@@ -8,9 +8,15 @@ import {
   creatorOnboardingSchema,
   handleSchema,
 } from '@/lib/schemas';
-import { createAnonClient, createSessionClient, isSupabaseConfigured } from '@/lib/supabase/server';
+import {
+  createAnonClient,
+  createServiceClient,
+  createSessionClient,
+  isSupabaseConfigured,
+} from '@/lib/supabase/server';
 import { getViewer } from '@/lib/access/viewer';
 import { analyzeAndStore } from '@/lib/ingest/store';
+import { enqueueAnalysisJob } from '@/lib/ingest/jobs';
 import { DEMO_ROLE_COOKIE, type DemoRole } from '@/lib/data/fixtures';
 import { resolveChannel, type ResolvedChannel } from '@/lib/youtube/resolve';
 
@@ -209,6 +215,36 @@ export async function createCreatorProfile(
     });
     if (!analysis.ok) {
       console.error('[onboarding] analysis failed', { handle: parsed.data.handle, reason: analysis.reason });
+    }
+
+    // And QUEUE the pass that cannot run here.
+    //
+    // The analysis above reads public figures and no model: uploads, cadence,
+    // engagement, disclosure, a keyword risk census. The classification is a
+    // different size — 6,369 comments on @가재맨 was 43 model calls and 5m30s —
+    // so it is recorded as owed and `scripts/worker.ts` pays it. Until this
+    // line existed the debt was never recorded and never paid: sentiment,
+    // purchase intent and the comment axes stayed null for every real signup
+    // unless somebody remembered to run the script by hand.
+    //
+    // Failure here is logged and swallowed. The creator row is written, the
+    // handle is taken, and a queue that is briefly unreachable must not bounce
+    // them back to a form they can no longer submit —
+    // `npm run worker -- --enqueue-missing` picks up whatever this dropped.
+    // BOTH passes, as two jobs. They read the same comments and measure
+    // different things — what an ad would sit beside, and what the section is
+    // about and wants — so either can fail or be retried without taking the
+    // other with it.
+    const service = createServiceClient();
+    for (const kind of ['classify_comments', 'classify_intent'] as const) {
+      const queued = await enqueueAnalysisJob(service, created.id, kind);
+      if (!queued.ok) {
+        console.error('[onboarding] could not queue a pass', {
+          handle: parsed.data.handle,
+          kind,
+          reason: queued.reason,
+        });
+      }
     }
   }
 

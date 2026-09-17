@@ -21,6 +21,8 @@ import { PublicOpinionPanel } from '@/components/profile/PublicOpinionPanel';
 import { ProfileHeader, TeaserHighlights } from '@/components/profile/ProfileHeader';
 import { ReportNav } from '@/components/profile/ReportNav';
 import { assessFitEligibility } from '@/lib/report/fit';
+import { describeJob, latestAnalysisJob } from '@/lib/ingest/jobs';
+import { createSessionClient } from '@/lib/supabase/server';
 import { OFF_PLATFORM_PANEL } from '@/lib/report/policy';
 import { StickyActionBar } from '@/components/profile/StickyActionBar';
 import { SiteHeader } from '@/components/shell/SiteHeader';
@@ -90,6 +92,25 @@ export default async function CreatorProfilePage({ params, searchParams }: PageP
       ? await getFitSummary(creator.id, access.organization.id)
       : null;
   const sufficiency = report ? assessReport(report) : null;
+
+  // WHICH absence this is, for the one person who can act on knowing.
+  //
+  // Only for the owner, and only while the pass is actually missing. RLS scopes
+  // `analysis_jobs` to the creator, and that is the right scope: a buyer's copy
+  // already says "a missing pass, not a missing audience", which is the part
+  // that protects the creator from an absence being read as a finding. The
+  // creator, who has just signed up and is looking at their own half-filled
+  // report, is the one who needs to know whether it is coming or broken.
+  const pendingPass =
+    access.mode === 'owner' && sufficiency?.unclassified
+      ? describeJob(
+          // `classify_intent`, NOT the safety census. `unclassified` means
+          // `comment_axes` is absent, and the axes are the intent pass's
+          // output — the census measures a different thing entirely and could
+          // have finished long ago while this gap is still open.
+          await latestAnalysisJob(createSessionClient(), creator.id, 'classify_intent'),
+        )
+      : null;
 
   const contextLabel =
     access.mode === 'token'
@@ -190,7 +211,7 @@ export default async function CreatorProfilePage({ params, searchParams }: PageP
               </Section>
 
               <Section id="commercial" label="Commercial fit">
-                <MetricsStrip report={report} />
+                <MetricsStrip report={report} pendingPass={pendingPass} />
                 <CommercialPanel
                   cost={report?.costEfficiency ?? null}
                   performance={report?.sponsoredPerformance ?? null}

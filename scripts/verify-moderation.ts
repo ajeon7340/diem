@@ -126,7 +126,15 @@ check('and nothing is reported', summary.reported, 0);
 // "on the creator" is a one-word change that silently un-measures a whole
 // format, and nothing else in the suite would notice.
 // ---------------------------------------------------------------------------
-const prompt = readFileSync(new URL('./scan-comments.ts', import.meta.url), 'utf8');
+// Read from the library, not the CLI: the prompt moved to `lib/ingest/classify`
+// when the worker became a second caller of it. Reading the old path would
+// still have "passed" — every assertion below is a negative or a substring over
+// a file that no longer holds the prompt, so four of them would have gone green
+// against the wrong file forever.
+const prompt = readFileSync(
+  new URL('../src/lib/ingest/classify.ts', import.meta.url),
+  'utf8',
+);
 
 check(
   'harassment is not scoped to the creator',

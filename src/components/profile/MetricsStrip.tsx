@@ -20,7 +20,21 @@ import { INTENT_WEIGHTS } from '@/lib/report/intent';
  * what the sample cannot support, and the risk callout surfaces a flag that
  * would otherwise sit three panels down.
  */
-export function MetricsStrip({ report }: { report: AIReport | null }) {
+export function MetricsStrip({
+  report,
+  /**
+   * What the product still owes this report, in a sentence, or null.
+   *
+   * Supplied only to the creator viewing their own profile — see the profile
+   * page. It sits with the sufficiency gaps rather than in a banner of its own
+   * because it IS a sufficiency gap: the same absence, with the extra fact that
+   * something is on its way to filling it.
+   */
+  pendingPass = null,
+}: {
+  report: AIReport | null;
+  pendingPass?: string | null;
+}) {
   const locked = report === null;
   const sufficiency = report ? assessReport(report) : null;
 
@@ -264,10 +278,19 @@ export function MetricsStrip({ report }: { report: AIReport | null }) {
         </p>
       ) : null}
 
-      {sufficiency && sufficiency.overall !== 'sufficient' ? (
+      {/*
+        `pendingPass` opens this on its own, and has to. `overall` can come back
+        'sufficient' on a corpus that is large and entirely unclassified — a
+        channel with plenty of comments and a sponsored history clears every
+        threshold this function measures, because none of them look at whether
+        the classifier ever ran. The notice would then be hidden and the creator
+        would be told nothing at all about the pass they are waiting on.
+      */}
+      {sufficiency && (sufficiency.overall !== 'sufficient' || pendingPass) ? (
         <SufficiencyNotice
           sufficiency={sufficiency}
           commentsAnalyzed={report?.commentsAnalyzed ?? 0}
+          pendingPass={pendingPass}
         />
       ) : null}
 
@@ -280,9 +303,11 @@ export function MetricsStrip({ report }: { report: AIReport | null }) {
 function SufficiencyNotice({
   sufficiency,
   commentsAnalyzed,
+  pendingPass = null,
 }: {
   sufficiency: ReportSufficiency;
   commentsAnalyzed: number;
+  pendingPass?: string | null;
 }) {
   return (
     <div className="border-t border-line bg-surface px-5 py-3.5">
@@ -290,7 +315,12 @@ function SufficiencyNotice({
         <Info className="h-3.5 w-3.5 shrink-0 text-ink-faint" aria-hidden />
         {sufficiency.overall === 'insufficient'
           ? `Provisional — ${exactNumber(commentsAnalyzed)} comments is below our reporting threshold`
-          : 'Limited sample — read the figures as directional'}
+          : sufficiency.overall === 'limited'
+            ? 'Limited sample — read the figures as directional'
+            : // Opened by a pending pass alone. The sample is fine; a pass has
+              // not run over it yet, and calling that a "limited sample" would
+              // blame the corpus for our own missing work.
+              'Still filling in'}
       </p>
       <ul className="mt-2 space-y-1">
         {sufficiency.gaps.map((gap) => (
@@ -298,6 +328,11 @@ function SufficiencyNotice({
             {gap}
           </li>
         ))}
+        {pendingPass ? (
+          // Last, and in the darker ink: it is the only line here that will
+          // stop being true on its own.
+          <li className="text-[11px] leading-relaxed text-ink">{pendingPass}</li>
+        ) : null}
       </ul>
     </div>
   );

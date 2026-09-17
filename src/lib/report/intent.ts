@@ -376,3 +376,45 @@ export function aggregateFromCells(
     rubricVersion: INTENT_RUBRIC_VERSION,
   };
 }
+
+/**
+ * Sentiment, 0–100, from the intent axis — or null, which is a real answer.
+ *
+ * THE DENOMINATOR IS OPINION-BEARING COMMENTS, not the corpus. Most comments
+ * hold no valence at all: `react`, `ask` and `buy` are not positive or negative
+ * about anything, and dividing by the whole corpus would make a busy, cheerful
+ * section score LOW simply because most of its comments were reactions. On
+ * @가재맨 that denominator choice is the difference between a number about the
+ * audience and a number about how chatty they are.
+ *
+ * `abuse` IS EXCLUDED, and this is the load-bearing line. Abuse is what was
+ * done TO the creator, and this codebase already refuses to let that reach
+ * their rating — the same rule `censusRisk` encodes, and the reason `abuse` was
+ * split out of `criticise` in the first place. Counting it here would rebuild
+ * the exact scoring the split removed: the more abuse a creator attracts, the
+ * worse their sentiment, which rewards obscurity and punishes reach.
+ *
+ * Null when nobody expressed an opinion either way. Not 50, and not 100: a
+ * section with no praise and no criticism has not been measured as neutral, it
+ * has not been measured at all. Zero is the worst score on a 0–100 scale and
+ * 50 is a claim nobody made.
+ *
+ * Computed from the SAME cells the axes are written from, by the one pass that
+ * writes them, so the headline cannot disagree with the panel beneath it. That
+ * is the whole lesson of `brand_safety_score`, which was hand-typed, had no
+ * producer, and contradicted the flags under it on every fixture.
+ */
+export function sentimentFromCells(cells: IntentCells): number | null {
+  const keys = Object.keys(cells) as IntentCellKey[];
+  const sum = (intent: CommentIntent) =>
+    keys
+      .filter((k) => k.endsWith(`:${intent}`))
+      .reduce((total, k) => total + count(cells, k), 0);
+
+  const praise = sum('praise');
+  const criticise = sum('criticise');
+  const opinionated = praise + criticise;
+  if (opinionated === 0) return null;
+
+  return (praise / opinionated) * 100;
+}

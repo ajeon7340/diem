@@ -1692,3 +1692,48 @@ export interface Viewer {
   /** Set when the signed-in user owns a creator profile. */
   creatorId: string | null;
 }
+
+// ---------------------------------------------------------------------------
+// Long passes
+// ---------------------------------------------------------------------------
+
+/**
+ * One value per pass that cannot finish inside a request. See migration 0028.
+ *
+ * `classify_comments` is the risk census (what an ad would sit beside).
+ * `classify_intent` is the two-axis pass (what the section is about and wants).
+ * They read the same comments and measure different things, so they are two
+ * jobs rather than one: either can fail, be retried, or be run alone.
+ */
+export type AnalysisJobKind = 'classify_comments' | 'classify_intent';
+
+export type AnalysisJobStatus = 'queued' | 'running' | 'succeeded' | 'failed';
+
+/**
+ * A unit of work the product owes a creator.
+ *
+ * Read by the profile page so an absent figure can say WHICH absence it is —
+ * queued, running, failed, or genuinely nothing to measure. Before this, all
+ * four rendered as the same silence, and the product's own copy for it ("the
+ * AI pipeline runs after the creator connects their accounts") described a
+ * pipeline that did not exist.
+ */
+export interface AnalysisJob {
+  id: string;
+  kind: AnalysisJobKind;
+  status: AnalysisJobStatus;
+  attempts: number;
+  maxAttempts: number;
+  queuedAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  /** Present once the pass has run. Denormalised from the job, not the report. */
+  commentsScanned: number | null;
+  findings: number | null;
+  /**
+   * The worker's last error, for a log. NEVER rendered to a creator: a Postgres
+   * message or an HTTP body is not a status line, and the states above already
+   * say everything a person can act on.
+   */
+  lastError: string | null;
+}
