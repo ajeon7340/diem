@@ -89,7 +89,17 @@ export async function getDirectory(filters: DirectoryFilters): Promise<Directory
   const { data, error } = await query.limit(100).returns<DirectoryListingRow[]>();
 
   if (error) {
-    console.error('[directory_listings] query failed', error.message);
+    // The paywall IS this error. `directory_listings` is security_invoker over
+    // `report_metrics`, and a free-plan account has no privilege on that table,
+    // so Postgres answers `permission denied` rather than returning zero rows —
+    // which is the design working, not a fault. Logging it at error level meant
+    // every free account browsing the directory wrote a line that looks like a
+    // broken query, and a real failure would have been indistinguishable from
+    // ordinary traffic. Measured against the live project, not inferred.
+    const paywalled = error.code === '42501' || /permission denied/i.test(error.message);
+    if (!paywalled) {
+      console.error('[directory_listings] query failed', { code: error.code, message: error.message });
+    }
     return { listings: [], niches: [], entitled: viewer.isProAgency };
   }
 

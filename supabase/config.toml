@@ -24,6 +24,11 @@ additional_redirect_urls = [
   "http://localhost:3000/**",
 ]
 
+# NOT settable from here: `auth.rate_limit.email_sent` comes back from
+# `config diff` as `unmanaged`, so `config push` ignores it. Raising the limit
+# would not have helped anyway — the built-in service stays a testing
+# convenience whatever the number says. The block below is the only real fix.
+
 # --- Mail -------------------------------------------------------------------
 #
 # Supabase's built-in email service is a testing convenience, not a mailer. It
