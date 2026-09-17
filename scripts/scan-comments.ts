@@ -28,8 +28,9 @@
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 
-import Anthropic from '@anthropic-ai/sdk';
 import { createClient } from '@supabase/supabase-js';
+
+import { aiModel, aiProvider, generateStructured } from '@/lib/ai/provider';
 
 import { isCandidate, loadExternalTerms, scanKeywords } from '@/lib/report/keywords';
 import { audienceClimate, measureRegister } from '@/lib/report/climate';
@@ -37,7 +38,6 @@ import { censusRisk } from '@/lib/report/safety';
 import { BRAND_RISK_CATEGORIES } from '@/types';
 import type { BrandRiskCategory, CommentRisk } from '@/types';
 
-const MODEL = 'claude-opus-5';
 /** commentThreads.list returns 100 per page at 1 quota unit — cheap. */
 const PAGE = 100;
 /** Comments per classification request. Large enough to be economic, small
@@ -88,7 +88,12 @@ interface RawComment {
 // claims every one was screened.
 const CATEGORIES: readonly BrandRiskCategory[] = BRAND_RISK_CATEGORIES;
 
-const CLASSIFY_TOOL: Anthropic.Tool = {
+/**
+ * Plain JSON Schema, not an SDK type: `lib/ai/provider` turns it into whatever
+ * the configured provider wants, and a type from one vendor's SDK sitting here
+ * would quietly make this file vendor-specific again.
+ */
+const CLASSIFY_TOOL = {
   name: 'record_risks',
   description: 'Record which of the numbered comments carry brand risk. Call exactly once.',
   strict: true,
@@ -241,25 +246,28 @@ async function fetchAllComments(apiKey: string, channelHandle: string) {
   return { comments, videos: capped.length, unreadable, channelId };
 }
 
+/** Reported by the provider, accumulated across the run. Not estimated. */
+export const spend = { inputTokens: 0, outputTokens: 0, calls: 0 };
+
 async function classify(batch: RawComment[]): Promise<Map<number, BrandRiskCategory>> {
-  const client = new Anthropic();
   const listing = batch.map((c, i) => `${i}. ${c.text.replace(/\s+/g, ' ').slice(0, 400)}`).join('\n');
 
-  const response = await client.messages.create({
-    model: MODEL,
-    max_tokens: 4_000,
+  const { data, usage } = await generateStructured<{
+    risky: { index: number; category: BrandRiskCategory }[];
+  }>({
     system: SYSTEM,
-    tools: [CLASSIFY_TOOL],
-    messages: [{ role: 'user', content: listing }],
+    user: listing,
+    schema: CLASSIFY_TOOL.input_schema as unknown as Record<string, unknown>,
+    toolName: CLASSIFY_TOOL.name,
+    maxTokens: 4_000,
   });
 
-  const call = response.content.find(
-    (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use' && b.name === 'record_risks',
-  );
-  if (!call) return new Map();
+  spend.inputTokens += usage.inputTokens;
+  spend.outputTokens += usage.outputTokens;
+  spend.calls += 1;
 
   const out = new Map<number, BrandRiskCategory>();
-  for (const r of (call.input as { risky: { index: number; category: BrandRiskCategory }[] }).risky) {
+  for (const r of data.risky ?? []) {
     if (r.index >= 0 && r.index < batch.length) out.set(r.index, r.category);
   }
   return out;
@@ -405,8 +413,11 @@ async function main() {
       console.log(`  ${missing} classified comments are gone from the section since the dump`);
     }
   } else {
-    if (!process.env.ANTHROPIC_API_KEY) {
-      console.log('\n  ANTHROPIC_API_KEY not set — fetched only, nothing classified.');
+    // Whichever provider is configured — checking one vendor's variable while
+    // calling another is how a run gets half way in and then stops.
+    const keyVar = aiProvider() === 'gemini' ? 'GEMINI_API_KEY' : 'ANTHROPIC_API_KEY';
+    if (!process.env[keyVar]) {
+      console.log(`\n  ${keyVar} not set — fetched only, nothing classified.`);
       console.log('  Use --dump <file> to classify offline instead.');
       return;
     }
@@ -416,6 +427,12 @@ async function main() {
       hits.forEach((category, index) => flagged.push({ comment: batch[index], category }));
       process.stdout.write(`\r  classified ${Math.min(i + BATCH, candidates.length)}/${candidates.length}`);
     }
+    process.stdout.write('\r');
+    console.log(
+      `  ${aiProvider()} ${aiModel()}: ${spend.calls} calls · ` +
+        `${spend.inputTokens.toLocaleString('en-US')} in · ` +
+        `${spend.outputTokens.toLocaleString('en-US')} out (reported by the provider)`,
+    );
     console.log();
   }
 

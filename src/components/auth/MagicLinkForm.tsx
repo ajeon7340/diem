@@ -43,6 +43,30 @@ export function MagicLinkForm({
     INITIAL_MAGIC_LINK_STATE,
   );
 
+  // Mocked delivery. Said plainly, in amber rather than the success green, and
+  // with the link shown rather than followed: a screen that claims to have
+  // emailed something it did not email is the one outcome worse than not
+  // sending it. The token is real and single-use — only the inbox is skipped.
+  if (state.status === 'sent' && state.mockLink) {
+    return (
+      <div className="rounded-panel border border-amber/30 bg-amber-wash px-5 py-7">
+        <p className="text-[13px] font-medium text-ink">
+          Email delivery is mocked on this deployment
+        </p>
+        <p className="mt-1.5 max-w-[46ch] text-[12px] leading-relaxed text-ink-muted">
+          Nothing was sent to {state.email}. The link below is a real one-time
+          sign-in token — it works once and expires like any other.
+        </p>
+        <a
+          href={state.mockLink}
+          className="mt-4 inline-flex h-10 items-center rounded-md bg-ink px-4 text-[13px] font-medium text-surface"
+        >
+          Open the sign-in link
+        </a>
+      </div>
+    );
+  }
+
   if (state.status === 'sent') {
     return (
       <div className="rounded-panel border border-emerald/30 bg-emerald-wash px-5 py-8 text-center">

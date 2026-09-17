@@ -16,6 +16,7 @@ import {
   type FitClaim,
 } from '@/lib/report/fit';
 import type { AIReport, IntentMeasurement } from '@/types';
+import { FIT_METRICS, FIT_SCHEMA, fitOutputSchema } from '@/lib/report/fit-schema';
 
 let pass = 0,
   fail = 0;
@@ -270,6 +271,36 @@ check(
   isStale({ reportAnalyzedAt: null }, subject),
   false,
 );
+
+// ---------------------------------------------------------------------------
+// The output contract exists twice, so it has to be checked twice
+//
+// zod VALIDATES what the model returned; plain JSON Schema is what the model
+// was SENT. Both providers take JSON Schema on the request and neither takes
+// zod, so the duplication is real — and the enum is what stops an invented
+// figure name from rendering as a checkable citation. If the two drift, the
+// model is told one set of metric names and judged against another.
+// ---------------------------------------------------------------------------
+{
+  const props = (FIT_SCHEMA.properties ?? {}) as Record<string, { type?: string }>;
+  check('the request schema names both fields', Object.keys(props).sort(), ['claims', 'summary']);
+
+  const claims = (props.claims ?? {}) as { items?: { properties?: Record<string, { enum?: string[] }> } };
+  const sent = claims.items?.properties?.metric?.enum ?? [];
+  check('the enum sent matches the enum declared', [...sent], [...FIT_METRICS]);
+
+  // And zod agrees with both — parsed, not assumed.
+  const good = fitOutputSchema.safeParse({
+    summary: 'x',
+    claims: [{ text: 'y', metric: FIT_METRICS[0], value: 1 }],
+  });
+  check('a claim citing a declared metric parses', good.success, true);
+  const bad = fitOutputSchema.safeParse({
+    summary: 'x',
+    claims: [{ text: 'y', metric: 'inventedFigure', value: 1 }],
+  });
+  check('a claim citing an invented figure is refused', bad.success, false);
+}
 
 console.log(`\n  ${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);

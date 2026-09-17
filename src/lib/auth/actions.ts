@@ -3,14 +3,25 @@
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 
+import { isMockEmail } from '@/lib/auth/mock';
 import { emailSchema, ACCOUNT_TYPES, type AccountType } from '@/lib/schemas';
-import { createSessionClient, isSupabaseConfigured } from '@/lib/supabase/server';
+import { createServiceClient, createSessionClient, isSupabaseConfigured } from '@/lib/supabase/server';
 
 export interface MagicLinkState {
   status: 'idle' | 'sent' | 'error';
   email?: string;
   message?: string;
+  /**
+   * The sign-in link itself, shown on screen instead of emailed.
+   *
+   * Only ever set when `ADFIT_MOCK_EMAIL` is on. It is in the state — not
+   * quietly followed — so the mock cannot be mistaken for the real thing: the
+   * person signing in still has to click a link, and the screen says why they
+   * are looking at one.
+   */
+  mockLink?: string;
 }
+
 
 /**
  * Where a given account type lands after clicking the emailed link.
@@ -89,6 +100,31 @@ export async function sendMagicLink(
   // here would make the onboarding guard think the account already exists.
   if (!isSupabaseConfigured()) {
     redirect(next);
+  }
+
+  // Mocked delivery: mint the same one-time token Supabase would have emailed
+  // and hand it over on screen. `/auth/mock` redeems it through verifyOtp, so
+  // the resulting session is indistinguishable from a real sign-in.
+  if (isMockEmail()) {
+    const admin = createServiceClient();
+    if (!admin) {
+      return { status: 'error', message: 'Mock email is on but SUPABASE_SERVICE_ROLE_KEY is not set.' };
+    }
+    const { data, error: linkError } = await admin.auth.admin.generateLink({
+      type: 'magiclink',
+      email: parsed.data,
+    });
+    if (linkError || !data.properties?.hashed_token) {
+      // A magiclink for an address with no account fails here rather than
+      // silently doing nothing — say so instead of claiming a link was sent.
+      console.error('[auth] mock link failed', linkError?.message);
+      return {
+        status: 'error',
+        message: `Could not mint a link for ${parsed.data}. In mock mode the account must already exist — create it in the Supabase dashboard, or use a seeded demo address.`,
+      };
+    }
+    const link = `/auth/mock?token_hash=${encodeURIComponent(data.properties.hashed_token)}&next=${encodeURIComponent(next)}`;
+    return { status: 'sent', email: parsed.data, mockLink: link };
   }
 
   const supabase = createSessionClient();

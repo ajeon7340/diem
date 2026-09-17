@@ -1,10 +1,10 @@
 'use server';
 
-import Anthropic from '@anthropic-ai/sdk';
-import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
+import { AiError, aiModel, generateStructured } from '@/lib/ai/provider';
+import { FIT_SCHEMA, fitOutputSchema } from '@/lib/report/fit-schema';
 import { getViewer } from '@/lib/access/viewer';
 import { resolveProfileAccess } from '@/lib/access/gatekeeper';
 import {
@@ -21,7 +21,6 @@ import { CAMPAIGN_CATEGORIES, type CampaignCategory } from '@/types';
 import { createSessionClient, isSupabaseConfigured } from '@/lib/supabase/server';
 import { isUnlocked } from '@/types';
 
-const MODEL = 'claude-opus-5';
 
 /**
  * The rules, restated for the model.
@@ -57,78 +56,34 @@ RULES
 - The creator reads this too. Argue for them; never write anything about them you could not show them.
 - No greeting, no sign-off, no headings, no bullets. Under 90 words.`;
 
-/**
- * A claim is a sentence plus the figure under it.
- *
- * Modelled as structured output rather than parsed out of prose, because a
- * citation the UI cannot machine-check is decoration. `metric` is a closed
- * enum so an invented figure name fails the schema instead of rendering.
- */
-const fitOutputSchema = z.object({
-  summary: z.string(),
-  claims: z.array(
-    z.object({
-      text: z.string(),
-      metric: z.enum([
-        'purchaseIntentRate',
-        'purchaseIntentFloor',
-        'commercialDensity',
-        'sentimentScore',
-        'raisedFlags',
-        'checkedFlags',
-        'engagementRate',
-        'estimatedCpm',
-        'sponsoredRetention',
-        'commentsAnalyzed',
-        'productPostsAnalyzed',
-      ]),
-      value: z.number(),
-    }),
-  ),
-});
+
 
 
 async function callModel(input: FitInput): Promise<z.infer<typeof fitOutputSchema>> {
-  const client = new Anthropic();
-
-  const response = await client.messages.parse({
-    model: MODEL,
-    max_tokens: 2_000,
-    system: [{ type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral' } }],
-    messages: [
-      {
-        role: 'user',
-        content: [
-          {
-            type: 'text',
-            // The creator half, cached. One creator is read against many
-            // briefs by the same agency, and this block is identical across
-            // all of them — the brief goes in the next block, after the
-            // breakpoint, so a second read of the same creator pays for the
-            // brief alone.
-            text: `Creator and analysis:\n${JSON.stringify(
-              { creator: input.creator, figures: input.figures, context: input.context },
-              null,
-              2,
-            )}`,
-            cache_control: { type: 'ephemeral' },
-          },
-          {
-            type: 'text',
-            text: `The buyer reading this:\n${JSON.stringify(input.buyer, null, 2)}`,
-          },
-        ],
-      },
-    ],
-    output_config: { format: zodOutputFormat(fitOutputSchema) },
+  const { data } = await generateStructured<unknown>({
+    system: SYSTEM,
+    // The creator half, cached. One creator is read against many briefs by the
+    // same agency and this block is identical across all of them — the brief
+    // goes after the breakpoint, so a second read pays for the brief alone.
+    cachedUser: `Creator and analysis:\n${JSON.stringify(
+      { creator: input.creator, figures: input.figures, context: input.context },
+      null,
+      2,
+    )}`,
+    user: `The buyer reading this:\n${JSON.stringify(input.buyer, null, 2)}`,
+    schema: FIT_SCHEMA,
+    toolName: 'record_fit',
+    maxTokens: 2_000,
   });
 
-  // A safety decline, or a schema the parse could not satisfy. Either way there
-  // is no summary — and an empty one must not be written to the table.
-  if (response.stop_reason === 'refusal' || !response.parsed_output) {
-    throw new Error('no_output');
-  }
-  return response.parsed_output;
+  // Parsed here rather than trusted. A provider that returns the wrong shape —
+  // a refusal, a truncation, an invented metric name — must fail before the
+  // row is written, because a fit read whose claims do not match the schema is
+  // prose with citations that cannot be checked, which is the one thing this
+  // panel exists not to be.
+  const parsed = fitOutputSchema.safeParse(data);
+  if (!parsed.success) throw new Error('no_output');
+  return parsed.data;
 }
 
 /**
@@ -202,7 +157,9 @@ export async function generateFitSummary(
   try {
     output = await callModel(input);
   } catch (error) {
-    if (error instanceof Anthropic.RateLimitError) {
+    // 429 from whichever provider is configured. `AiError` carries the status
+    // precisely so this branch does not have to know which vendor answered.
+    if (error instanceof AiError && error.status === 429) {
       return { status: 'error', message: 'Busy right now — try again in a moment.' };
     }
     console.error('[fit_summaries] generation failed', {
@@ -239,7 +196,9 @@ export async function generateFitSummary(
         summary: output.summary,
         claims,
         confidence: eligibility.confidence,
-        model_version: MODEL,
+        // Whatever actually answered. A stored version that names a model the
+        // row was not produced by makes every later comparison a guess.
+        model_version: aiModel(),
         rubric_version: report!.intent?.rubricVersion ?? INTENT_RUBRIC_VERSION,
         report_analyzed_at: report!.lastAnalyzedAt,
       },
