@@ -10,8 +10,6 @@ export interface ExplainState {
   result: VideoExplain | null;
 }
 
-export const INITIAL_EXPLAIN: ExplainState = { status: 'idle', message: '', result: null };
-
 /**
  * Analyse a video the creator pasted.
  *

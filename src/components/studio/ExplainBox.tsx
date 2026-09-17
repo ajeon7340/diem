@@ -3,7 +3,8 @@
 import { useFormState, useFormStatus } from 'react-dom';
 import { Link2, TriangleAlert } from 'lucide-react';
 
-import { INITIAL_EXPLAIN, explainPastedVideo } from '@/app/actions/studio';
+import { explainPastedVideo } from '@/app/actions/studio';
+import { INITIAL_EXPLAIN } from '@/app/actions/state';
 import { Panel } from '@/components/ui/Panel';
 import { Button } from '@/components/ui/Button';
 import { DriverList } from './DriverList';

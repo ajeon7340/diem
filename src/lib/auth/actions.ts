@@ -12,8 +12,6 @@ export interface MagicLinkState {
   message?: string;
 }
 
-export const INITIAL_MAGIC_LINK_STATE: MagicLinkState = { status: 'idle' };
-
 /**
  * Where a given account type lands after clicking the emailed link.
  *

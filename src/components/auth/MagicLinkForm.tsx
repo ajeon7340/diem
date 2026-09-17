@@ -4,11 +4,8 @@ import { useFormState, useFormStatus } from 'react-dom';
 import { MailCheck } from 'lucide-react';
 
 import { Button } from '@/components/ui/Button';
-import {
-  INITIAL_MAGIC_LINK_STATE,
-  sendMagicLink,
-  type MagicLinkState,
-} from '@/lib/auth/actions';
+import { sendMagicLink, type MagicLinkState } from '@/lib/auth/actions';
+import { INITIAL_MAGIC_LINK_STATE } from '@/app/actions/state';
 import type { AccountType } from '@/lib/schemas';
 import { cn } from '@/lib/cn';
 
