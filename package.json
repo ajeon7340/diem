@@ -6,21 +6,50 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "verify": "npm run verify:climate && npm run verify:clusters && npm run verify:directory && npm run verify:disclosure && npm run verify:drivers && npm run verify:fit && npm run verify:intent && npm run verify:keywords && npm run verify:moderation && npm run verify:onboarding && npm run verify:opinion && npm run verify:policy && npm run verify:retention && npm run verify:safety && npm run verify:schemas && npm run verify:sufficiency",
+    "verify:schemas": "tsx --tsconfig tsconfig.scripts.json scripts/verify-schemas.ts",
+    "verify:sufficiency": "tsx --tsconfig tsconfig.scripts.json scripts/verify-sufficiency.ts",
+    "verify:clusters": "tsx --tsconfig tsconfig.scripts.json scripts/verify-clusters.ts",
+    "verify:intent": "tsx --tsconfig tsconfig.scripts.json scripts/verify-intent.ts",
+    "verify:fit": "tsx --tsconfig tsconfig.scripts.json scripts/verify-fit.ts",
+    "verify:safety": "tsx --tsconfig tsconfig.scripts.json scripts/verify-safety.ts",
+    "verify:policy": "tsx --tsconfig tsconfig.scripts.json scripts/verify-policy.ts",
+    "retention": "tsx --tsconfig tsconfig.scripts.json scripts/retention.ts",
+    "opinion:press": "tsx --tsconfig tsconfig.scripts.json scripts/opinion-press.ts",
+    "verify:opinion": "tsx --tsconfig tsconfig.scripts.json scripts/verify-opinion.ts",
+    "scan:comments": "tsx --tsconfig tsconfig.scripts.json scripts/scan-comments.ts",
+    "scan:promotions": "tsx --tsconfig tsconfig.scripts.json scripts/scan-promotions.ts",
+    "verify:moderation": "tsx --tsconfig tsconfig.scripts.json scripts/verify-moderation.ts",
+    "verify:retention": "tsx --tsconfig tsconfig.scripts.json scripts/verify-retention.ts",
+    "verify:drivers": "tsx --tsconfig tsconfig.scripts.json scripts/verify-drivers.ts",
+    "verify:disclosure": "tsx --tsconfig tsconfig.scripts.json scripts/verify-disclosure.ts",
+    "verify:onboarding": "tsx --tsconfig tsconfig.scripts.json scripts/verify-onboarding.ts",
+    "verify:keywords": "tsx --tsconfig tsconfig.scripts.json scripts/verify-keywords.ts",
+    "verify:directory": "tsx --tsconfig tsconfig.scripts.json scripts/verify-directory.ts",
+    "verify:climate": "tsx --tsconfig tsconfig.scripts.json scripts/verify-climate.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.125.0",
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "^2.109.0",
+    "clsx": "^2.1.1",
+    "lucide-react": "^1.44.0",
+    "next": "14.2.35",
     "react": "^18",
     "react-dom": "^18",
-    "next": "14.2.35"
+    "tailwind-merge": "^3.6.0",
+    "zod": "^4.6.2"
   },
   "devDependencies": {
-    "typescript": "^5",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
+    "eslint": "^8",
+    "eslint-config-next": "14.2.35",
     "postcss": "^8",
     "tailwindcss": "^3.4.1",
-    "eslint": "^8",
-    "eslint-config-next": "14.2.35"
+    "tsx": "^4.23.13",
+    "typescript": "^5"
   }
 }

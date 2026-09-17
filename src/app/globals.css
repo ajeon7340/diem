@@ -2,26 +2,218 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Swiss / institutional light surface.
+ *
+ * One paper ground, one panel white, hairline slate borders, and exactly two
+ * accents: indigo for anything actionable, emerald for verification and
+ * positive signal. No gradients, no shadows beyond a single elevation for
+ * overlays. Every figure is monospace and tabular so columns align down the
+ * page regardless of digit width.
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: light;
+
+  --paper: #f8fafc;        /* slate-50  */
+  --surface: #ffffff;
+  --line: #e2e8f0;         /* slate-200 */
+  --line-strong: #cbd5e1;  /* slate-300 */
+
+  --ink: #0f172a;          /* slate-900 */
+  --ink-muted: #475569;    /* slate-600 */
+  --ink-faint: #94a3b8;    /* slate-400 */
+
+  --indigo: #4f46e5;
+  --indigo-hover: #4338ca;
+  --indigo-wash: #eef2ff;
+
+  --emerald: #10b981;
+  --emerald-wash: #ecfdf5;
+
+  --amber: #d97706;
+  --amber-wash: #fffbeb;
+  --rose: #e11d48;
+  --rose-wash: #fff1f2;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  border-color: var(--line);
 }
 
 body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-geist-sans), ui-sans-serif, 'Pretendard', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
+/* Every number, percentage, and timestamp. */
+.tnum {
+  font-family: var(--font-geist-mono), ui-monospace, 'JetBrains Mono', monospace;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1, 'zero' 1;
+}
+
+/* Section label rail: small, uppercase, letterspaced. */
+.rail {
+  font-size: 10px;
+  line-height: 1;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--ink-faint);
+}
+
+/*
+ * Locked sections.
+ *
+ * `.beneath` is placeholder geometry — the real figures are never fetched for
+ * an unauthorised visitor, so there is nothing here to un-blur. The blur is a
+ * curiosity device: enough structure to read as a real chart, no legible value.
+ */
+.beneath {
+  filter: blur(6px);
+  opacity: 0.55;
+  user-select: none;
+  pointer-events: none;
+}
+
+.frost {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px) saturate(1.2);
+  -webkit-backdrop-filter: blur(12px) saturate(1.2);
+}
+
+/* Hairline grid, used behind page headers only. */
+.grid-rule {
+  background-image:
+    linear-gradient(var(--line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--line) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: linear-gradient(to bottom, #000, transparent 85%);
+}
+
+@keyframes sheet-in-right {
+  from { opacity: 0; transform: translateX(24px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes sheet-in-bottom {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes scrim-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.animate-scrim { animation: scrim-in 160ms ease-out both; }
+.animate-sheet { animation: sheet-in-bottom 260ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+@media (min-width: 640px) {
+  .animate-sheet { animation-name: sheet-in-right; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-scrim, .animate-sheet { animation: none; }
+}
+
+::selection {
+  background: #e0e7ff;
+  color: var(--ink);
+}
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border: 3px solid transparent;
+  background-clip: padding-box;
+  border-radius: 999px;
+}
+
+/* ===========================================================================
+ * Print sheet
+ *
+ * The report exports as a real page, not a screenshot: text stays selectable
+ * and searchable, which matters for a document a buyer pastes into a deck or
+ * attaches to a procurement thread. Everything here is scoped to `.sheet` so
+ * it cannot leak into the interactive profile.
+ * ======================================================================== */
+.sheet {
+  --sheet-gap: 7px;
+  width: 186mm;
+  margin: 0 auto;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 8.2pt;
+  line-height: 1.34;
+}
+
+.sheet .rail {
+  font-size: 5.6pt;
+  letter-spacing: 0.07em;
+}
+
+.sheet-box {
+  border: 0.4pt solid var(--line);
+  border-radius: 3px;
+  break-inside: avoid;
+}
+
+.sheet-head {
+  border-bottom: 0.4pt solid var(--line);
+  padding: 3px 7px;
+  background: var(--paper);
+}
+
+.sheet-body { padding: 6px 7px; }
+
+/* Screen preview: show the sheet on the page ground so the operator can see
+   what will come out before hitting print. */
+@media screen {
+  .sheet-frame {
+    padding: 16px 12px 48px;
+    background: var(--paper);
   }
+  .sheet {
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.1), 0 8px 24px rgba(15, 23, 42, 0.08);
+    padding: 10mm;
+    border-radius: 2px;
+  }
+}
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 11mm;
+  }
+
+  html, body {
+    background: #fff !important;
+    margin: 0;
+    padding: 0;
+  }
+
+  /* Keep the tinted tiles and severity colours — a risk flag printed grey is a
+     risk flag nobody reads. */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .print\:hidden { display: none !important; }
+
+  .sheet-frame { padding: 0; background: #fff; }
+  .sheet {
+    width: auto;
+    padding: 0;
+    box-shadow: none;
+    border-radius: 0;
+  }
+
+  /* One page is the target; if content ever overflows, break between boxes
+     rather than through one. */
+  .sheet-box { break-inside: avoid; page-break-inside: avoid; }
 }
