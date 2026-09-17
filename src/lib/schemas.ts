@@ -701,21 +701,54 @@ export const handleSchema = z
  * against YouTube before the row is written, since a handle that does not
  * exist leaves Studio permanently empty and nothing downstream would say why.
  */
+/**
+ * What a creator may paste into the YouTube field.
+ *
+ * They are asked for "your YouTube URL", so the whole shape of what YouTube
+ * puts in an address bar has to be accepted, not just the bare handle:
+ *
+ *     https://www.youtube.com/@가재맨          -> @가재맨
+ *     https://youtube.com/@jooshica6178/videos -> @jooshica6178
+ *     youtube.com/channel/UCxxxxxxxxxxxxxxxxx  -> UCxxxxxxxxxxxxxxxxx
+ *     @jooshica6178                            -> @jooshica6178
+ *     jooshica6178                             -> @jooshica6178
+ *
+ * `\w` was the bug and it was silent: it is ASCII-only, so the URL match
+ * failed on @가재맨, the whole URL fell through as the "handle", and the final
+ * refine rejected it with "Use your @handle, like @jooshica6178" — advice that
+ * cannot be followed, because the handle WAS the problem. Every non-Latin
+ * handle on YouTube — Korean, Japanese, Cyrillic, Arabic — was unenterable,
+ * and the one real channel this product was built against is one of them.
+ *
+ * `\p{L}\p{N}` with the u flag is what YouTube actually allows.
+ */
+const CHANNEL_ID = /^UC[\w-]{22}$/;
+
 export const youtubeHandleSchema = z
   .string()
   .trim()
-  .max(120)
+  .max(200)
   .optional()
   .nullable()
   .transform((value) => {
     if (!value) return null;
-    const url = value.match(/youtube\.com\/(@[\w.-]+)/i);
-    const raw = url ? url[1] : value;
+
+    // A channel URL carries an id rather than a handle. Keep it as the id —
+    // `resolveChannel` looks it up by id and returns the real handle, which is
+    // what gets stored. Guessing a handle from an id is not possible.
+    const byId = value.match(/youtube\.com\/channel\/(UC[\w-]{22})/i);
+    if (byId) return byId[1];
+    if (CHANNEL_ID.test(value)) return value;
+
+    // Stop at the first path separator or query: /@handle/videos and
+    // /@handle?sub_confirmation=1 are both links people actually copy.
+    const byHandle = value.match(/youtube\.com\/(@[^/?#\s]+)/iu);
+    const raw = byHandle ? byHandle[1] : value;
     const name = raw.replace(/^@/, '').trim();
     return name ? `@${name}` : null;
   })
-  .refine((v) => v === null || /^@[\w.-]{3,30}$/.test(v), {
-    message: 'Use your @handle, like @jooshica6178',
+  .refine((v) => v === null || CHANNEL_ID.test(v) || /^@[\p{L}\p{N}_.-]{3,30}$/u.test(v), {
+    message: 'Paste your channel URL or your @handle, like youtube.com/@jooshica6178',
   });
 
 export const creatorOnboardingSchema = z.object({

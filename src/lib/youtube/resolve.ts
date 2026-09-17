@@ -27,19 +27,33 @@ export type ResolveResult =
   | { ok: true; channel: ResolvedChannel }
   | { ok: false; message: string };
 
+/**
+ * A channel id, as it appears in youtube.com/channel/UC… — 24 characters, and
+ * the only form `forHandle` cannot look up. `youtubeHandleSchema` passes these
+ * through untouched because an id cannot be turned into a handle locally; the
+ * lookup is what returns the handle, and that is what gets stored.
+ */
+const CHANNEL_ID = /^UC[\w-]{22}$/;
+
 export async function resolveChannel(handle: string): Promise<ResolveResult> {
+  const byId = CHANNEL_ID.test(handle);
   try {
     const { items } = await ytFetch<{
       id: string;
       snippet: { title: string; customUrl?: string; thumbnails?: { default?: { url?: string } } };
       statistics: { subscriberCount?: string; hiddenSubscriberCount?: boolean };
-    }>('channels', { part: 'snippet,statistics', forHandle: handle });
+    }>('channels', {
+      part: 'snippet,statistics',
+      ...(byId ? { id: handle } : { forHandle: handle }),
+    });
 
     const channel = items[0];
     if (!channel) {
       return {
         ok: false,
-        message: `YouTube has no channel at ${handle}. Check the spelling — it is the @name in your channel URL.`,
+        message: byId
+          ? `YouTube has no channel with the id ${handle}. Copy the address from your channel page.`
+          : `YouTube has no channel at ${handle}. Check the spelling — it is the @name in your channel URL.`,
       };
     }
 
@@ -54,7 +68,10 @@ export async function resolveChannel(handle: string): Promise<ResolveResult> {
       ok: true,
       channel: {
         channelId: channel.id,
-        handle: channel.snippet.customUrl ?? handle,
+        // customUrl is the real @handle. Falling back to the input is right for
+        // a handle lookup and wrong for an id lookup — storing `UC…` in
+        // `youtube_handle` would put a channel id where the UI prints a name.
+        handle: channel.snippet.customUrl ?? (byId ? `@${channel.snippet.title}` : handle),
         title: channel.snippet.title,
         // Hidden is absent, not zero — a creator may switch the count off, and
         // storing 0 would publish "0 followers" on their own media kit.

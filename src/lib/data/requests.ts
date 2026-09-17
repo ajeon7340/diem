@@ -127,8 +127,11 @@ export async function getDemographicsGrants(creatorId: string): Promise<Demograp
 
   const supabase = createSessionClient();
   const { data, error } = await supabase
-    .from('demographics_grants')
-    .select('*, organizations(name)')
+    // The view, not the table: `organizations_member_read` hides the requesting
+    // organisation's name from the creator, and an unnamed party is not what
+    // III.E.3.b asks them to approve. See migration 0026.
+    .from('demographics_grant_inbox')
+    .select('*')
     .eq('creator_id', creatorId)
     .order('requested_at', { ascending: false })
     .returns<DemographicsGrantRow[]>();

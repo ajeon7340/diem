@@ -255,7 +255,7 @@ export interface BriefRecipientRow {
   } | null;
 }
 
-/** `public.demographics_grants` joined to the requesting organisation. */
+/** `public.demographics_grant_inbox` — the grant with the organisation NAMED. */
 export interface DemographicsGrantRow {
   id: string;
   creator_id: string;
@@ -265,5 +265,8 @@ export interface DemographicsGrantRow {
   decided_at: string | null;
   view_count: number;
   last_viewed_at: string | null;
+  /** From the view's join. Never null in practice — the join is inner. */
+  organization_name?: string | null;
+  /** Legacy shape from the embedded read the view replaced. See 0026. */
   organizations?: { name: string } | null;
 }

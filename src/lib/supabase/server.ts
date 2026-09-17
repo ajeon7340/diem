@@ -5,6 +5,7 @@ import { createServerClient as createSSRClient } from '@supabase/ssr';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 const URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 /**
@@ -98,3 +99,26 @@ export function createSessionClient(): SupabaseClient {
   );
 }
 
+
+/**
+ * Service-role client. Bypasses RLS entirely.
+ *
+ * Exactly one caller is allowed to use it from a request path: the signup
+ * analysis, which writes `report_metrics` and `social_accounts` for the
+ * creator row the same request just created. Those two tables are
+ * worker-written by design — a creator has no INSERT on either, and giving
+ * them one would let anyone write their own audience figures, which is the
+ * whole point of the report.
+ *
+ * The key is server-only (no NEXT_PUBLIC_ prefix, and this module imports
+ * 'server-only'), so it cannot reach a browser bundle. Never pass a value from
+ * the request into a query on this client without scoping it to a row the
+ * caller was just proven to own.
+ */
+export function createServiceClient(): SupabaseClient | null {
+  if (!URL || !SERVICE_KEY) return null;
+  return createClient(URL, SERVICE_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { fetch: uncachedFetch },
+  });
+}

@@ -86,12 +86,23 @@ export async function moderateComment(
     .select('access_token, scopes, token_expires_at')
     .eq('creator_id', viewer.creatorId)
     .eq('platform', 'youtube')
-    .maybeSingle<{ access_token: string; scopes: string[]; token_expires_at: string | null }>();
+    .maybeSingle<{ access_token: string | null; scopes: string[]; token_expires_at: string | null }>();
 
   if (!account) {
     return {
       status: 'error',
       message: 'Connect your YouTube channel before moderating from here.',
+      queueId,
+    };
+  }
+  // A DECLARED channel: signup read its public figures with an API key and
+  // stored them, which is why a row exists at all. It holds no credential, so
+  // this is not a reconnect — nothing was ever connected. See migration 0027.
+  if (!account.access_token) {
+    return {
+      status: 'error',
+      message:
+        'Your channel is declared but not connected. Hiding a comment acts on YouTube as you, which needs your authorisation — connect the channel to enable it.',
       queueId,
     };
   }

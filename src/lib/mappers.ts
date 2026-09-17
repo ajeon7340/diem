@@ -395,7 +395,7 @@ export function toDemographicsGrant(row: DemographicsGrantRow): DemographicsGran
     // Null renders as "an organisation" rather than blank — a creator deciding
     // who sees their audience data is owed the name when we have it and an
     // honest placeholder when we do not.
-    organizationName: row.organizations?.name ?? null,
+    organizationName: row.organization_name ?? row.organizations?.name ?? null,
     status: row.status,
     requestedAt: row.requested_at,
     decidedAt: row.decided_at,

@@ -41,18 +41,27 @@ additional_redirect_urls = [
 # retrying clears it and nothing about the app is wrong — sign-in simply cannot
 # work for real users until a provider is configured.
 #
-# Uncomment, fill in a provider, put the password in the environment, and run
-# `supabase config push`. `env(...)` keeps the credential out of this file and
-# out of git; `config push` sends it as a secret.
+# Gmail SMTP, chosen because it needs no new account and no DNS: 2-Step
+# Verification on the Google account, then an App Password from
+# https://myaccount.google.com/apppasswords . 500 messages a day, which is
+# several orders of magnitude past what the built-in service allows.
 #
-# [auth.email.smtp]
-# enabled = true
-# host = "smtp.resend.com"     # or smtp.sendgrid.net, smtp.postmarkapp.com, …
-# port = 465
-# user = "resend"              # SendGrid uses the literal "apikey"
-# pass = "env(SMTP_PASSWORD)"
-# admin_email = "noreply@yourdomain"   # must be on a domain you verified
-# sender_name = "adfit"
+# The password is referenced as env(...) so it stays out of this file and out
+# of git; `supabase config push` sends it as a secret. Set SMTP_PASSWORD in the
+# environment (it is in .env.local, which is gitignored) before pushing.
 #
-# Until then, `npm run dev:session -- <handle>@demo.adfit.invalid` mints a real
-# session cookie without sending anything.
+# admin_email must be the same Gmail address as `user`. Gmail rewrites the
+# From header to the authenticated account regardless of what is asked for, so
+# a different sender here would only make the config disagree with the mail.
+#
+# Until a real domain is verified somewhere else, this is what makes sign-in
+# work at all. `npm run dev:session -- <handle>@demo.adfit.invalid` remains the
+# way in without sending anything.
+[auth.email.smtp]
+enabled = true
+host = "smtp.gmail.com"
+port = 465
+user = "ajjeon7340@gmail.com"
+pass = "env(SMTP_PASSWORD)"
+admin_email = "ajjeon7340@gmail.com"
+sender_name = "adfit"

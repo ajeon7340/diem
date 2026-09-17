@@ -10,6 +10,7 @@ import {
 } from '@/lib/schemas';
 import { createAnonClient, createSessionClient, isSupabaseConfigured } from '@/lib/supabase/server';
 import { getViewer } from '@/lib/access/viewer';
+import { analyzeAndStore } from '@/lib/ingest/store';
 import { DEMO_ROLE_COOKIE, type DemoRole } from '@/lib/data/fixtures';
 import { resolveChannel, type ResolvedChannel } from '@/lib/youtube/resolve';
 
@@ -147,7 +148,9 @@ export async function createCreatorProfile(
     return { status: 'error', message: 'Your sign-in link expired. Request a new one.' };
   }
 
-  const { error } = await supabase.from('creators').insert({
+  const { data: created, error } = await supabase
+    .from('creators')
+    .insert({
     user_id: user.id,
     handle: parsed.data.handle,
     display_name: parsed.data.displayName,
@@ -165,7 +168,9 @@ export async function createCreatorProfile(
     youtube_handle: channel?.handle ?? null,
     youtube_channel_id: channel?.channelId ?? null,
     youtube_checked_at: channel ? new Date().toISOString() : null,
-  });
+    })
+    .select('id')
+    .single<{ id: string }>();
 
   if (error) {
     // 23505 covers both unique indexes on the table: handle and user_id.
@@ -180,6 +185,31 @@ export async function createCreatorProfile(
 
     console.error('[creators] insert failed', error.message);
     return { status: 'error', message: 'Could not create your profile. Please try again.' };
+  }
+
+  // Build the report NOW, from public data, before the creator lands on their
+  // own profile.
+  //
+  // Without this a signup ends on "Access granted, but the report is still
+  // generating — the AI pipeline runs after the creator connects their
+  // accounts", which was true of nothing: no pipeline ran, then or later, and
+  // the page said so forever. Measured at ~2-3s for 25 uploads and ~600
+  // comments, about 15 quota units.
+  //
+  // Bounded deliberately. A channel with 1,400 uploads must not turn one
+  // signup into a full census — `scripts/analyze-creator.ts` does the deep
+  // pass, and this is the one that has to finish while someone is waiting.
+  //
+  // Never throws: the creator row is already written and their handle is
+  // already taken, so a YouTube outage must not bounce them back to the form.
+  if (channel) {
+    const analysis = await analyzeAndStore(created.id, channel.channelId, {
+      maxVideos: 25,
+      maxComments: 600,
+    });
+    if (!analysis.ok) {
+      console.error('[onboarding] analysis failed', { handle: parsed.data.handle, reason: analysis.reason });
+    }
   }
 
   revalidatePath('/', 'layout');
