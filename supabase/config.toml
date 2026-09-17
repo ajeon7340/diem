@@ -1,0 +1,25 @@
+# Hosted auth configuration, as code.
+#
+# `supabase config push` writes ONLY the properties this file declares and
+# leaves everything else on the project untouched — so this file deliberately
+# declares nothing but the two URL settings. Do not let `supabase init` rewrite
+# it with its full template: the template carries a local-development site_url
+# and a pile of disabled toggles, and pushing those non-interactively would
+# overwrite real hosted settings that nobody meant to change.
+project_id = "ukkcrkkakvabpnwdkasb"
+
+[auth]
+# Where a magic link lands. Without this the link points at whatever Supabase
+# was last told, which on a fresh project is http://localhost:3000 — so every
+# link mailed to a real user sends them to their own machine.
+site_url = "https://diem-git-main-abe7340-gmailcoms-projects.vercel.app"
+
+# The allowlist the callback is checked against. A link whose redirect is not
+# on this list is refused at /auth/callback — the mail arrives and sign-in
+# still fails, which is the confusing half of this setting.
+additional_redirect_urls = [
+  "https://diem-git-main-abe7340-gmailcoms-projects.vercel.app/auth/callback",
+  "https://diem-git-main-abe7340-gmailcoms-projects.vercel.app/**",
+  "http://localhost:3000/auth/callback",
+  "http://localhost:3000/**",
+]

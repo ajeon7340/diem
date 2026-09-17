@@ -2,78 +2,96 @@
 #
 # Push the Supabase configuration from .env.local into the Vercel project.
 #
-# The deployed app has been running on fixtures because Vercel holds none of
-# these — `isSupabaseConfigured()` is false there, so every database branch is
-# switched off in production while it works locally. This copies the four the
-# app reads, for all three environments.
-#
-#   npx vercel login          # once, interactive — needs a browser
 #   npm run vercel:env
 #
-# Values are piped in on stdin, never passed as arguments: a secret in argv is
-# a secret in `ps` output and in the shell history of whoever runs this.
+# Needs a Vercel token in VERCEL_TOKEN, or in the file named by
+# VERCEL_TOKEN_FILE (default ~/.vercel-token). Read from a file rather than
+# taken as an argument: an argument is visible in `ps` and lands in shell
+# history.
 #
-# NEXT_PUBLIC_SITE_URL is the exception to copying .env.local verbatim. Locally
-# it is http://localhost:3000; on Vercel it must be the deployment origin or
-# every magic link mails the user a link back to their own machine.
+# WHY THE REST API AND NOT `vercel env add`: a team-scoped token cannot load a
+# user, and the CLI resolves the user before it does anything else —
+#
+#     Error: Not able to load user because of unexpected error: User not found.
+#
+# — so the CLI is unusable with exactly the kind of token you should be using
+# here. The API takes the same token and is scoped to the project.
+#
+# NEXT_PUBLIC_SITE_URL is the one value not copied from .env.local. Locally it
+# is http://localhost:3000, and shipping that would mail every user a sign-in
+# link pointing at their own machine.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-PROJECT="${VERCEL_PROJECT:-diem}"
 SCOPE="${VERCEL_SCOPE:-abe7340-gmailcoms-projects}"
+PROJECT="${VERCEL_PROJECT:-diem}"
 SITE_URL="${VERCEL_SITE_URL:-https://diem-git-main-abe7340-gmailcoms-projects.vercel.app}"
 
-if [ ! -f .env.local ]; then
-  echo "  .env.local not found — nothing to copy." >&2
+TOKEN_FILE="${VERCEL_TOKEN_FILE:-$HOME/.vercel-token}"
+if [ -n "${VERCEL_TOKEN:-}" ]; then
+  TOKEN="$VERCEL_TOKEN"
+elif [ -f "$TOKEN_FILE" ]; then
+  TOKEN="$(cat "$TOKEN_FILE")"
+else
+  echo "  No token. Set VERCEL_TOKEN or put one in $TOKEN_FILE." >&2
+  echo "  Create one at https://vercel.com/account/tokens" >&2
   exit 1
 fi
 
-read_var() {
-  # Last assignment wins, value kept verbatim after the first '='.
-  grep -E "^$1=" .env.local | tail -1 | cut -d= -f2-
+[ -f .env.local ] || { echo "  .env.local not found." >&2; exit 1; }
+
+api() { # method path [json-body]
+  local method="$1" path="$2"
+  if [ "$#" -ge 3 ]; then
+    curl -sS -X "$method" "https://api.vercel.com$path" \
+      -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d @-
+  else
+    curl -sS -X "$method" "https://api.vercel.com$path" -H "Authorization: Bearer $TOKEN"
+  fi
 }
 
-# A token keeps this runnable without an interactive browser login. Read from
-# a file rather than an argument so it never lands in `ps` or shell history.
-TOKEN_FILE="${VERCEL_TOKEN_FILE:-$HOME/.vercel-token}"
-TOKEN_ARGS=()
-if [ -n "${VERCEL_TOKEN:-}" ]; then
-  TOKEN_ARGS=(--token "$VERCEL_TOKEN")
-elif [ -f "$TOKEN_FILE" ]; then
-  TOKEN_ARGS=(--token "$(cat "$TOKEN_FILE")")
-fi
+PROJECT_ID="$(api GET "/v9/projects?slug=$SCOPE" | PROJECT="$PROJECT" python3 -c '
+import json, os, sys
+for p in json.load(sys.stdin).get("projects", []):
+    if p["name"] == os.environ["PROJECT"]:
+        print(p["id"]); break
+')"
+[ -n "$PROJECT_ID" ] || { echo "  No project $SCOPE/$PROJECT for this token." >&2; exit 1; }
+echo "  $SCOPE/$PROJECT -> $PROJECT_ID"
 
-vercel() { npx --yes vercel@latest "$@" "${TOKEN_ARGS[@]}"; }
+read_var() { grep -E "^$1=" .env.local | tail -1 | cut -d= -f2-; }
 
-echo "  linking $SCOPE/$PROJECT…"
-vercel link --yes --project "$PROJECT" --scope "$SCOPE" >/dev/null
+EXISTING="$(api GET "/v9/projects/$PROJECT_ID/env")"
 
 for NAME in NEXT_PUBLIC_SUPABASE_URL NEXT_PUBLIC_SUPABASE_ANON_KEY SUPABASE_SERVICE_ROLE_KEY NEXT_PUBLIC_SITE_URL; do
-  if [ "$NAME" = "NEXT_PUBLIC_SITE_URL" ]; then
-    VALUE="$SITE_URL"
-  else
-    VALUE="$(read_var "$NAME")"
-  fi
-  if [ -z "$VALUE" ]; then
-    echo "  SKIP $NAME — not set in .env.local" >&2
-    continue
-  fi
-  for ENVIRONMENT in production preview development; do
-    # Idempotent: remove first so a re-run updates instead of erroring.
-    vercel env rm "$NAME" "$ENVIRONMENT" --yes >/dev/null 2>&1 || true
-    printf '%s' "$VALUE" | vercel env add "$NAME" "$ENVIRONMENT" >/dev/null
+  if [ "$NAME" = "NEXT_PUBLIC_SITE_URL" ]; then VALUE="$SITE_URL"; else VALUE="$(read_var "$NAME")"; fi
+  if [ -z "$VALUE" ]; then echo "  SKIP $NAME — not in .env.local"; continue; fi
+
+  # Remove every existing copy first so a re-run updates rather than collides.
+  for ID in $(printf '%s' "$EXISTING" | NAME="$NAME" python3 -c '
+import json, os, sys
+for e in json.load(sys.stdin).get("envs", []):
+    if e["key"] == os.environ["NAME"]: print(e["id"])
+'); do
+    api DELETE "/v9/projects/$PROJECT_ID/env/$ID" >/dev/null
   done
-  echo "  set  $NAME  (${#VALUE} chars) → production, preview, development"
+
+  RESULT="$(VALUE="$VALUE" NAME="$NAME" python3 -c '
+import json, os
+print(json.dumps({"key": os.environ["NAME"], "value": os.environ["VALUE"],
+                  "type": "encrypted",
+                  "target": ["production", "preview", "development"]}))
+' | api POST "/v10/projects/$PROJECT_ID/env" -)"
+  printf '  %-30s %3d chars  %s\n' "$NAME" "${#VALUE}" \
+    "$(printf '%s' "$RESULT" | python3 -c '
+import json, sys
+d = json.load(sys.stdin)
+print("error: " + str(d["error"].get("message"))[:60] if "error" in d else "production, preview, development")
+')"
 done
 
 echo
-echo "  Done. Two things this script cannot do:"
-echo "    1. Vercel → Settings → General → Node.js Version → 22."
-echo "       supabase-js aborts on Node 20 with 'native WebSocket not found',"
-echo "       so the whole database path dies on the default runtime."
-echo "    2. Supabase → Authentication → URL Configuration → Redirect URLs:"
-echo "       add $SITE_URL/auth/callback"
-echo "       Without it the magic link arrives and the callback is rejected."
-echo
-echo "  Then redeploy:  npx vercel --prod"
+echo "  Supabase -> Authentication -> URL Configuration -> Redirect URLs must include:"
+echo "    $SITE_URL/auth/callback"
+echo "  Then redeploy for the build to pick the new values up."
