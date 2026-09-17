@@ -34,7 +34,17 @@ read_var() {
   grep -E "^$1=" .env.local | tail -1 | cut -d= -f2-
 }
 
-vercel() { npx --yes vercel@latest "$@"; }
+# A token keeps this runnable without an interactive browser login. Read from
+# a file rather than an argument so it never lands in `ps` or shell history.
+TOKEN_FILE="${VERCEL_TOKEN_FILE:-$HOME/.vercel-token}"
+TOKEN_ARGS=()
+if [ -n "${VERCEL_TOKEN:-}" ]; then
+  TOKEN_ARGS=(--token "$VERCEL_TOKEN")
+elif [ -f "$TOKEN_FILE" ]; then
+  TOKEN_ARGS=(--token "$(cat "$TOKEN_FILE")")
+fi
+
+vercel() { npx --yes vercel@latest "$@" "${TOKEN_ARGS[@]}"; }
 
 echo "  linking $SCOPE/$PROJECT…"
 vercel link --yes --project "$PROJECT" --scope "$SCOPE" >/dev/null
