@@ -14,6 +14,7 @@
     "scan:comments": "tsx --tsconfig tsconfig.scripts.json scripts/scan-comments.ts",
     "scan:promotions": "tsx --tsconfig tsconfig.scripts.json scripts/scan-promotions.ts",
     "seed": "tsx --tsconfig tsconfig.scripts.json scripts/seed.ts",
+    "vercel:env": "bash scripts/vercel-env.sh",
     "verify:actions": "tsx --tsconfig tsconfig.scripts.json scripts/verify-actions.ts",
     "verify:climate": "tsx --tsconfig tsconfig.scripts.json scripts/verify-climate.ts",
     "verify:clusters": "tsx --tsconfig tsconfig.scripts.json scripts/verify-clusters.ts",
