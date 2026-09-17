@@ -13,7 +13,7 @@
  * the provider rejects all fail here for a fraction of a cent, instead of
  * three thousand comments into a run.
  */
-import { AiError, aiModel, aiProvider, generateStructured } from '@/lib/ai/provider';
+import { AiError, aiModel, aiProvider, generateStructured, listModels } from '@/lib/ai/provider';
 
 interface Verdict {
   ok: boolean;
@@ -22,6 +22,16 @@ interface Verdict {
 
 async function main() {
   console.log(`  provider ${aiProvider()} · model ${aiModel()}`);
+
+  // `--list` before anything is billed. The 404 that sends people here does
+  // not name a single valid id, and guessing version numbers against a metered
+  // endpoint is a bad way to find a typo.
+  if (process.argv.includes('--list')) {
+    const models = (await listModels()).filter((m) => m.methods.includes('generateContent'));
+    console.log(`  ${models.length} models support generateContent:\n`);
+    for (const m of models) console.log(`    ${m.id}`);
+    return;
+  }
 
   try {
     const { data, usage } = await generateStructured<Verdict>({

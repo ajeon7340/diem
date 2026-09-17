@@ -241,3 +241,40 @@ async function viaAnthropic<T>({
     },
   };
 }
+
+/**
+ * What the configured key can actually call.
+ *
+ * A 404 from `generateStructured` says the model id is wrong and says nothing
+ * about which ids are right — and guessing at version numbers against a billed
+ * endpoint is how a run costs money to discover a typo. This asks.
+ */
+export async function listModels(): Promise<{ id: string; methods: string[] }[]> {
+  if (aiProvider() !== 'gemini') throw new AiError('listModels is gemini-only', null, aiProvider());
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) throw new AiError('GEMINI_API_KEY is not set', null, 'gemini');
+
+  const out: { id: string; methods: string[] }[] = [];
+  let pageToken: string | undefined;
+  do {
+    const url = new URL('https://generativelanguage.googleapis.com/v1beta/models');
+    url.searchParams.set('pageSize', '200');
+    if (pageToken) url.searchParams.set('pageToken', pageToken);
+    const res = await fetch(url, { headers: { 'x-goog-api-key': key } });
+    if (!res.ok) {
+      throw new AiError(`${res.status} ${(await res.text()).slice(0, 200)}`, res.status, 'gemini');
+    }
+    const json = (await res.json()) as {
+      models?: { name?: string; supportedGenerationMethods?: string[] }[];
+      nextPageToken?: string;
+    };
+    for (const m of json.models ?? []) {
+      out.push({
+        id: (m.name ?? '').replace(/^models\//, ''),
+        methods: m.supportedGenerationMethods ?? [],
+      });
+    }
+    pageToken = json.nextPageToken;
+  } while (pageToken);
+  return out;
+}
