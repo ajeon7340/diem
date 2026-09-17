@@ -52,15 +52,39 @@ function requireEnv(name: string): string {
   return value;
 }
 
+/**
+ * The schema's encoding of absence for the not-null jsonb columns.
+ *
+ * `report_metrics` declares twelve jsonb columns `not null default '{}'` or
+ * `'[]'`, and `emptyToNull` in lib/mappers.ts turns an empty container back
+ * into null on the way out — so the DB spells "no sponsored history" as `{}`
+ * and the app reads it as null. Writing a literal null instead is not a
+ * smaller version of the same thing; it violates the constraint and the row
+ * never lands:
+ *
+ *     null value in column "cost_efficiency" of relation "report_metrics"
+ *     violates not-null constraint
+ *
+ * which is how @quietcircuit — the creator with no sponsorships, no cohort and
+ * no CPM, the one whose whole purpose in the fixtures is to be missing things
+ * — failed to seed while the four creators with full reports went in fine.
+ */
+function obj(value: unknown): unknown {
+  return value ?? {};
+}
+function arr(value: unknown): unknown {
+  return value ?? [];
+}
+
 /** The report row, built from the same object the fixture path renders. */
 function reportRow(creatorId: string, report: AIReport) {
   return {
     creator_id: creatorId,
     teaser_highlights: [],
-    demographics: report.demographics,
-    top_comment_clusters: report.topCommentClusters,
+    demographics: obj(report.demographics),
+    top_comment_clusters: arr(report.topCommentClusters),
     comment_axes: report.commentAxes,
-    comment_coverage: report.coverage,
+    comment_coverage: obj(report.coverage),
     sentiment_score: report.sentimentScore,
     purchase_intent_rate: report.purchaseIntentRate,
     // The stored column is history. `deriveBrandSafety` recomputes from the
@@ -71,17 +95,17 @@ function reportRow(creatorId: string, report: AIReport) {
     engagement_rate: report.engagementRate,
     ad_fatigue_level: report.adFatigueLevel,
     ai_summary: report.aiSummary,
-    benchmarks: report.benchmarks,
-    cost_efficiency: report.costEfficiency,
-    sponsored_performance: report.sponsoredPerformance,
-    brand_safety_flags: report.brandSafetyFlags,
+    benchmarks: obj(report.benchmarks),
+    cost_efficiency: obj(report.costEfficiency),
+    sponsored_performance: obj(report.sponsoredPerformance),
+    brand_safety_flags: arr(report.brandSafetyFlags),
     category_exposure: [],
-    recommended_actions: report.recommendedActions,
-    platform_breakdown: report.platformBreakdown,
-    public_opinion: report.publicOpinion,
-    output_stats: report.outputStats,
-    promotions: report.promotions,
-    comment_risks: report.commentRisks,
+    recommended_actions: arr(report.recommendedActions),
+    platform_breakdown: arr(report.platformBreakdown),
+    public_opinion: obj(report.publicOpinion),
+    output_stats: arr(report.outputStats),
+    promotions: arr(report.promotions),
+    comment_risks: arr(report.commentRisks),
     moderation: report.moderation,
     comment_register: report.commentRegister,
     purchase_intent_ci_low: report.intent?.ciLow ?? null,

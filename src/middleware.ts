@@ -60,6 +60,9 @@ async function refreshSession(request: NextRequest): Promise<NextResponse> {
   if (!url || !anonKey) return response;
 
   const supabase = createServerClient(url, anonKey, {
+    // Same reason as lib/supabase/server.ts: never let a token check come out
+    // of a cache. This one decides who the request is.
+    global: { fetch: (input, init) => fetch(input, { ...init, cache: 'no-store' }) },
     cookies: {
       getAll: () => request.cookies.getAll(),
       setAll: (cookiesToSet) => {

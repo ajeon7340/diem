@@ -16,6 +16,37 @@ export function isSupabaseConfigured(): boolean {
   return Boolean(URL && ANON_KEY);
 }
 
+/**
+ * Supabase reads must never enter Next's Data Cache.
+ *
+ * `export const dynamic = 'force-dynamic'` on the profile page turns off the
+ * FULL ROUTE cache, and the comment there says why: "a cached unlocked render
+ * would serve one brand's paid report to the next anonymous visitor." It does
+ * not turn off the DATA cache. Next patches global `fetch`, and supabase-js
+ * issues a plain GET for every `.select()`, so the row itself is cached on
+ * disk under `.next/cache/fetch-cache` and replayed on later requests.
+ *
+ * Measured, not theorised: a creator's bio was changed directly in Postgres,
+ * the anon client confirmed the new value, and the profile page kept rendering
+ * the old one across a cache-busting query string, a full server restart, and
+ * a rebuild. Deleting `.next/cache/fetch-cache` fixed it instantly.
+ *
+ * Two consequences, and the second is the serious one:
+ *
+ *   1. Staleness. A report that was just re-analysed, a handle that was just
+ *      claimed, an access grant that was just revoked — none of it lands.
+ *   2. Cross-visitor reuse. The anon client sends the same headers for every
+ *      visitor, so one entry serves all of them. That is tolerable for the
+ *      public teaser and is NOT tolerable for anything the gatekeeper decided,
+ *      which is most of what this app does.
+ *
+ * `no-store` on every request opts the whole client out. It costs nothing that
+ * was ever safe to keep: none of these reads are public, static, or shared.
+ */
+function uncachedFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  return fetch(input, { ...init, cache: 'no-store' });
+}
+
 function requireEnv(name: string, value: string | undefined): string {
   if (!value) throw new Error(`Missing environment variable: ${name}`);
   return value;
@@ -29,7 +60,10 @@ export function createAnonClient(): SupabaseClient {
   return createClient(
     requireEnv('NEXT_PUBLIC_SUPABASE_URL', URL),
     requireEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY', ANON_KEY),
-    { auth: { persistSession: false, autoRefreshToken: false } },
+    {
+      auth: { persistSession: false, autoRefreshToken: false },
+      global: { fetch: uncachedFetch },
+    },
   );
 }
 
@@ -46,6 +80,7 @@ export function createSessionClient(): SupabaseClient {
     requireEnv('NEXT_PUBLIC_SUPABASE_URL', URL),
     requireEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY', ANON_KEY),
     {
+      global: { fetch: uncachedFetch },
       cookies: {
         getAll: () => cookieStore.getAll(),
         setAll: (cookiesToSet) => {

@@ -8,6 +8,7 @@
     "lint": "next lint",
     "start": "next start",
     "verify": "npm run verify:actions && npm run verify:climate && npm run verify:clusters && npm run verify:directory && npm run verify:disclosure && npm run verify:drivers && npm run verify:fit && npm run verify:intent && npm run verify:keywords && npm run verify:moderation && npm run verify:onboarding && npm run verify:opinion && npm run verify:policy && npm run verify:retention && npm run verify:safety && npm run verify:schemas && npm run verify:sufficiency",
+    "dev:session": "tsx --env-file=.env.local --tsconfig tsconfig.scripts.json scripts/dev-session.ts",
     "opinion:press": "tsx --tsconfig tsconfig.scripts.json scripts/opinion-press.ts",
     "retention": "tsx --tsconfig tsconfig.scripts.json scripts/retention.ts",
     "scan:comments": "tsx --tsconfig tsconfig.scripts.json scripts/scan-comments.ts",
