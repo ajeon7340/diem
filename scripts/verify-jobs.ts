@@ -12,6 +12,7 @@
 import { describeJob } from '@/lib/ingest/jobs';
 import { rollUp, type Flagged, type RawComment } from '@/lib/ingest/classify';
 import { rollUpAxes, type AxisLabel } from '@/lib/ingest/intent';
+import { jobMaxVideos, positiveEnv } from '@/lib/ingest/worker-config';
 import { INTENT_WEIGHTS } from '@/lib/report/intent';
 import type { AnalysisJob, CommentIntent, CommentObject } from '@/types';
 
@@ -290,6 +291,34 @@ check('and are reported as their own figure', withUnreadable.unreadable, 10);
 // They are NOT in the product basis, so they cannot dilute the rate downwards
 // by pretending to be product comments that did not convert.
 check('and are not counted as product comments', withUnreadable.measurement.commentsScored, 90);
+
+// ---------------------------------------------------------------------------
+// The worker's bounds, read from places that lie about emptiness
+// ---------------------------------------------------------------------------
+//
+// THE EMPTY STRING IS THE WHOLE POINT. `Number('')` is 0, not NaN, and `??`
+// does not catch it — so a workflow passing an unset optional input through
+// would have produced a census of no videos that reports SUCCESS, and a lease
+// that has already expired.
+
+check('an unset variable uses the default', positiveEnv('X', 30, {}), 30);
+check('an EMPTY variable uses the default', positiveEnv('X', 30, { X: '' }), 30);
+check('whitespace uses the default', positiveEnv('X', 30, { X: '   ' }), 30);
+check('a real value wins', positiveEnv('X', 30, { X: '5' }), 5);
+check('zero is refused', positiveEnv('X', 30, { X: '0' }), 30);
+check('a negative is refused', positiveEnv('X', 30, { X: '-2' }), 30);
+check('nonsense is refused', positiveEnv('X', 30, { X: 'lots' }), 30);
+
+check('no params uses the default', jobMaxVideos(null, 30), 30);
+check('an absent bound uses the default', jobMaxVideos({}, 30), 30);
+check('a null bound uses the default', jobMaxVideos({ maxVideos: null }, 30), 30);
+check('an empty bound uses the default', jobMaxVideos({ maxVideos: '' }, 30), 30);
+check('a zero bound uses the default', jobMaxVideos({ maxVideos: 0 }, 30), 30);
+check('a real bound wins', jobMaxVideos({ maxVideos: 2 }, 30), 2);
+check('a numeric string is read', jobMaxVideos({ maxVideos: '2' }, 30), 2);
+// An unbounded full census is a legitimate thing to queue, and this is the
+// only way to ask for one.
+check('an unbounded census is allowed', jobMaxVideos({ maxVideos: Infinity }, 30), Infinity);
 
 console.log(`\n  ${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);

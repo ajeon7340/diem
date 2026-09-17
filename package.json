@@ -17,7 +17,7 @@
     "scan:promotions": "tsx --env-file=.env.local --tsconfig tsconfig.scripts.json scripts/scan-promotions.ts",
     "seed": "tsx --env-file=.env.local --tsconfig tsconfig.scripts.json scripts/seed.ts",
     "vercel:env": "bash scripts/vercel-env.sh",
-    "worker": "tsx --env-file=.env.local --tsconfig tsconfig.scripts.json scripts/worker.ts",
+    "worker": "tsx --env-file-if-exists=.env.local --tsconfig tsconfig.scripts.json scripts/worker.ts",
     "verify:actions": "tsx --tsconfig tsconfig.scripts.json scripts/verify-actions.ts",
     "verify:climate": "tsx --tsconfig tsconfig.scripts.json scripts/verify-climate.ts",
     "verify:clusters": "tsx --tsconfig tsconfig.scripts.json scripts/verify-clusters.ts",

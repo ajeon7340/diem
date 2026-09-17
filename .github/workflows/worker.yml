@@ -1,0 +1,84 @@
+# The worker, somewhere it actually runs.
+#
+# Signup queues two model passes it cannot run itself — the classification is
+# minutes long, which is past every serverless limit this app deploys behind.
+# Until something claims those jobs they sit in `queued` forever, and the
+# creator's report stays half-filled with a line saying the scan is coming.
+#
+# WHY GITHUB ACTIONS AND NOT A VERCEL CRON ROUTE.
+#
+# A route would have to finish inside the function timeout, and the measured
+# pass does not: 6,369 comments took 5m30s. Bounding the job small enough to
+# fit would mean shipping a census that stops early and does not say so, which
+# is the one failure this product cannot absorb. A route is also an HTTP
+# surface that SPENDS MONEY on each call, so it would need its own shared
+# secret and rate limit; this needs neither, because nothing is exposed.
+#
+# This is the zero-infrastructure option, not the best one. A long-lived
+# container (Fly, Railway, Render, a box) running `npm run worker` with no
+# flags is strictly better: it picks a job up seconds after signup instead of
+# on the next tick, and it costs no Actions minutes. Swap to that the moment
+# somebody is watching a real signup and waiting. Nothing here needs to change
+# for it — the same command, without `--drain`.
+name: worker
+
+on:
+  schedule:
+    # Every ten minutes. GitHub's scheduler is best-effort and runs late under
+    # load, which is fine: "queued and will run shortly" is a promise this
+    # keeps, and the report is not live data.
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+    inputs:
+      max_videos:
+        description: 'Videos per channel (blank uses the worker default of 30)'
+        required: false
+        type: string
+
+# Overlapping runs are SAFE — `claim_analysis_job` holds `for update skip
+# locked`, so a second worker takes a different job or none. This exists to
+# stop paying for a queue that is already being drained, not to protect
+# correctness.
+concurrency:
+  group: adfit-worker
+  cancel-in-progress: false
+
+jobs:
+  drain:
+    runs-on: ubuntu-latest
+    # A bound, not an expectation. A run killed at the ceiling leaves its job
+    # `running` with a lease, and the lease expiring is what makes it
+    # claimable again — the attempt is already counted, so a job that reliably
+    # eats a worker walks to max_attempts instead of retrying forever.
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # NOT optional: supabase-js aborts on Node 20 with "native WebSocket
+          # not found".
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      - name: Drain the queue
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Configuration rather than credentials, so repository VARIABLES.
+          # The model id is deliberately not defaulted here: `provider.ts`
+          # defaults to a family name that 404s loudly rather than silently
+          # billing for something nobody chose.
+          ADFIT_AI_PROVIDER: ${{ vars.ADFIT_AI_PROVIDER || 'anthropic' }}
+          ADFIT_AI_MODEL: ${{ vars.ADFIT_AI_MODEL }}
+          ADFIT_WORKER_MAX_VIDEOS: ${{ inputs.max_videos }}
+        # `--drain` runs until the queue is empty and then exits 0, which is
+        # what a scheduled job wants. Plain `npm run worker` would poll forever
+        # and be killed at the timeout every single run.
+        run: npm run worker -- --drain

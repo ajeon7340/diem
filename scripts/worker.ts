@@ -31,6 +31,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { aiModel, aiProvider } from '@/lib/ai/provider';
 import { ClaimLostError, classifyAndStore } from '@/lib/ingest/classify';
 import { classifyIntentAndStore } from '@/lib/ingest/intent';
+import { jobMaxVideos, positiveEnv } from '@/lib/ingest/worker-config';
 import type { AnalysisJobKind } from '@/types';
 
 const args = process.argv.slice(2);
@@ -41,9 +42,9 @@ const STATUS = args.includes('--status');
 const VERBOSE = args.includes('--verbose');
 
 /** How long a claim is held before another worker may take the job. */
-const LEASE_SECONDS = Number(process.env.ADFIT_WORKER_LEASE ?? 900);
+const LEASE_SECONDS = positiveEnv('ADFIT_WORKER_LEASE', 900);
 /** Gap between polls when there was nothing to do. */
-const IDLE_MS = Number(process.env.ADFIT_WORKER_IDLE_MS ?? 15_000);
+const IDLE_MS = positiveEnv('ADFIT_WORKER_IDLE_MS', 15_000);
 /**
  * Bound on a single signup-triggered census.
  *
@@ -52,7 +53,7 @@ const IDLE_MS = Number(process.env.ADFIT_WORKER_IDLE_MS ?? 15_000);
  * that has to LAND, so it is bounded and says so; the unbounded census is
  * `scan:comments` with no --max-videos, run deliberately.
  */
-const DEFAULT_MAX_VIDEOS = Number(process.env.ADFIT_WORKER_MAX_VIDEOS ?? 30);
+const DEFAULT_MAX_VIDEOS = positiveEnv('ADFIT_WORKER_MAX_VIDEOS', 30);
 
 const WORKER = `${hostname()}/${process.pid}`;
 
@@ -174,7 +175,7 @@ async function requireChannel(
 async function runClassifyComments(supabase: SupabaseClient, job: JobRow): Promise<void> {
   const creator = await requireChannel(supabase, job.creator_id);
 
-  const maxVideos = Number(job.params?.maxVideos ?? DEFAULT_MAX_VIDEOS);
+  const maxVideos = jobMaxVideos(job.params, DEFAULT_MAX_VIDEOS);
   log(
     `@${creator.handle} · ${aiProvider()} ${aiModel()} · ` +
       `${Number.isFinite(maxVideos) ? `${maxVideos} videos` : 'full census'}`,
@@ -212,7 +213,7 @@ async function runClassifyComments(supabase: SupabaseClient, job: JobRow): Promi
 
 async function runClassifyIntent(supabase: SupabaseClient, job: JobRow): Promise<void> {
   const creator = await requireChannel(supabase, job.creator_id);
-  const maxVideos = Number(job.params?.maxVideos ?? DEFAULT_MAX_VIDEOS);
+  const maxVideos = jobMaxVideos(job.params, DEFAULT_MAX_VIDEOS);
 
   log(
     `@${creator.handle} intent · ${aiProvider()} ${aiModel()} · ` +
