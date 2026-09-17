@@ -36,6 +36,33 @@ function siteOrigin(): string {
 }
 
 /**
+ * What to tell someone whose link did not send.
+ *
+ * "Please try again" was the answer to every failure, and for the one that
+ * actually happens it is the wrong instruction. Supabase's built-in email
+ * service allows a couple of messages an hour per project — it is a testing
+ * convenience, not a mailer — and past that every request returns
+ *
+ *     429  over_email_send_rate_limit  "email rate limit exceeded"
+ *
+ * Trying again is precisely what will not work, and a creator told to retry
+ * will retry, fail, and conclude the product is broken. It is not their
+ * address, their spam folder, or their timing: the project has no mail
+ * provider configured. Say which of those it is.
+ */
+function magicLinkFailure(error: { code?: string; status?: number; message: string }): string {
+  if (error.code === 'over_email_send_rate_limit' || error.status === 429) {
+    return 'Sign-in email is rate-limited on this deployment and retrying will not clear it — the project has no mail provider configured yet. Please contact us and we will send you a link directly.';
+  }
+  // A redirect the project does not allow fails here rather than at the
+  // callback, and the fix is a configuration change, not a retry.
+  if (/redirect/i.test(error.message)) {
+    return 'This sign-in link could not be issued for this address on this site. Please contact us — this is a configuration problem on our side, not yours.';
+  }
+  return 'Could not send the link. Please try again in a moment.';
+}
+
+/**
  * Sends a passwordless sign-in link.
  *
  * `shouldCreateUser` is true for both register and sign-in: with magic links
@@ -74,8 +101,8 @@ export async function sendMagicLink(
   });
 
   if (error) {
-    console.error('[auth] magic link failed', error.message);
-    return { status: 'error', message: 'Could not send the link. Please try again.' };
+    console.error('[auth] magic link failed', { code: error.code, status: error.status, message: error.message });
+    return { status: 'error', message: magicLinkFailure(error) };
   }
 
   return { status: 'sent', email: parsed.data };

@@ -23,3 +23,31 @@ additional_redirect_urls = [
   "http://localhost:3000/auth/callback",
   "http://localhost:3000/**",
 ]
+
+# --- Mail -------------------------------------------------------------------
+#
+# Supabase's built-in email service is a testing convenience, not a mailer. It
+# allows roughly two messages an hour per project and, on newer projects, only
+# to addresses belonging to the Supabase organisation. Past that:
+#
+#     429  over_email_send_rate_limit  "email rate limit exceeded"
+#
+# which is what "Could not send the link" was on the deployment. No amount of
+# retrying clears it and nothing about the app is wrong — sign-in simply cannot
+# work for real users until a provider is configured.
+#
+# Uncomment, fill in a provider, put the password in the environment, and run
+# `supabase config push`. `env(...)` keeps the credential out of this file and
+# out of git; `config push` sends it as a secret.
+#
+# [auth.email.smtp]
+# enabled = true
+# host = "smtp.resend.com"     # or smtp.sendgrid.net, smtp.postmarkapp.com, …
+# port = 465
+# user = "resend"              # SendGrid uses the literal "apikey"
+# pass = "env(SMTP_PASSWORD)"
+# admin_email = "noreply@yourdomain"   # must be on a domain you verified
+# sender_name = "adfit"
+#
+# Until then, `npm run dev:session -- <handle>@demo.adfit.invalid` mints a real
+# session cookie without sending anything.
