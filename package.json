@@ -20,6 +20,7 @@
     "verify:opinion": "tsx --tsconfig tsconfig.scripts.json scripts/verify-opinion.ts",
     "scan:comments": "tsx --tsconfig tsconfig.scripts.json scripts/scan-comments.ts",
     "scan:promotions": "tsx --tsconfig tsconfig.scripts.json scripts/scan-promotions.ts",
+    "seed": "tsx --tsconfig tsconfig.scripts.json scripts/seed.ts",
     "verify:moderation": "tsx --tsconfig tsconfig.scripts.json scripts/verify-moderation.ts",
     "verify:retention": "tsx --tsconfig tsconfig.scripts.json scripts/verify-retention.ts",
     "verify:drivers": "tsx --tsconfig tsconfig.scripts.json scripts/verify-drivers.ts",

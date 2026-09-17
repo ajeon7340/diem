@@ -209,8 +209,8 @@ export const sponsoredPerformanceSchema = z
     organicMedianViews: z.number().min(0),
     sponsoredMedianViews: z.number().min(0),
     viewRetention: z.number().min(0).max(5),
-    organicSentiment: z.number().min(0).max(100),
-    sponsoredSentiment: z.number().min(0).max(100),
+    organicSentiment: z.number().min(0).max(100).nullable().catch(null),
+    sponsoredSentiment: z.number().min(0).max(100).nullable().catch(null),
   })
   .nullable()
   .catch(null);

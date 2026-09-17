@@ -478,7 +478,15 @@ function Sheet({
                 />
                 <Line
                   label="Comment sentiment /100"
-                  value={`${score(perf.organicSentiment)} → ${score(perf.sponsoredSentiment)}`}
+                  // The printed sheet gets emailed around a buying team and
+                  // cannot be clicked into, so an unmeasured pair has to say so
+                  // in words. "0 → 0" on a 0-100 scale is the worst possible
+                  // misreading of a field nobody measured.
+                  value={
+                    perf.organicSentiment === null || perf.sponsoredSentiment === null
+                      ? 'not measured'
+                      : `${score(perf.organicSentiment)} → ${score(perf.sponsoredSentiment)}`
+                  }
                 />
                 <Line label="Ad fatigue" value={report.adFatigueLevel ?? 'no basis'} />
               </>

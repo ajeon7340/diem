@@ -427,9 +427,20 @@ export interface SponsoredPerformance {
   sponsoredMedianViews: number;
   /** sponsored ÷ organic median views. 1.0 means no drop-off. */
   viewRetention: number;
-  /** Both 0–100, same scale as `sentimentScore`. */
-  organicSentiment: number;
-  sponsoredSentiment: number;
+  /**
+   * Both 0–100, same scale as `sentimentScore`. NULL when the sentiment pass
+   * has not run on that half — which is not the same as a sentiment of zero.
+   *
+   * Required until 2026-09-16, and the cost was immediate: a creator with no
+   * sentiment pass carried 0 and 0, and the panel rendered
+   * "0.0 → 0.0 +0%" IN EMERALD — because the delta helper treats a zero
+   * denominator as no change, and no change is coloured as a good outcome. An
+   * unmeasured field came out as a green, flat, confident result on a 0-100
+   * scale where 0 is the worst score available. Absence rendering as a finding,
+   * in the one direction nobody checks.
+   */
+  organicSentiment: number | null;
+  sponsoredSentiment: number | null;
 }
 
 export type RiskSeverity = 'none' | 'low' | 'medium' | 'high';

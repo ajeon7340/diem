@@ -34,3 +34,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# supabase cli scratch (holds only a cached CLI version string, but it is not ours to track)
+/supabase/.temp/

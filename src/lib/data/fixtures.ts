@@ -62,7 +62,14 @@ const CREATOR_E_ID = 'c0000000-0000-4000-8000-00000000000e';
  */
 const CREATOR_F_ID = 'c0000000-0000-4000-8000-00000000000f';
 
-const CREATORS: Creator[] = [
+/**
+ * Exported for `scripts/seed.ts` only — the seed writes these same objects into
+ * a real Supabase project so the database path renders the same pages the
+ * fixture path does. Nothing in the app should import them directly: the
+ * accessors below are what enforce directory visibility and the locked-metric
+ * projection, and a caller reaching past them gets rows it is not entitled to.
+ */
+export const CREATORS: Creator[] = [
   {
     id: CREATOR_A_ID,
     handle: 'marahwoods',
@@ -279,7 +286,14 @@ const UNDERIVED: AIReport['brandSafety'] = {
   rubricVersion: '',
 };
 
-const REPORTS: Record<string, AIReport> = {
+/**
+ * Exported for `scripts/seed.ts` only — the seed writes these same objects into
+ * a real Supabase project so the database path renders the same pages the
+ * fixture path does. Nothing in the app should import them directly: the
+ * accessors below are what enforce directory visibility and the locked-metric
+ * projection, and a caller reaching past them gets rows it is not entitled to.
+ */
+export const REPORTS: Record<string, AIReport> = {
   [CREATOR_A_ID]: {
     creatorId: CREATOR_A_ID,
     demographics: {
@@ -2559,10 +2573,12 @@ const REPORTS: Record<string, AIReport> = {
       sponsoredMedianViews: 205_808,
       viewRetention: 0.319,
       organicSentiment: 61.4,
-      // Not measured: the sentiment pass never ran on this one video, and
-      // copying the organic figure across asserted "no difference", which is a
-      // finding. It reads as unmeasured now.
-      sponsoredSentiment: 61.4,
+      // Was 61.4, copied from the organic figure beside it — which asserts "the
+      // sponsored post landed exactly like the rest", and that is a finding, not
+      // a blank. Yesterday's comment here said "it reads as unmeasured now"
+      // while the number stayed: a note claiming a fix that had not been made.
+      // The field is nullable now and this is null.
+      sponsoredSentiment: null,
     },
     brandSafety: UNDERIVED,
     // Both overwritten in the normalisation pass below.
@@ -3158,7 +3174,6 @@ const REPORTS: Record<string, AIReport> = {
     aiSummary: '',
     benchmarks: null,
     costEfficiency: null,
-    sponsoredPerformance: null,
     brandSafetyFlags: [],
     // Counts only. `example` is empty on every row on purpose: these comments
     // are aimed at real, named people, and committing a transcript of what a
@@ -3181,7 +3196,51 @@ const REPORTS: Record<string, AIReport> = {
       lastModeratedAt: null,
     },
     recommendedActions: [],
-    promotions: [],
+    // Found by `npm run scan:promotions` over the same 20-upload window this
+    // report's `outputStats` describes — one of them carries YouTube's own
+    // `hasPaidProductPlacement` flag, which the creator sets.
+    //
+    // `brand` is filled here and null on @jooshica's row, and the difference is
+    // not effort: this description names the advertiser in its first line. That
+    // is measured. Her description names a campaign hashtag and no company, so
+    // hers stays "unidentified" — the honest cell.
+    promotions: [
+      {
+        postId: 'N3RWjH6qFQM',
+        platform: 'youtube',
+        title: '카톡 ㅂ남 낚시',
+        url: 'https://www.youtube.com/watch?v=N3RWjH6qFQM',
+        publishedAt: '2026-09-16T15:00:15.000Z',
+        brand: '모두닥',
+        product: 'Dental price comparison and booking',
+        category: 'Healthcare services',
+        disclosure: 'explicit',
+        views: 109_653,
+        // 109,653 against an 80,281 organic median. Above 1.0, which is the
+        // uncommon direction and worth not rounding away: the paid upload
+        // outperformed the median organic one.
+        sponsoredRetention: 1.366,
+      },
+    ],
+    // One post is not a paid baseline and the panel beside it says so. It is
+    // recorded because "one placement, and it did this" is a different fact
+    // from "never sponsored", and the report had only the second.
+    sponsoredPerformance: {
+      sponsoredPostsAnalyzed: 1,
+      windowDays: 90,
+      // Excludes the sponsored upload, which is why it sits just under the
+      // 84,686 in `outputStats` rather than equalling it.
+      organicMedianViews: 80_281,
+      sponsoredMedianViews: 109_653,
+      viewRetention: 1.366,
+      // Not measured. The sentiment pass has not run on this channel at all.
+      // Null, not 0. The sentiment pass has never run on this channel — only
+      // the risk census and the two-axis classification have — and 0 on a
+      // 0-100 scale is the worst score available, which is what this rendered
+      // as: "0.0 → 0.0 +0%", in emerald.
+      organicSentiment: null,
+      sponsoredSentiment: null,
+    },
     platformBreakdown: [
       {
         platform: 'youtube',
@@ -3191,7 +3250,7 @@ const REPORTS: Record<string, AIReport> = {
         sentimentScore: null,
         purchaseIntentRate: null,
         commentsAnalyzed: 2_392,
-        sponsoredRetention: null,
+        sponsoredRetention: 1.366,
         estimatedCpm: null,
         dominantIntent: null,
         bestFormat: null,

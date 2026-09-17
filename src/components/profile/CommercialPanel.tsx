@@ -8,32 +8,67 @@ import { LockedPanel } from './LockedPanel';
 import { cn } from '@/lib/cn';
 
 /** Organic → sponsored, as one line rather than a chart. */
+/**
+ * A before/after pair, or an explicit "not measured".
+ *
+ * `from` and `to` used to be required numbers, and the fallout was the sharpest
+ * version of the rule this report is built on. A creator with no sentiment pass
+ * carried 0 and 0; `change` was computed as `from === 0 ? 0 : ...`, so it came
+ * out as no change; no change is coloured EMERALD. The panel rendered
+ * "0.0 → 0.0 +0%" in green, on a 0-100 scale where 0 is the worst score
+ * there is — a confident, flat, healthy result for a figure nobody measured.
+ *
+ * Null is a first-class input now, and there is no arithmetic to do on it.
+ */
 function Delta({
   label,
   from,
   to,
   format,
   locked,
+  unmeasured = 'Not measured.',
 }: {
   label: string;
-  from: number;
-  to: number;
+  from: number | null;
+  to: number | null;
   format: (value: number) => string;
   locked: boolean;
+  /** What to say instead of a number. Never a bare dash — that reads as a bug. */
+  unmeasured?: string;
 }) {
-  const change = from === 0 ? 0 : (to - from) / from;
-  const tone = change >= -0.1 ? 'text-emerald' : change < -0.2 ? 'text-rose' : 'text-ink-muted';
+  if (!locked && (from === null || to === null)) {
+    return (
+      <div className="px-5 py-4">
+        <div className="rail">{label}</div>
+        <p className="mt-2 text-[12px] leading-relaxed text-ink-muted">{unmeasured}</p>
+      </div>
+    );
+  }
+
+  const a = from ?? 0;
+  const b = to ?? 0;
+  // A zero baseline has no percentage change — the division is undefined, not
+  // zero — so the chip is withheld rather than printed as +0%.
+  const change = a === 0 ? null : (b - a) / a;
+  const tone =
+    change === null
+      ? 'text-ink-faint'
+      : change >= -0.1
+        ? 'text-emerald'
+        : change < -0.2
+          ? 'text-rose'
+          : 'text-ink-muted';
 
   return (
     <div className="px-5 py-4">
       <div className="rail">{label}</div>
       <div className="mt-2 flex flex-wrap items-baseline gap-2">
-        <span className="tnum text-[15px] text-ink-muted">{locked ? '—' : format(from)}</span>
+        <span className="tnum text-[15px] text-ink-muted">{locked ? '—' : format(a)}</span>
         <span className="text-ink-faint" aria-hidden>
           →
         </span>
-        <span className="tnum text-[19px] font-medium text-ink">{locked ? '—' : format(to)}</span>
-        {!locked ? (
+        <span className="tnum text-[19px] font-medium text-ink">{locked ? '—' : format(b)}</span>
+        {!locked && change !== null ? (
           <span className={cn('tnum text-[12px]', tone)}>
             {change >= 0 ? '+' : ''}
             {(change * 100).toFixed(0)}%
@@ -212,6 +247,7 @@ export function CommercialPanel({
                 to={perf.sponsoredSentiment}
                 format={(value) => score(value)}
                 locked={locked}
+                unmeasured="The sentiment pass has not run on the sponsored posts, so there is nothing to compare against. Not a flat result, an absent one."
               />
             </div>
           </div>
