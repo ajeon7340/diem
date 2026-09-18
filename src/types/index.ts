@@ -1510,6 +1510,48 @@ export interface DemographicsGrant {
  * platform, and a fit read that treats it as one more vertical would be
  * offering a judgement it has no business making — see CATEGORY_CAUTION.
  */
+/**
+ * The niches a creator may pick from.
+ *
+ * A dropdown rather than a text field, because this is the directory's only
+ * categorical filter and free text does not filter. Typed by hand it produced
+ * "Consumer Tech & Workspace", "consumer tech", "Tech/Workspace" and
+ * "Tech" — four rows a brand filtering for tech sees one of.
+ *
+ * The first six are the values already in the database and must stay spelled
+ * exactly as they are; changing one orphans every creator carrying it. The
+ * column is still free text on purpose: this list constrains what NEW signups
+ * can choose without invalidating a row that predates it.
+ */
+export const CREATOR_NICHES = [
+  'Audio & Listening',
+  'Beauty & Lifestyle',
+  'Consumer Tech & Workspace',
+  'Gaming & Commentary',
+  'Outdoor & Gear',
+  'Stationery & Paper',
+  'Art & Illustration',
+  'Automotive',
+  'Books & Writing',
+  'Business & Finance',
+  'Cooking & Food',
+  'Education & Science',
+  'Family & Parenting',
+  'Fashion',
+  'Film & TV',
+  'Fitness & Health',
+  'Home & Interiors',
+  'Music',
+  'News & Politics',
+  'Pets & Animals',
+  'Photography & Video',
+  'Software & Development',
+  'Sports',
+  'Travel',
+] as const;
+
+export type CreatorNiche = (typeof CREATOR_NICHES)[number];
+
 export const CAMPAIGN_CATEGORIES = [
   'beauty',
   'technology',

@@ -177,6 +177,11 @@ export function budgetRange(
 ): string | null {
   const { budgetMin, budgetMax, budgetNegotiable } = creator;
   if (budgetMin !== null && budgetMax !== null) {
+    // One price, said once. The signup form lets a creator give a single
+    // figure, which stores as min === max; rendering that as "$15,000–$15,000"
+    // reads as a range the width of nothing and makes a confident answer look
+    // like a data error.
+    if (budgetMin === budgetMax) return currency(budgetMin, code);
     return `${currency(budgetMin, code)}–${currency(budgetMax, code)}`;
   }
   if (budgetMin !== null) return `from ${currency(budgetMin, code)}`;

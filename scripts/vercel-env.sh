@@ -64,7 +64,13 @@ read_var() { grep -E "^$1=" .env.local | tail -1 | cut -d= -f2-; }
 
 EXISTING="$(api GET "/v9/projects/$PROJECT_ID/env")"
 
-for NAME in NEXT_PUBLIC_SUPABASE_URL NEXT_PUBLIC_SUPABASE_ANON_KEY SUPABASE_SERVICE_ROLE_KEY NEXT_PUBLIC_SITE_URL; do
+# YOUTUBE_API_KEY was missing from this list, and its absence is invisible
+# until someone signs up: `resolveChannel` throws, and the form said "Could not
+# check that handle. Try again in a moment." on a deployment where waiting
+# could never help. The model keys are here for the same reason.
+for NAME in NEXT_PUBLIC_SUPABASE_URL NEXT_PUBLIC_SUPABASE_ANON_KEY SUPABASE_SERVICE_ROLE_KEY \
+            NEXT_PUBLIC_SITE_URL YOUTUBE_API_KEY GEMINI_API_KEY ADFIT_AI_PROVIDER ADFIT_AI_MODEL \
+            ADFIT_MOCK_EMAIL; do
   if [ "$NAME" = "NEXT_PUBLIC_SITE_URL" ]; then VALUE="$SITE_URL"; else VALUE="$(read_var "$NAME")"; fi
   if [ -z "$VALUE" ]; then echo "  SKIP $NAME — not in .env.local"; continue; fi
 

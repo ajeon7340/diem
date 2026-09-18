@@ -7,7 +7,7 @@
     "dev": "next dev",
     "lint": "next lint",
     "start": "next start",
-    "verify": "npm run verify:actions && npm run verify:climate && npm run verify:clusters && npm run verify:directory && npm run verify:disclosure && npm run verify:drivers && npm run verify:fit && npm run verify:intent && npm run verify:jobs && npm run verify:keywords && npm run verify:migrations && npm run verify:moderation && npm run verify:onboarding && npm run verify:opinion && npm run verify:policy && npm run verify:retention && npm run verify:safety && npm run verify:schemas && npm run verify:sufficiency",
+    "verify": "npm run verify:actions && npm run verify:climate && npm run verify:clusters && npm run verify:directory && npm run verify:disclosure && npm run verify:drivers && npm run verify:fit && npm run verify:intent && npm run verify:jobs && npm run verify:keywords && npm run verify:migrations && npm run verify:moderation && npm run verify:onboarding && npm run verify:opinion && npm run verify:policy && npm run verify:retention && npm run verify:safety && npm run verify:schemas && npm run verify:signup && npm run verify:sufficiency",
     "ai:check": "tsx --env-file=.env.local --tsconfig tsconfig.scripts.json scripts/ai-check.ts",
     "analyze": "tsx --env-file=.env.local --tsconfig tsconfig.scripts.json scripts/analyze-creator.ts",
     "dev:session": "tsx --env-file=.env.local --tsconfig tsconfig.scripts.json scripts/dev-session.ts",
@@ -17,7 +17,6 @@
     "scan:promotions": "tsx --env-file=.env.local --tsconfig tsconfig.scripts.json scripts/scan-promotions.ts",
     "seed": "tsx --env-file=.env.local --tsconfig tsconfig.scripts.json scripts/seed.ts",
     "vercel:env": "bash scripts/vercel-env.sh",
-    "worker": "tsx --env-file-if-exists=.env.local --tsconfig tsconfig.scripts.json scripts/worker.ts",
     "verify:actions": "tsx --tsconfig tsconfig.scripts.json scripts/verify-actions.ts",
     "verify:climate": "tsx --tsconfig tsconfig.scripts.json scripts/verify-climate.ts",
     "verify:clusters": "tsx --tsconfig tsconfig.scripts.json scripts/verify-clusters.ts",
@@ -36,7 +35,9 @@
     "verify:retention": "tsx --tsconfig tsconfig.scripts.json scripts/verify-retention.ts",
     "verify:safety": "tsx --tsconfig tsconfig.scripts.json scripts/verify-safety.ts",
     "verify:schemas": "tsx --tsconfig tsconfig.scripts.json scripts/verify-schemas.ts",
-    "verify:sufficiency": "tsx --tsconfig tsconfig.scripts.json scripts/verify-sufficiency.ts"
+    "verify:signup": "tsx --tsconfig tsconfig.scripts.json scripts/verify-signup.ts",
+    "verify:sufficiency": "tsx --tsconfig tsconfig.scripts.json scripts/verify-sufficiency.ts",
+    "worker": "tsx --env-file-if-exists=.env.local --tsconfig tsconfig.scripts.json scripts/worker.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",

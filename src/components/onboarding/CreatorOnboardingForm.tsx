@@ -1,61 +1,87 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { useFormState, useFormStatus } from 'react-dom';
+import { Check, LoaderCircle, Search, TriangleAlert } from 'lucide-react';
 
 import { Button } from '@/components/ui/Button';
-import { HandleField } from '@/components/auth/HandleField';
 import {
+  checkHandleAvailability,
   createCreatorProfile,
+  resolveChannelPreview,
   type OnboardingState,
 } from '@/app/actions/onboarding';
-import { cn } from '@/lib/cn';
 import { INITIAL_ONBOARDING_STATE } from '@/app/actions/state';
+import { CREATOR_NICHES } from '@/types';
+import { compactNumber } from '@/lib/format';
+import { cn } from '@/lib/cn';
 
 const FIELD = cn(
-  'h-11 w-full rounded-md border border-line bg-surface px-3 text-[13px] text-ink',
+  'h-10 w-full rounded-md border border-line bg-surface px-3 text-[13px] text-ink',
   'placeholder:text-ink-faint outline-none transition-colors',
   'focus:border-indigo focus:ring-2 focus:ring-indigo/20',
 );
+
+interface Channel {
+  channelId: string;
+  youtubeHandle: string;
+  title: string;
+  subscribers: number | null;
+  thumbnail: string | null;
+}
 
 function Field({
   label,
   htmlFor,
   error,
   hint,
+  className,
   children,
 }: {
   label: string;
-  htmlFor: string;
+  htmlFor?: string;
   error?: string;
   hint?: string;
+  className?: string;
   children: React.ReactNode;
 }) {
   return (
-    <div>
+    <div className={className}>
       <label htmlFor={htmlFor} className="rail block">
         {label}
       </label>
-      <div className="mt-2">{children}</div>
+      <div className="mt-1.5">{children}</div>
       {error ? (
-        <p className="mt-1.5 text-[11px] text-rose">{error}</p>
+        <p className="mt-1 text-[11px] text-rose">{error}</p>
       ) : hint ? (
-        <p className="mt-1.5 text-[11px] text-ink-faint">{hint}</p>
+        <p className="mt-1 text-[11px] leading-snug text-ink-faint">{hint}</p>
       ) : null}
     </div>
   );
 }
 
-function SubmitButton() {
+function SubmitButton({ children }: { children: React.ReactNode }) {
   const { pending } = useFormStatus();
   return (
     <Button type="submit" size="lg" disabled={pending} className="w-full">
-      {pending ? 'Creating profile…' : 'Publish my media kit'}
+      {pending ? 'Reading your channel…' : children}
     </Button>
   );
 }
 
+/**
+ * Creator signup, in one screen, starting from the channel.
+ *
+ * The old form opened on "Handle" — a field whose rules are ours and whose
+ * consequence is a permanent URL — and asked for the channel fourth. So the
+ * first thing a creator did was invent an identifier, and the thing that makes
+ * the product work at all was optional and below the fold.
+ *
+ * It starts from the channel now, and everything the channel can answer is
+ * answered from it: display name, handle, subscriber count. The creator
+ * corrects rather than composes.
+ */
 export function CreatorOnboardingForm() {
   const router = useRouter();
   const [state, formAction] = useFormState<OnboardingState, FormData>(
@@ -63,150 +89,325 @@ export function CreatorOnboardingForm() {
     INITIAL_ONBOARDING_STATE,
   );
 
+  const [url, setUrl] = useState('');
+  const [channel, setChannel] = useState<Channel | null>(null);
+  const [lookupError, setLookupError] = useState<string | null>(null);
+  const [looking, startLookup] = useTransition();
+
+  const [handle, setHandle] = useState('');
+  const [handleState, setHandleState] = useState<'idle' | 'checking' | 'free' | 'taken'>('idle');
+  const [handleReason, setHandleReason] = useState<string | null>(null);
+  const [displayName, setDisplayName] = useState('');
+  const [singlePrice, setSinglePrice] = useState(true);
+
   useEffect(() => {
     if (state.status === 'success' && state.redirectTo) router.push(state.redirectTo);
   }, [state, router]);
 
+  // Availability is advisory: the unique index and the reserved-handle CHECK
+  // are what actually decide, and the server maps both to an inline error.
+  useEffect(() => {
+    const candidate = handle.trim().replace(/^@+/, '').toLowerCase();
+    if (candidate.length < 3) {
+      setHandleState('idle');
+      return;
+    }
+    setHandleState('checking');
+    const timer = setTimeout(() => {
+      void checkHandleAvailability(candidate).then((result) => {
+        setHandleState(result.available ? 'free' : 'taken');
+        setHandleReason(result.reason ?? null);
+      });
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [handle]);
+
+  function lookup() {
+    if (!url.trim()) return;
+    setLookupError(null);
+    startLookup(async () => {
+      const result = await resolveChannelPreview(url);
+      if (!result.ok || !result.channel) {
+        setChannel(null);
+        setLookupError(result.message ?? 'Could not read that channel.');
+        return;
+      }
+      setChannel(result.channel);
+      setDisplayName((current) => current || result.channel!.title);
+      // Null when nothing safe could be derived — a Korean or Japanese handle
+      // has no ASCII form and a transliteration would be a guess embedded in
+      // their permanent URL. The field stays empty and they choose.
+      if (result.suggestedHandle) setHandle((current) => current || result.suggestedHandle!);
+    });
+  }
+
   const errors = state.fieldErrors ?? {};
 
   return (
-    <form action={formAction} className="space-y-5">
-      <HandleField error={errors.handle} />
-
-      <Field label="Display name" htmlFor="displayName" error={errors.displayName}>
-        <input
-          id="displayName"
-          name="displayName"
-          required
-          maxLength={80}
-          placeholder="Marah Woods"
-          className={FIELD}
-        />
-      </Field>
-
+    <form action={formAction} className="space-y-2.5">
+      {/* --- 1. The channel ------------------------------------------------ */}
       <Field
-        label="Niche"
-        htmlFor="niche"
-        error={errors.niche}
-        hint="One phrase. Agencies filter the directory by this."
-      >
-        <input
-          id="niche"
-          name="niche"
-          maxLength={60}
-          placeholder="Consumer Tech & Workspace"
-          className={FIELD}
-        />
-      </Field>
-
-      {/* Placed above the bio, and before the budget, because it is the field
-          that makes the product do anything. Without it the creator finishes
-          signing up and Studio — the only page that works before an advertiser
-          exists — is empty for them forever. */}
-      <Field
-        label="YouTube channel"
+        label="Your YouTube channel"
         htmlFor="youtubeHandle"
-        error={errors.youtubeHandle}
-        hint="Your @handle. We check it against YouTube now, and it unlocks your Studio analysis immediately — no advertiser needed."
+        error={lookupError ?? errors.youtubeHandle}
+        hint={channel ? undefined : 'Paste the address of your channel page. We read the rest from it.'}
       >
-        <input
-          id="youtubeHandle"
-          name="youtubeHandle"
-          maxLength={120}
-          placeholder="@jooshica6178"
-          autoCapitalize="off"
-          autoCorrect="off"
-          spellCheck={false}
-          className={FIELD}
-        />
-      </Field>
-
-      <Field label="Bio" htmlFor="bio" error={errors.bio}>
-        <textarea
-          id="bio"
-          name="bio"
-          rows={3}
-          maxLength={500}
-          placeholder="What you make, and who watches."
-          className={cn(FIELD, 'h-auto resize-none py-2.5 leading-relaxed')}
-        />
-      </Field>
-
-      {/* A range, not a floor. "Minimum budget" asked a creator for the
-          smallest figure they would accept and then published it, which anchors
-          every negotiation at their own worst number — and tells a brand only
-          what they will not do, never what a placement usually costs.
-
-          The range is asked for first and the opt-out second, on purpose: a
-          directory where everyone is "negotiable" is one nobody can plan
-          against, and the creators who lose most from that are the ones a
-          brand has never heard of. */}
-      <Field
-        label="What you'd like for a placement"
-        htmlFor="budgetMin"
-        error={errors.budgetMin ?? errors.budgetMax}
-        hint="A range is enough. Shown on the proposal form so brands self-select — it never blocks a request, and you can still negotiate."
-      >
-        <div className="flex items-center gap-2">
+        <div className="flex gap-2">
           <input
-            id="budgetMin"
-            name="budgetMin"
-            inputMode="numeric"
-            placeholder="15,000"
-            aria-label="Lower end"
-            className={cn(FIELD, 'tnum')}
+            id="youtubeHandle"
+            name="youtubeHandle"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            onBlur={() => !channel && lookup()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                // Enter in this field means "look it up", not "submit the form
+                // with three empty fields below".
+                e.preventDefault();
+                lookup();
+              }
+            }}
+            placeholder="https://www.youtube.com/@yourchannel"
+            autoCapitalize="off"
+            autoCorrect="off"
+            spellCheck={false}
+            className={FIELD}
           />
-          <span className="shrink-0 text-[13px] text-ink-faint">to</span>
-          <input
-            id="budgetMax"
-            name="budgetMax"
-            inputMode="numeric"
-            placeholder="25,000"
-            aria-label="Upper end"
-            className={cn(FIELD, 'tnum')}
-          />
+          <button
+            type="button"
+            onClick={lookup}
+            disabled={looking || !url.trim()}
+            className={cn(
+              'inline-flex h-10 shrink-0 items-center gap-1.5 rounded-md border border-line px-3',
+              'text-[12px] font-medium text-ink transition-colors hover:bg-paper disabled:opacity-50',
+            )}
+          >
+            {looking ? (
+              <LoaderCircle className="h-3.5 w-3.5 animate-spin" aria-hidden />
+            ) : (
+              <Search className="h-3.5 w-3.5" aria-hidden />
+            )}
+            Find
+          </button>
         </div>
       </Field>
 
-      <label className="flex cursor-pointer items-start gap-3 rounded-panel border border-line bg-paper px-4 py-3.5">
-        <input
-          type="checkbox"
-          name="budgetNegotiable"
-          className="mt-0.5 h-3.5 w-3.5 cursor-pointer accent-indigo"
-        />
-        <span>
-          <span className="block text-[13px] font-medium text-ink">
-            Rather not say — open to offers
+      {/* The acknowledgement. A lookup that silently fills two fields leaves
+          the creator unsure whether we found THEIR channel or someone else's
+          — so show what we found, with the subscriber count as the thing they
+          can check at a glance. */}
+      {channel ? (
+        <div className="flex items-center gap-3 rounded-panel border border-emerald/30 bg-emerald-wash px-4 py-3">
+          {channel.thumbnail ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={channel.thumbnail}
+              alt=""
+              width={36}
+              height={36}
+              className="h-9 w-9 shrink-0 rounded-full"
+            />
+          ) : (
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-ink/5 text-[12px] text-ink-muted">
+              {channel.title.slice(0, 1)}
+            </span>
+          )}
+          <span className="min-w-0 flex-1">
+            <span className="flex items-center gap-1.5 text-[13px] font-medium text-ink">
+              <Check className="h-3.5 w-3.5 shrink-0 text-emerald" aria-hidden />
+              <span className="truncate">{channel.title}</span>
+            </span>
+            <span className="tnum mt-0.5 block truncate text-[11px] text-ink-muted">
+              {channel.youtubeHandle}
+              {channel.subscribers !== null
+                ? ` · ${compactNumber(channel.subscribers)} subscribers`
+                : ' · subscriber count hidden'}
+            </span>
           </span>
-          {/* Said plainly rather than sold as a strategy. Withholding is a
-              real choice and sometimes the right one; it also means brands
-              filtering on budget will not see you, and a creator deserves to
-              know that before they tick it rather than after. */}
-          <span className="mt-1 block text-[12px] leading-relaxed text-ink-muted">
-            Fine to choose, and worth knowing what it costs: brands filtering by budget will not
-            see you, and the first message becomes a negotiation instead of a brief. A rough range
-            usually gets better offers than none.
-          </span>
-        </span>
-      </label>
+          <button
+            type="button"
+            onClick={() => {
+              setChannel(null);
+              setLookupError(null);
+            }}
+            className="shrink-0 text-[11px] text-ink-faint underline-offset-4 hover:underline"
+          >
+            Not me
+          </button>
+        </div>
+      ) : null}
 
-      <label className="flex cursor-pointer items-start gap-3 rounded-panel border border-line bg-paper px-4 py-3.5">
-        <input
-          type="checkbox"
-          name="isDirectoryVisible"
-          className="mt-0.5 h-3.5 w-3.5 cursor-pointer accent-indigo"
-        />
-        <span>
-          <span className="block text-[13px] font-medium text-ink">
-            List me in the agency directory
-          </span>
-          <span className="mt-0.5 block text-[12px] leading-relaxed text-ink-muted">
-            Pro Agency subscribers can find you and read your full report without asking first.
-            Leave this off and your profile stays reachable by link only — every brand has to
-            request access one by one.
-          </span>
-        </span>
-      </label>
+      {/* --- 2. Identity, proposed from the channel ------------------------ */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Display name" htmlFor="displayName" error={errors.displayName}>
+          <input
+            id="displayName"
+            name="displayName"
+            required
+            maxLength={80}
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+            placeholder="Your channel name"
+            className={FIELD}
+          />
+        </Field>
+
+        <Field
+          label="Profile handle"
+          htmlFor="handle"
+          error={
+            errors.handle ??
+            (handleState === 'taken' ? (handleReason ?? 'That handle is taken') : undefined)
+          }
+          hint={handleState === 'free' ? 'Free — this becomes your URL.' : 'adfit.com/@…'}
+        >
+          <div
+            className={cn(
+              'flex h-10 items-center rounded-md border bg-surface pr-2.5 transition-colors',
+              'focus-within:ring-2 focus-within:ring-indigo/20',
+              handleState === 'taken' || errors.handle
+                ? 'border-rose'
+                : handleState === 'free'
+                  ? 'border-emerald'
+                  : 'border-line',
+            )}
+          >
+            <span className="pl-3 text-[13px] text-ink-faint">@</span>
+            <input
+              id="handle"
+              name="handle"
+              required
+              value={handle}
+              onChange={(e) => setHandle(e.target.value)}
+              placeholder="yourname"
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck={false}
+              className="h-full min-w-0 flex-1 bg-transparent px-1 text-[13px] text-ink outline-none placeholder:text-ink-faint"
+            />
+            {handleState === 'checking' ? (
+              <LoaderCircle className="h-3.5 w-3.5 animate-spin text-ink-faint" aria-hidden />
+            ) : handleState === 'free' ? (
+              <Check className="h-3.5 w-3.5 text-emerald" aria-hidden />
+            ) : handleState === 'taken' ? (
+              <TriangleAlert className="h-3.5 w-3.5 text-rose" aria-hidden />
+            ) : null}
+          </div>
+        </Field>
+      </div>
+
+      {/* --- 3. Niche and price ------------------------------------------- */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field
+          label="Niche"
+          htmlFor="niche"
+          error={errors.niche}
+          hint="Agencies filter on this."
+        >
+          <select id="niche" name="niche" required defaultValue="" className={cn(FIELD, 'pr-8')}>
+            <option value="" disabled>
+              Choose one
+            </option>
+            {CREATOR_NICHES.map((niche) => (
+              <option key={niche} value={niche}>
+                {niche}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        {/* A price or a range, because both are real answers. Asking for two
+            numbers from someone who charges one made them type the same figure
+            twice or leave the field blank — and a blank one drops them out of
+            every budget filter in the directory. */}
+        <Field
+          label="What a placement costs"
+          htmlFor="budgetMin"
+          error={errors.budgetMin ?? errors.budgetMax}
+          hint="Never blocks a request."
+        >
+          <div className="flex items-center gap-2">
+            <input
+              id="budgetMin"
+              name="budgetMin"
+              inputMode="numeric"
+              placeholder="15,000"
+              aria-label={singlePrice ? 'Price' : 'Lower end'}
+              className={cn(FIELD, 'tnum')}
+            />
+            {singlePrice ? (
+              <button
+                type="button"
+                onClick={() => setSinglePrice(false)}
+                className="shrink-0 whitespace-nowrap text-[11px] text-indigo underline-offset-4 hover:underline"
+              >
+                + range
+              </button>
+            ) : (
+              <>
+                <span className="shrink-0 text-[13px] text-ink-faint">to</span>
+                <input
+                  name="budgetMax"
+                  inputMode="numeric"
+                  placeholder="25,000"
+                  aria-label="Upper end"
+                  className={cn(FIELD, 'tnum')}
+                />
+              </>
+            )}
+          </div>
+        </Field>
+      </div>
+
+      {/* Bio beside the two choices rather than above them. Three short
+          blocks in the height of one is the difference between this form
+          fitting a laptop screen and not. */}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Bio" htmlFor="bio" error={errors.bio}>
+          <textarea
+            id="bio"
+            name="bio"
+            rows={3}
+            maxLength={500}
+            placeholder="What you make, and who watches."
+            className={cn(FIELD, 'h-auto resize-none py-2 leading-relaxed')}
+          />
+        </Field>
+
+        <div className="grid content-start gap-2">
+          <label className="flex cursor-pointer items-start gap-2.5 rounded-panel border border-line bg-paper px-3.5 py-2.5">
+            <input
+              type="checkbox"
+              name="isDirectoryVisible"
+              defaultChecked
+              className="mt-0.5 h-3.5 w-3.5 cursor-pointer accent-indigo"
+            />
+            <span>
+              <span className="block text-[12px] font-medium text-ink">List me in the directory</span>
+              <span className="mt-0.5 block text-[11px] leading-snug text-ink-muted">
+                Pro agencies can find you. Off means link-only.
+              </span>
+            </span>
+          </label>
+
+          <label className="flex cursor-pointer items-start gap-2.5 rounded-panel border border-line bg-paper px-3.5 py-2.5">
+            <input
+              type="checkbox"
+              name="budgetNegotiable"
+              className="mt-0.5 h-3.5 w-3.5 cursor-pointer accent-indigo"
+            />
+            <span>
+              <span className="block text-[12px] font-medium text-ink">Rather not say a price</span>
+              {/* Said plainly rather than sold. Withholding is a real choice and
+                  sometimes the right one; it also drops you out of every budget
+                  filter, and that is worth knowing before ticking it. */}
+              <span className="mt-0.5 block text-[11px] leading-snug text-ink-muted">
+                Brands filtering by budget will not see you.
+              </span>
+            </span>
+          </label>
+        </div>
+      </div>
 
       {state.status === 'error' && state.message ? (
         <p className="rounded-md border border-rose/30 bg-rose-wash px-3 py-2 text-[12px] text-rose">
@@ -214,11 +415,10 @@ export function CreatorOnboardingForm() {
         </p>
       ) : null}
 
-      <SubmitButton />
+      <SubmitButton>Publish my media kit</SubmitButton>
 
-      <p className="text-center text-[11px] leading-relaxed text-ink-faint">
-        Your profile publishes immediately. The verified badge and the AI report appear after you
-        connect YouTube or Instagram.
+      <p className="text-center text-[11px] leading-snug text-ink-faint">
+        Publishes immediately. Age, gender and geography stay empty until you connect YouTube.
       </p>
     </form>
   );

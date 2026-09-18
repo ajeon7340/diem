@@ -80,7 +80,7 @@ export function ProfileHeader({ creator }: { creator: Creator }) {
 
           {creator.minimumBudget !== null ? (
             <div>
-              <dt className="rail">Minimum budget</dt>
+              <dt className="rail">Placement</dt>
               <dd className="tnum mt-1.5 text-[19px] font-medium leading-none text-ink">
                 {currency(creator.minimumBudget)}
               </dd>

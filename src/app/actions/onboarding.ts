@@ -7,6 +7,7 @@ import {
   businessOnboardingSchema,
   creatorOnboardingSchema,
   handleSchema,
+  youtubeHandleSchema,
 } from '@/lib/schemas';
 import {
   createAnonClient,
@@ -16,6 +17,7 @@ import {
 } from '@/lib/supabase/server';
 import { getViewer } from '@/lib/access/viewer';
 import { analyzeAndStore } from '@/lib/ingest/store';
+import { nextHandle, suggestHandle } from '@/lib/report/handle-suggest';
 import { enqueueAnalysisJob } from '@/lib/ingest/jobs';
 import { DEMO_ROLE_COOKIE, type DemoRole } from '@/lib/data/fixtures';
 import { resolveChannel, type ResolvedChannel } from '@/lib/youtube/resolve';
@@ -75,6 +77,75 @@ export async function checkHandleAvailability(
   }
 
   return data === true ? { available: true } : { available: false, reason: 'That handle is taken' };
+}
+
+/**
+ * Resolve the channel the creator pasted, and propose the rest of the form
+ * from it.
+ *
+ * The old form asked for a handle first, in a field whose rules are ours
+ * ("3-30 characters, letters numbers underscores dots") and whose consequence
+ * is permanent. The creator already told us who they are the moment they
+ * pasted their channel; asking them to invent an identifier before that is
+ * friction for nothing.
+ *
+ * Returns a PROPOSAL, never a decision. The handle comes back editable and
+ * pre-checked, the display name comes back as the channel's own title, and a
+ * channel with no ASCII form — @가재맨 — returns a null handle rather than a
+ * romanisation nobody asked for, embedded permanently in their URL.
+ */
+export async function resolveChannelPreview(rawUrl: string): Promise<{
+  ok: boolean;
+  message?: string;
+  channel?: {
+    channelId: string;
+    youtubeHandle: string;
+    title: string;
+    subscribers: number | null;
+    thumbnail: string | null;
+  };
+  /** Free and checked, or null when nothing safe could be derived. */
+  suggestedHandle?: string | null;
+}> {
+  const parsed = youtubeHandleSchema.safeParse(rawUrl);
+  if (!parsed.success || !parsed.data) {
+    return { ok: false, message: parsed.success ? 'Paste your channel URL.' : parsed.error.issues[0]?.message };
+  }
+
+  const resolved = await resolveChannel(parsed.data);
+  if (!resolved.ok) return { ok: false, message: resolved.message };
+
+  const base = suggestHandle({
+    youtubeHandle: resolved.channel.handle,
+    title: resolved.channel.title,
+  });
+
+  // Walk a few numbered variants rather than handing back one that is taken.
+  // Bounded: after a handful of collisions the creator picks, which is a
+  // better outcome than name7 and faster than looping.
+  let suggested: string | null = null;
+  if (base) {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const candidate = attempt === 0 ? base : nextHandle(base, attempt + 1);
+      const { available } = await checkHandleAvailability(candidate);
+      if (available) {
+        suggested = candidate;
+        break;
+      }
+    }
+  }
+
+  return {
+    ok: true,
+    channel: {
+      channelId: resolved.channel.channelId,
+      youtubeHandle: resolved.channel.handle,
+      title: resolved.channel.title,
+      subscribers: resolved.channel.subscribers,
+      thumbnail: resolved.channel.thumbnail,
+    },
+    suggestedHandle: suggested,
+  };
 }
 
 /**
@@ -163,7 +234,10 @@ export async function createCreatorProfile(
     niche: parsed.data.niche,
     bio: parsed.data.bio,
     budget_min: parsed.data.budgetMin,
-    budget_max: parsed.data.budgetMax,
+    // One figure given: store it as both ends. "from $15,000" is a different
+    // claim from "$15,000" — it implies a ceiling the creator did not name —
+    // and a null max also drops them out of any filter with an upper bound.
+    budget_max: parsed.data.budgetMax ?? parsed.data.budgetMin,
     budget_negotiable: parsed.data.budgetNegotiable,
     // Kept in step so anything still reading the old column agrees with the
     // range rather than quietly contradicting it.

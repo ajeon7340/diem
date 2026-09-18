@@ -26,9 +26,10 @@ export default async function CreatorOnboardingPage() {
 
   return (
     <AuthShell
-      eyebrow="Influencer · Step 2 of 2"
-      title="Claim your handle"
-      intro="This publishes your public profile and connects your channel. Everything sensitive stays locked until you approve a brand — and your Studio analysis works straight away, with or without an advertiser."
+      eyebrow="Creator · Step 2 of 2"
+      title="Connect your channel"
+      intro="Paste your channel — we read the rest from it."
+      width="form"
       footer={null}
     >
       <CreatorOnboardingForm />

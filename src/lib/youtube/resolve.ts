@@ -87,6 +87,19 @@ export async function resolveChannel(handle: string): Promise<ResolveResult> {
       // and Studio will report honestly when it cannot read the channel.
       return { ok: false, message: 'Could not reach YouTube just now. Try again in a moment.' };
     }
+    // A missing key is a deployment that was never finished, and waiting will
+    // not fix it. Telling a creator to "try again in a moment" sends them into
+    // a loop that cannot terminate — the same defect as the rate-limited
+    // sign-in email, which also said retry to a condition retrying never
+    // clears. Name it instead.
+    if (err instanceof YouTubeError && err.reason === 'no_key') {
+      console.error('[youtube/resolve] YOUTUBE_API_KEY is not set on this deployment');
+      return {
+        ok: false,
+        message:
+          'Channel lookup is not configured on this deployment, so we cannot confirm your channel yet. You can finish signing up without it and add the channel later.',
+      };
+    }
     console.error('[youtube/resolve] failed', err);
     return { ok: false, message: 'Could not check that handle. Try again in a moment.' };
   }

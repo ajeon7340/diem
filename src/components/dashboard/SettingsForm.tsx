@@ -118,7 +118,7 @@ export function SettingsForm({ creator }: { creator: Creator }) {
       </Field>
 
       <Field
-        label="Minimum budget"
+        label="What a placement costs"
         htmlFor="minimumBudget"
         error={errors.minimumBudget}
         hint="Shown on the proposal form and used to estimate your CPM. Leave blank to hide both."
