@@ -1,3 +1,4 @@
+import { mapConcurrent } from './concurrent';
 import 'server-only';
 
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -34,6 +35,9 @@ const PAGE = 100;
 /** Comments per classification request. Large enough to be economic, small
  *  enough that one malformed batch does not cost the whole run. */
 export const BATCH = 150;
+
+/** See `INTENT_CONCURRENCY`. Same quota, same reasoning. */
+export const CLASSIFY_CONCURRENCY = 4;
 
 // Shared with the report rather than copied. A category the union has and this
 // array does not is a category the scan never looks for, while `checked` still
@@ -165,6 +169,20 @@ export async function fetchAllComments(
    */
   channel: { handle?: string | null; channelId?: string | null },
   maxVideos: number = Infinity,
+  /**
+   * The bound that actually governs how long a pass takes.
+   *
+   * `maxVideos` was the only one, and it bounds the wrong thing: 30 videos of
+   * @gajaeman is 2,437 comments and 30 videos of @Fireship is 28,265. The
+   * second is ~283 model calls, which is over an hour — from a signup that
+   * says the figures will appear shortly.
+   *
+   * A comment bound makes the cost of a pass a property of the SETTING rather
+   * than of whose channel it is. The denominator is reported either way:
+   * `commentsScanned` and `axes.total` both say what was read, so a capped
+   * corpus is stated rather than implied.
+   */
+  maxComments: number = Infinity,
 ): Promise<FetchedCorpus> {
   const get = async (path: string, params: Record<string, string>) => {
     const url = new URL(`https://www.googleapis.com/youtube/v3/${path}`);
@@ -210,6 +228,8 @@ export async function fetchAllComments(
   let unreadable = 0;
 
   for (const video of capped) {
+
+    if (comments.length >= maxComments) break;
     let token: string | undefined;
     do {
       let page;
@@ -245,7 +265,7 @@ export async function fetchAllComments(
         });
       }
       token = page.nextPageToken;
-    } while (token);
+    } while (token && comments.length < maxComments);
   }
 
   return { comments, videos: capped.length, unreadable, channelId };
@@ -316,18 +336,29 @@ export async function classifyComments(
     ? comments.filter((c) => isCandidate(c.text, loadExternalTerms()))
     : comments;
 
-  const flagged: Flagged[] = [];
+  const batches: RawComment[][] = [];
   for (let i = 0; i < candidates.length; i += BATCH) {
+    batches.push(candidates.slice(i, i + BATCH));
+  }
+
+  let done = 0;
+  const perBatch = await mapConcurrent(batches, CLASSIFY_CONCURRENCY, async (batch) => {
     // Checked BEFORE spending on the batch, not after: the point is to stop
     // paying for a job somebody else is already running.
     if (options.stillMine && !(await options.stillMine())) throw new ClaimLostError();
 
-    const batch = candidates.slice(i, i + BATCH);
     const hits = await classifyBatch(batch, spend);
-    hits.forEach((category, index) => flagged.push({ comment: batch[index], category }));
-    options.onProgress?.(Math.min(i + BATCH, candidates.length), candidates.length);
-  }
-  return flagged;
+    const found: Flagged[] = [];
+    hits.forEach((category, index) => found.push({ comment: batch[index], category }));
+    // Batches land out of order, so progress counts what has COMPLETED.
+    done += batch.length;
+    options.onProgress?.(Math.min(done, candidates.length), candidates.length);
+    return found;
+  });
+
+  // Findings have no positional contract — unlike the axis labels — but batch
+  // order is kept anyway so two runs over one corpus produce the same list.
+  return perBatch.flat();
 }
 
 export interface Rollup {
@@ -493,7 +524,7 @@ export async function classifyAndStore(
   supabase: SupabaseClient,
   creatorId: string,
   channel: { handle?: string | null; channelId?: string | null },
-  options: ClassifyRunOptions & { maxVideos?: number } = {},
+  options: ClassifyRunOptions & { maxVideos?: number; maxComments?: number } = {},
 ): Promise<ClassifyAndStoreResult> {
   const apiKey = process.env.YOUTUBE_API_KEY;
   if (!apiKey) throw new Error('YOUTUBE_API_KEY is required — commentThreads.list needs it.');
@@ -501,7 +532,7 @@ export async function classifyAndStore(
   const keyVar = aiProvider() === 'gemini' ? 'GEMINI_API_KEY' : 'ANTHROPIC_API_KEY';
   if (!process.env[keyVar]) throw new Error(`${keyVar} is required for ${aiProvider()}.`);
 
-  const corpus = await fetchAllComments(apiKey, channel, options.maxVideos ?? Infinity);
+  const corpus = await fetchAllComments(apiKey, channel, options.maxVideos ?? Infinity, options.maxComments ?? Infinity);
   const spend: Spend = { inputTokens: 0, outputTokens: 0, calls: 0 };
   const flagged = await classifyComments(corpus.comments, spend, options);
 

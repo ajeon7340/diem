@@ -241,6 +241,7 @@ export default async function CreatorProfilePage({ params, searchParams }: PageP
                   engagementRate={report?.engagementRate ?? null}
                   adFatigueLevel={report?.adFatigueLevel ?? null}
                   hasMinimumBudget={creator.minimumBudget !== null}
+                  disclosedPromotions={report?.promotions.length ?? 0}
                   sponsoredConfidence={
                     sufficiency ? confidenceLabel(sufficiency.sponsored) : undefined
                   }

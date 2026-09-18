@@ -1,3 +1,4 @@
+import { sponsorshipState } from '@/lib/report/sponsorship';
 import { FINANCIAL_DISCLOSURE } from '@/lib/report/policy';
 import type { AdFatigueLevel, CostEfficiency, SponsoredPerformance } from '@/types';
 import { Info, ShieldQuestion } from 'lucide-react';
@@ -94,6 +95,7 @@ export function CommercialPanel({
   adFatigueLevel,
   hasMinimumBudget,
   sponsoredConfidence,
+  disclosedPromotions = 0,
   locked,
 }: {
   cost: CostEfficiency | null;
@@ -101,13 +103,36 @@ export function CommercialPanel({
   engagementRate: number | null;
   adFatigueLevel: AdFatigueLevel | null;
   hasMinimumBudget: boolean;
+  /**
+   * Paid placements the promotions scan actually found.
+   *
+   * Separate from `performance` because the two answer different questions:
+   * this one is whether the creator has EVER been sponsored, and that one is
+   * whether we could MEASURE how a sponsorship performed. A channel that runs
+   * a sponsor segment on every upload has no organic video left in the window
+   * to measure against, so the second is null while the first is 25.
+   */
+  disclosedPromotions?: number;
   /** Set when the sponsored sample is too thin to lean on. */
   sponsoredConfidence: string | undefined;
   locked: boolean;
 }) {
   // Never sponsored is a position, not an absence — and it changes what the
   // headline CPM means, because every view behind it is organic.
-  const neverSponsored = !locked && performance === null;
+  //
+  // It is NOT the same as having no measurement, and conflating them printed
+  // the worst sentence this report has produced: "No sponsorship history — the
+  // audience has not been sold to here", on a channel whose own panel two
+  // sections down read "25 posts · 25 disclosed". Every upload in the window
+  // carried YouTube's own paid-placement flag, which left no organic video to
+  // compute a baseline from — so `performance` came back null and was read as
+  // "never".
+  //
+  // A buyer acts on that. It is the difference between an untouched audience
+  // and one that sees a sponsor segment every week.
+  const state = sponsorshipState(performance, disclosedPromotions);
+  const neverSponsored = !locked && state === 'never';
+  const sponsoredButUnmeasured = !locked && state === 'unmeasurable';
   // The creator's OWN retention, not a category median. The median was a
   // cross-owner aggregate — forbidden by III.E.2 and stripped to null, so this
   // read as a permanent blank — and their own figure was always the better
@@ -137,7 +162,9 @@ export function CommercialPanel({
           ? `${perf.sponsoredPostsAnalyzed} ${perf.sponsoredPostsAnalyzed === 1 ? 'post' : 'posts'} · ${perf.windowDays}d${
               adFatigueLevel ? ` · fatigue ${adFatigueLevel}` : ''
             }`
-          : 'never sponsored',
+          : disclosedPromotions > 0
+            ? `${disclosedPromotions} disclosed · not measurable`
+            : 'never sponsored',
       ]
         .filter(Boolean)
         .join(' · ') || undefined;
@@ -183,7 +210,12 @@ export function CommercialPanel({
             hint={
               adjustedCpm && retention
                 ? `their paid posts hold ${percent(retention, 0)} of organic views`
-                : 'No sponsored history to adjust by'
+                : // Same distinction as the panel below. Saying "no sponsored
+                  // history" beside a count of 25 disclosed placements is the
+                  // contradiction, not the missing number.
+                  sponsoredButUnmeasured
+                  ? 'No organic post in the window to adjust against'
+                  : 'No sponsored history to adjust by'
             }
           />
         </div>
@@ -210,7 +242,33 @@ export function CommercialPanel({
         </p>
       ) : null}
 
-      {neverSponsored ? (
+      {sponsoredButUnmeasured ? (
+        <div className="px-5 py-4">
+          <div className="flex items-center gap-2">
+            <ShieldQuestion className="h-3.5 w-3.5 shrink-0 text-ink-faint" aria-hidden />
+            <h3 className="text-[13px] font-medium text-ink">
+              Sponsored, but the lift cannot be measured
+            </h3>
+          </div>
+          <dl className="mt-3 grid gap-x-6 gap-y-2 sm:grid-cols-2">
+            <div>
+              <dt className="rail">What we found</dt>
+              <dd className="mt-1 text-[12px] leading-relaxed text-ink-muted">
+                {disclosedPromotions} paid {disclosedPromotions === 1 ? 'placement' : 'placements'},
+                disclosed on YouTube by the creator. This is an audience that is sold to.
+              </dd>
+            </div>
+            <div>
+              <dt className="rail text-amber">Why there is no figure</dt>
+              <dd className="mt-1 text-[12px] leading-relaxed text-ink-muted">
+                Every upload we read carried a paid placement, so there is no organic post left in
+                the window to measure them against. A sponsored-versus-organic number needs both
+                halves, and inventing the missing one would be the whole claim.
+              </dd>
+            </div>
+          </dl>
+        </div>
+      ) : neverSponsored ? (
         <div className="px-5 py-4">
           <div className="flex items-center gap-2">
             <ShieldQuestion className="h-3.5 w-3.5 shrink-0 text-ink-faint" aria-hidden />

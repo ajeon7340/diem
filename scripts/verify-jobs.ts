@@ -15,6 +15,7 @@ import { rollUpAxes, type AxisLabel } from '@/lib/ingest/intent';
 import { jobMaxVideos, positiveEnv } from '@/lib/ingest/worker-config';
 import { INTENT_WEIGHTS } from '@/lib/report/intent';
 import type { AnalysisJob, CommentIntent, CommentObject } from '@/types';
+import { jobMaxComments } from '@/lib/ingest/worker-config';
 
 let pass = 0,
   fail = 0;
@@ -356,6 +357,27 @@ check(
   describeJob(job({ status: 'succeeded', progressDone: 6369, progressTotal: 6369 })),
   null,
 );
+
+// ---------------------------------------------------------------------------
+// The bound that governs how long a pass takes
+//
+// `maxVideos` bounds the wrong thing. Thirty videos is 2,437 comments on one
+// channel and 28,265 on another — the second is about 283 model calls, which
+// is over an hour, from a signup that says the figures appear shortly. Cost
+// has to be a property of the setting, not of whose channel it is.
+// ---------------------------------------------------------------------------
+check('a job may set its own comment bound', jobMaxComments({ maxComments: 500 }, 3_000), 500);
+check('and falls back when it does not', jobMaxComments({}, 3_000), 3_000);
+// The empty-string trap that `positiveEnv` exists for, in params this time:
+// Number('') and Number(null) are both 0, so `??` alone would set the bound to
+// zero and a pass would read nothing, find nothing and succeed.
+check('an empty string is absent, not zero', jobMaxComments({ maxComments: '' }, 3_000), 3_000);
+check('null is absent too', jobMaxComments({ maxComments: null }, 3_000), 3_000);
+check('zero is refused', jobMaxComments({ maxComments: 0 }, 3_000), 3_000);
+check('negatives are refused', jobMaxComments({ maxComments: -5 }, 3_000), 3_000);
+check('nonsense is refused', jobMaxComments({ maxComments: 'lots' }, 3_000), 3_000);
+// A true census is still askable — it is the only way to request one.
+check('Infinity passes through', jobMaxComments({ maxComments: Infinity }, 3_000), Infinity);
 
 console.log(`\n  ${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);

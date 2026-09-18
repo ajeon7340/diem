@@ -31,7 +31,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { aiModel, aiProvider } from '@/lib/ai/provider';
 import { ClaimLostError, classifyAndStore } from '@/lib/ingest/classify';
 import { classifyIntentAndStore } from '@/lib/ingest/intent';
-import { jobMaxVideos, positiveEnv } from '@/lib/ingest/worker-config';
+import { jobMaxComments, jobMaxVideos, positiveEnv } from '@/lib/ingest/worker-config';
 import type { AnalysisJobKind } from '@/types';
 
 const args = process.argv.slice(2);
@@ -54,6 +54,13 @@ const IDLE_MS = positiveEnv('ADFIT_WORKER_IDLE_MS', 15_000);
  * `scan:comments` with no --max-videos, run deliberately.
  */
 const DEFAULT_MAX_VIDEOS = positiveEnv('ADFIT_WORKER_MAX_VIDEOS', 30);
+/**
+ * 3,000 comments is about 30 model calls and two to four minutes — the bound
+ * that makes a pass finish while somebody is still interested. Videos alone
+ * did not bound it: 30 videos is 2,437 comments on one channel and 28,265 on
+ * another, and the second is over an hour.
+ */
+const DEFAULT_MAX_COMMENTS = positiveEnv('ADFIT_WORKER_MAX_COMMENTS', 3_000);
 
 const WORKER = `${hostname()}/${process.pid}`;
 
@@ -205,6 +212,7 @@ async function runClassifyComments(supabase: SupabaseClient, job: JobRow): Promi
   const creator = await requireChannel(supabase, job.creator_id);
 
   const maxVideos = jobMaxVideos(job.params, DEFAULT_MAX_VIDEOS);
+  const maxComments = jobMaxComments(job.params, DEFAULT_MAX_COMMENTS);
   log(
     `@${creator.handle} · ${aiProvider()} ${aiModel()} · ` +
       `${Number.isFinite(maxVideos) ? `${maxVideos} videos` : 'full census'}`,
@@ -222,6 +230,7 @@ async function runClassifyComments(supabase: SupabaseClient, job: JobRow): Promi
     { handle: creator.youtube_handle, channelId: creator.youtube_channel_id },
     {
       maxVideos,
+      maxComments,
       stillMine: heartbeat(supabase, job.id, progress.read()),
       onProgress: (done, total) => {
         progress.set({ done, total, stage: 'classifying' });
@@ -249,6 +258,7 @@ async function runClassifyComments(supabase: SupabaseClient, job: JobRow): Promi
 async function runClassifyIntent(supabase: SupabaseClient, job: JobRow): Promise<void> {
   const creator = await requireChannel(supabase, job.creator_id);
   const maxVideos = jobMaxVideos(job.params, DEFAULT_MAX_VIDEOS);
+  const maxComments = jobMaxComments(job.params, DEFAULT_MAX_COMMENTS);
 
   log(
     `@${creator.handle} intent · ${aiProvider()} ${aiModel()} · ` +
@@ -264,6 +274,7 @@ async function runClassifyIntent(supabase: SupabaseClient, job: JobRow): Promise
     { handle: creator.youtube_handle, channelId: creator.youtube_channel_id },
     {
       maxVideos,
+      maxComments,
       stillMine: heartbeat(supabase, job.id, progress.read()),
       onProgress: (done, total) => {
         progress.set({ done, total, stage: 'classifying' });

@@ -3,6 +3,7 @@ import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { buildClusters } from './clusters';
+import { mapConcurrent } from './concurrent';
 
 import { aiModel, aiProvider, generateStructured } from '@/lib/ai/provider';
 import { ClaimLostError, fetchAllComments, type RawComment, type Spend } from './classify';
@@ -51,6 +52,16 @@ import type {
  * ceiling with room for long-tail verbosity.
  */
 export const INTENT_BATCH = 100;
+
+/**
+ * Batches in flight at once.
+ *
+ * Four rather than more: the calls are independent, but they share one API
+ * quota and one rate limit, and a pass that trips it fails a job that had
+ * already paid for most of its answers. Measured 596s sequential on 3,055
+ * comments — 31 calls of roughly 19 seconds each, nearly all of it waiting.
+ */
+export const INTENT_CONCURRENCY = 4;
 
 const OBJECTS: readonly CommentObject[] = [
   'creator',
@@ -214,20 +225,32 @@ export async function classifyAxes(
   spend: Spend,
   options: IntentRunOptions = {},
 ): Promise<AxisLabel[]> {
-  const labels: AxisLabel[] = [];
-
+  const batches: RawComment[][] = [];
   for (let i = 0; i < comments.length; i += INTENT_BATCH) {
-    if (options.stillMine && !(await options.stillMine())) throw new ClaimLostError();
-
-    const batch = comments.slice(i, i + INTENT_BATCH);
-    const hits = await classifyAxesBatch(batch, spend);
-    for (let j = 0; j < batch.length; j++) {
-      labels.push(hits.get(j) ?? { object: 'unclassified', intent: 'unclassified' });
-    }
-    options.onProgress?.(Math.min(i + INTENT_BATCH, comments.length), comments.length);
+    batches.push(comments.slice(i, i + INTENT_BATCH));
   }
 
-  return labels;
+  let done = 0;
+  const perBatch = await mapConcurrent(batches, INTENT_CONCURRENCY, async (batch) => {
+    // Checked per batch, not per run: this pass is minutes long and a claim
+    // can be lost in the middle of it.
+    if (options.stillMine && !(await options.stillMine())) throw new ClaimLostError();
+
+    const hits = await classifyAxesBatch(batch, spend);
+    const placed: AxisLabel[] = batch.map(
+      (_, j) => hits.get(j) ?? { object: 'unclassified', intent: 'unclassified' },
+    );
+    // Batches finish out of order under concurrency, so progress counts what
+    // has COMPLETED rather than how far down the list we have started.
+    done += batch.length;
+    options.onProgress?.(Math.min(done, comments.length), comments.length);
+    return placed;
+  });
+
+  // Flattened in batch order, which `mapConcurrent` preserves — `labels` must
+  // stay parallel to `comments` by position or every label lands on a
+  // different comment.
+  return perBatch.flat();
 }
 
 export interface AxesRollup {
@@ -356,7 +379,7 @@ export async function classifyIntentAndStore(
   supabase: SupabaseClient,
   creatorId: string,
   channel: { handle?: string | null; channelId?: string | null },
-  options: IntentRunOptions & { maxVideos?: number } = {},
+  options: IntentRunOptions & { maxVideos?: number; maxComments?: number } = {},
 ): Promise<IntentAndStoreResult> {
   const apiKey = process.env.YOUTUBE_API_KEY;
   if (!apiKey) throw new Error('YOUTUBE_API_KEY is required — commentThreads.list needs it.');
@@ -364,7 +387,7 @@ export async function classifyIntentAndStore(
   const keyVar = aiProvider() === 'gemini' ? 'GEMINI_API_KEY' : 'ANTHROPIC_API_KEY';
   if (!process.env[keyVar]) throw new Error(`${keyVar} is required for ${aiProvider()}.`);
 
-  const corpus = await fetchAllComments(apiKey, channel, options.maxVideos ?? Infinity);
+  const corpus = await fetchAllComments(apiKey, channel, options.maxVideos ?? Infinity, options.maxComments ?? Infinity);
   const spend: Spend = { inputTokens: 0, outputTokens: 0, calls: 0 };
   const labels = await classifyAxes(corpus.comments, spend, options);
   const rollup = rollUpAxes(labels);

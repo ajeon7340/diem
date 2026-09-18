@@ -63,3 +63,20 @@ export function jobMaxVideos(
   if (Number.isNaN(value) || value <= 0) return fallback;
   return value;
 }
+
+/**
+ * The comment bound for one job. Same traps as `jobMaxVideos`.
+ *
+ * Infinity is allowed through deliberately — a true census is a legitimate
+ * thing to queue, and this is the only way to ask for one.
+ */
+export function jobMaxComments(
+  params: Record<string, unknown> | null | undefined,
+  fallback: number,
+): number {
+  const raw = params?.maxComments;
+  if (raw === undefined || raw === null || raw === '') return fallback;
+  const value = typeof raw === 'number' ? raw : Number(raw);
+  if (Number.isNaN(value) || value <= 0) return fallback;
+  return value;
+}

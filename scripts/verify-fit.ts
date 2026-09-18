@@ -18,6 +18,7 @@ import {
 import type { AIReport, IntentMeasurement } from '@/types';
 import { FIT_METRICS, FIT_SCHEMA, fitOutputSchema } from '@/lib/report/fit-schema';
 import { deriveCostEfficiency } from '@/lib/report/cost';
+import { sponsorshipState } from '@/lib/report/sponsorship';
 
 let pass = 0,
   fail = 0;
@@ -347,6 +348,30 @@ check(
   );
   // A cohort of one is not a cohort.
   check('no benchmark is invented', [cost?.cohortMedianCpm, cost?.cohortMedianRetention], [null, null]);
+}
+
+// ---------------------------------------------------------------------------
+// Sponsored, not measurable, never — three states, and the middle one existed
+// nowhere
+//
+// "No sponsorship history — the audience has not been sold to here" printed on
+// a channel with 25 disclosed paid placements, because every upload in the
+// window carried one and there was no organic post left to measure against.
+// `sponsoredPerformance` came back null and null was read as "never".
+// ---------------------------------------------------------------------------
+{
+  const perf = {
+    sponsoredPostsAnalyzed: 3, windowDays: 180, organicMedianViews: 100,
+    sponsoredMedianViews: 80, viewRetention: 0.8,
+    organicSentiment: null, sponsoredSentiment: null,
+  };
+  check('measured when there is a figure', sponsorshipState(perf, 3), 'measured');
+  check('never when nothing was found', sponsorshipState(null, 0), 'never');
+  // The one that was missing.
+  check('found but unmeasurable is its own state', sponsorshipState(null, 25), 'unmeasurable');
+  check('one placement is enough to stop saying never', sponsorshipState(null, 1), 'unmeasurable');
+  // A figure wins over the count: if it could be measured, it was measured.
+  check('a measurement outranks the count', sponsorshipState(perf, 0), 'measured');
 }
 
 console.log(`\n  ${pass} passed, ${fail} failed`);
