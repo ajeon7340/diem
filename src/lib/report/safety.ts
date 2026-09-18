@@ -340,7 +340,21 @@ export function censusRisk(
   commentsAnalyzed: number,
 ): CensusRisk | null {
   // Empty is "not scanned", never "clean" — the coveredPlatforms rule again.
-  if (risks.length === 0) return null;
+  //
+  // UNLESS the scan said how much it read. `moderation.commentsScanned` is the
+  // record that the pass ran, and it is the one piece of evidence that
+  // separates the two states an empty array used to collapse.
+  //
+  // This mattered the moment a real scan came back clean. @visuallyexplained-
+  // education: 884 comments read across 21 videos, nothing flagged, stored as
+  // `comment_risks: []` beside `moderation.commentsScanned: 884` — and the
+  // profile said "Brand safety · not assessed · with no readable comments
+  // there is nothing to assess", under a heading reporting 884 comments
+  // analysed. The absence rule inverted: a genuine clean result reported as
+  // unmeasured, which is the same lie as the reverse and costs the creator the
+  // one finding that was actually in their favour.
+  const scanned = moderation?.commentsScanned ?? 0;
+  if (risks.length === 0 && scanned <= 0) return null;
 
   const adjacent = risks.reduce((sum, r) => sum + r.count, 0);
   const hidden = moderation?.hiddenTotal ?? risks.reduce((sum, r) => sum + r.hidden, 0);

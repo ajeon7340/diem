@@ -17,6 +17,7 @@ import {
 } from '@/lib/report/fit';
 import type { AIReport, IntentMeasurement } from '@/types';
 import { FIT_METRICS, FIT_SCHEMA, fitOutputSchema } from '@/lib/report/fit-schema';
+import { deriveCostEfficiency } from '@/lib/report/cost';
 
 let pass = 0,
   fail = 0;
@@ -300,6 +301,52 @@ check(
     claims: [{ text: 'y', metric: 'inventedFigure', value: 1 }],
   });
   check('a claim citing an invented figure is refused', bad.success, false);
+}
+
+// ---------------------------------------------------------------------------
+// Cost per thousand, from the price the creator published
+//
+// `cost_efficiency` was the fourth column here with a type, a schema, a mapper
+// and a locked panel and no producer — and the panel blamed the creator's
+// catalogue for it: "Not enough view history yet to derive a CPM", on a channel
+// with 667 uploads and a 6,614-view median.
+// ---------------------------------------------------------------------------
+{
+  const cost = deriveCostEfficiency({
+    budgetMin: 15_000,
+    budgetMax: 15_000,
+    medianViews: 6_614,
+    engagementRate: 0.05,
+  });
+  check('a CPM is derivable from a price and a median', cost !== null, true);
+  check('CPM is budget over thousands of views', cost?.estimatedCpm, 2267.92);
+  check('engaged CPM divides by the engagement rate', cost?.costPerThousandEngaged, 45358.33);
+  check('the basis is stated', cost?.basisBudget, 15_000);
+
+  // The floor of a range, not the ceiling: a CPM off the top describes the
+  // most expensive version of a creator, and the floor is the figure they are
+  // certain about.
+  check(
+    'a range prices off its low end',
+    deriveCostEfficiency({ budgetMin: 15_000, budgetMax: 25_000, medianViews: 1_000, engagementRate: null })
+      ?.basisBudget,
+    15_000,
+  );
+
+  // Null, never zero. An unpriced creator is not a free one, and a CPM with no
+  // denominator is not a CPM of nothing.
+  check(
+    'no price yields no CPM',
+    deriveCostEfficiency({ budgetMin: null, budgetMax: null, medianViews: 6_614, engagementRate: 0.05 }),
+    null,
+  );
+  check(
+    'no views yields no CPM',
+    deriveCostEfficiency({ budgetMin: 15_000, budgetMax: null, medianViews: 0, engagementRate: 0.05 }),
+    null,
+  );
+  // A cohort of one is not a cohort.
+  check('no benchmark is invented', [cost?.cohortMedianCpm, cost?.cohortMedianRetention], [null, null]);
 }
 
 console.log(`\n  ${pass} passed, ${fail} failed`);

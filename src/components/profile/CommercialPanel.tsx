@@ -153,8 +153,13 @@ export function CommercialPanel({
       {!locked && !cost ? (
         <p className="border-b border-line px-5 py-6 text-center text-[12px] leading-relaxed text-ink-muted">
           {hasMinimumBudget
-            ? 'Not enough view history yet to derive a CPM.'
-            : 'No published minimum budget, so there is no basis to estimate CPM from. Ask for a rate card.'}
+            ? // Was "Not enough view history yet", which blamed the creator's
+              // catalogue — it said that on a channel with 667 uploads and a
+              // 6,614-view median, because nothing computed the figure at all.
+              // Now that something does, this can only mean the channel
+              // analysis has not produced a median yet, and says so.
+              'A CPM needs a median view count and the channel analysis has not produced one yet.'
+            : 'No published price, so there is no basis to estimate CPM from. Ask for a rate card.'}
         </p>
       ) : (
         <div className="grid grid-cols-2 border-b border-line">

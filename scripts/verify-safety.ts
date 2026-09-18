@@ -331,5 +331,44 @@ check(
   new Set(BRAND_RISK_CATEGORIES).size,
 );
 
+// ---------------------------------------------------------------------------
+// A clean census is a result, not an absence
+//
+// The moment a real scan came back with nothing, `comment_risks: []` beside
+// `moderation.commentsScanned: 884` was read as "never scanned" and the panel
+// said "with no readable comments there is nothing to assess" — under a
+// heading reporting 884 comments analysed. The absence rule inverted: a
+// genuine clean result reported as unmeasured, which costs the creator the one
+// finding that was in their favour.
+// ---------------------------------------------------------------------------
+{
+  const cleanScan = censusRisk([], {
+    commentsScanned: 884,
+    foundTotal: 0,
+    visibleTotal: 0,
+    hiddenTotal: 0,
+    lastModeratedAt: null,
+  }, 884);
+  check('a clean census is a census', cleanScan !== null, true);
+  check('and it knows what it read', cleanScan?.scanned, 884);
+  check('nothing adjacent', cleanScan?.adjacent, 0);
+  check('a share of zero, not a null share', cleanScan?.adjacentShare, 0);
+  check('no categories to list', cleanScan?.categories.length, 0);
+
+  const derived = deriveBrandSafety([], 884, cleanScan);
+  check('it reports as checked', derived.checked, BRAND_RISK_CATEGORIES.length);
+  check('with nothing raised', derived.raised, 0);
+  check('and nothing against the creator', derived.worst, 'none');
+
+  // The distinction the whole rule exists for: no scan is still no scan.
+  check('no scan at all is still null', censusRisk([], null, 884), null);
+  check(
+    'and a moderation row that scanned nothing is too',
+    censusRisk([], { commentsScanned: 0, foundTotal: 0, visibleTotal: 0, hiddenTotal: 0, lastModeratedAt: null }, 884),
+    null,
+  );
+  check('which still reports as unassessed', deriveBrandSafety([], 884, null).checked, 0);
+}
+
 console.log(`\n  ${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);

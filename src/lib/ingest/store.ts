@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { analyzeChannel, type AnalyzeOptions } from './analyze';
+import { deriveCostEfficiency } from '@/lib/report/cost';
 import { createServiceClient } from '@/lib/supabase/server';
 
 /**
@@ -30,6 +31,54 @@ export async function analyzeAndStore(
     const report = await analyzeChannel(channelIdOrHandle, options);
     const now = new Date().toISOString();
 
+    // The price lives on `creators`, not in the channel analysis, so it is read
+    // here rather than passed in — the pipeline must not need a database row to
+    // measure a channel.
+    const { data: creator } = await supabase
+      .from('creators')
+      .select('budget_min, budget_max')
+      .eq('id', creatorId)
+      .maybeSingle<{ budget_min: number | null; budget_max: number | null }>();
+
+    // Has the classifier already run? Both passes read comments and they read
+    // DIFFERENT AMOUNTS — this one is bounded for a signup, the classifier is
+    // not. `comments_analyzed` and `comment_coverage` describe the corpus the
+    // REPORT is built on, and once there are axes that corpus is the
+    // classifier's. Overwriting them here printed "617 comments analysed"
+    // above eighteen clusters counted over 884.
+    const { data: existing } = await supabase
+      .from('report_metrics')
+      .select('comment_axes, moderation')
+      .eq('creator_id', creatorId)
+      .maybeSingle<{ comment_axes: unknown; moderation: { commentsScanned?: number } | null }>();
+    const classified = existing?.comment_axes != null;
+    // The model census supersedes the keyword lens, so this pass writes a
+    // census only when there is none. Dropping it entirely would leave a new
+    // creator with no brand-safety read at all between signup and the worker
+    // picking their job up — which on a GitHub cron is minutes, and the lens
+    // is deterministic, free and already computed.
+    const scanned = existing?.moderation?.commentsScanned ?? 0;
+
+    const cost = deriveCostEfficiency({
+      budgetMin: creator?.budget_min ?? null,
+      budgetMax: creator?.budget_max ?? null,
+      medianViews: report.outputStats[0]?.medianViews ?? null,
+      engagementRate: report.engagementRate,
+    });
+
+    // WHAT THIS PASS OWNS, and nothing else.
+    //
+    // Re-running the backfill used to null `comment_axes`, blank
+    // `top_comment_clusters` and reset sentiment and purchase intent — so a
+    // deep analyse after the classifier had finished DELETED five minutes of
+    // paid model output and put the report back to "read but not classified".
+    // Measured: @visuallyexplainededucation went from 884 comments with 18
+    // clusters to 617 with none, in 4.9 seconds.
+    //
+    // An upsert only writes the columns it names, so the fix is to name fewer.
+    // The classifier owns the axes, the clusters, the sentiment, the intent
+    // measurement, the risk census and the moderation rollup. This pass owns
+    // what the public API can see without a model.
     const { error } = await supabase.from('report_metrics').upsert(
       {
         creator_id: creatorId,
@@ -37,19 +86,18 @@ export async function analyzeAndStore(
         // Authorized Data — needs the creator's own OAuth grant, and nothing
         // public substitutes. `{}` is how this schema spells absence.
         demographics: {},
-        top_comment_clusters: [],
         // Null, not an empty axes object: "read but not classified" is its own
         // state, distinct from "no comments". See lib/report/sufficiency.
-        comment_axes: null,
-        comment_coverage: report.coverage,
-        sentiment_score: null,
-        purchase_intent_rate: null,
+        ...(classified ? {} : { comment_coverage: report.coverage }),
         brand_safety_score: null,
         engagement_rate: report.engagementRate,
         ad_fatigue_level: null,
         ai_summary: null,
         benchmarks: {},
-        cost_efficiency: {},
+        // Arithmetic over the price the creator published and the views
+        // their videos get. `{}` is how this schema spells absence, and it
+        // stays that when there is no price or no views to divide by.
+        cost_efficiency: cost ?? {},
         sponsored_performance: report.sponsoredPerformance ?? {},
         brand_safety_flags: [],
         category_exposure: [],
@@ -58,21 +106,13 @@ export async function analyzeAndStore(
         public_opinion: {},
         output_stats: report.outputStats,
         promotions: report.promotions,
-        comment_risks: report.commentRisks,
-        moderation: report.moderation,
         comment_register: report.commentRegister,
-        purchase_intent_ci_low: null,
-        purchase_intent_ci_high: null,
-        purchase_intent_basis: null,
-        commercial_density: null,
-        intent_comments_scored: null,
-        intent_posts_scored: null,
-        product_posts_analyzed: null,
-        intent_dispersion: null,
-        intent_rubric_version: null,
+        ...(scanned > 0
+          ? {}
+          : { comment_risks: report.commentRisks, moderation: report.moderation }),
         intent_samples: null,
         model_version: null,
-        comments_analyzed: report.commentsAnalyzed,
+        ...(classified ? {} : { comments_analyzed: report.commentsAnalyzed }),
         last_analyzed_at: now,
         // Retention horizons run from the FETCH, not from the analysis.
         data_fetched_at: now,
