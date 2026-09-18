@@ -148,7 +148,9 @@ export function buildClusters(
         keyphrases: keyphrases(cell.items.map((c) => c.text), corpusCounts, comments.length),
         comments: examples.map((c) => ({
           id: c.id,
-          text: c.text,
+          // Bounded at the source too. The schema truncates on read, but a
+          // stored payload nobody capped is a row that grows without limit.
+          text: c.text.slice(0, 800),
           platform: 'youtube' as const,
           postId: c.videoId,
           postTitle: c.videoTitle || null,
@@ -157,7 +159,7 @@ export function buildClusters(
           basis: 'most_liked' as const,
           url: `https://www.youtube.com/watch?v=${c.videoId}&lc=${c.id}`,
         })),
-        exampleComment: examples[0]?.text ?? '',
+        exampleComment: (examples[0]?.text ?? '').slice(0, 500),
       };
     });
 }

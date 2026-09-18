@@ -59,7 +59,15 @@ const clusterCommentSchema = z.object({
   id: z.string().min(1),
   // Nullable since the verbatim horizon split: null means the 30-day cap
   // passed and the stored copy was dropped. The cluster around it survives.
-  text: z.string().max(800).nullable().optional().transform((v) => v ?? null),
+  // Truncated, not rejected. This is a payload bound — the row is still a
+  // true row with a long comment in it — and rejecting made a 660-character
+  // comment invalidate its cluster, which `.catch([])` below then turned into
+  // the loss of every cluster on the report.
+  text: z
+    .string()
+    .nullable()
+    .optional()
+    .transform((v) => (v == null ? null : v.slice(0, 800))),
   platform: z.enum(['youtube', 'instagram']),
   postId: z.string().max(128),
   postTitle: z.string().max(200).nullable().optional().transform((v) => v ?? null),
@@ -139,9 +147,24 @@ export const commentClustersSchema = z
       // payload bound, not a semantic one — every one of these ships to the
       // client on an unlocked page.
       comments: z.array(clusterCommentSchema).max(10).default([]),
-      exampleComment: z.string().max(500).default(''),
-    }),
+      exampleComment: z.string().default('').transform((v) => v.slice(0, 500)),
+    })
+      // `.nullable()` first so the catch has a value it is allowed to return.
+      .nullable()
+      // PER ROW, not per array. `.catch([])` on the array alone meant one
+      // malformed cluster discarded all of them — and `safeParse` reported
+      // SUCCESS, because the catch had already swallowed it. A 660-character
+      // comment overrunning a 500-character cap rendered as "no readable
+      // comments on the analysed posts" over a corpus of 884 with seventeen
+      // clusters sitting in the row.
+      //
+      // Note this breaks the shares-sum-to-1 contract for the rows that do
+      // survive. That is the right trade: sixteen clusters whose shares sum to
+      // 0.95 is a report with a rounding question in it, and zero clusters is
+      // a report that says the audience never said anything.
+      .catch(null),
   )
+  .transform((rows) => rows.filter((row): row is NonNullable<typeof row> => row !== null))
   .catch([]);
 
 export const platformStatsSchema = z

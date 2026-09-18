@@ -7,6 +7,7 @@
  *   npm run verify:schemas
  */
 import {
+  commentClustersSchema,
   creatorOnboardingSchema,
   businessOnboardingSchema,
   handleSchema,
@@ -58,6 +59,60 @@ check('reserved handle blocked at onboarding',
 // --- business onboarding
 check('org name trimmed', businessOnboardingSchema.safeParse({ organizationName: '  Northbeam  ' }).data?.organizationName, 'Northbeam');
 check('1-char org rejected', businessOnboardingSchema.safeParse({ organizationName: 'N' }).success, false);
+
+// ---------------------------------------------------------------------------
+// One bad cluster must not delete the rest
+//
+// `.catch([])` sat on the ARRAY, so a single malformed row discarded every
+// cluster in the report — and `safeParse` returned SUCCESS, because the catch
+// had already swallowed it. What actually happened: one comment ran to 660
+// characters against a 500-character cap on `exampleComment`, and a creator
+// with 884 comments and seventeen clusters was told "no readable comments on
+// the analysed posts".
+// ---------------------------------------------------------------------------
+{
+  const good = (id: string) => ({
+    id,
+    label: 'Praise for the creator',
+    share: 0.5,
+    commentCount: 10,
+    intent: 'praise',
+    object: 'creator',
+    keyphrases: ['channel'],
+    comments: [],
+    exampleComment: 'nice work',
+  });
+
+  check('a healthy pair parses', commentClustersSchema.parse([good('a'), good('b')]).length, 2);
+
+  // The row that broke it: over-long text is a PAYLOAD bound, not a lie about
+  // the data, so it truncates rather than invalidating the row.
+  const long = { ...good('c'), exampleComment: 'x'.repeat(660) };
+  const withLong = commentClustersSchema.parse([good('a'), long, good('b')]);
+  check('an over-long example does not drop its row', withLong.length, 3);
+  check('and is truncated to the bound', withLong[1].exampleComment.length, 500);
+
+  const longComment = {
+    ...good('d'),
+    comments: [{
+      id: 'x1', text: 'y'.repeat(1200), platform: 'youtube',
+      postId: 'v1', postTitle: null, likes: 1, publishedAt: null,
+      basis: 'most_liked', url: 'https://www.youtube.com/watch?v=v1',
+    }],
+  };
+  const withLongComment = commentClustersSchema.parse([longComment]);
+  check('a long stored comment survives too', withLongComment.length, 1);
+  check('truncated at 800', withLongComment[0].comments[0].text?.length, 800);
+
+  // Genuinely malformed rows are dropped — ONE of them, not all of them.
+  const broken = { id: '', label: '', share: 'not a number', intent: 'nonsense' };
+  const mixed = commentClustersSchema.parse([good('a'), broken, good('b')]);
+  check('a malformed row is dropped alone', mixed.length, 2);
+  check('and the healthy ones are intact', mixed.map((c) => c.id), ['a', 'b']);
+
+  // The whole-array catch stays as the last resort.
+  check('a non-array still yields empty', commentClustersSchema.parse('nope'), []);
+}
 
 console.log(`\n  ${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);
