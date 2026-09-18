@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 
 import { getViewer } from '@/lib/access/viewer';
-import { getModerationQueue } from '@/lib/data/requests';
+import { getModerationQueue, getCreatorHandle } from '@/lib/data/requests';
 import { SiteHeader } from '@/components/shell/SiteHeader';
 import { DashboardNav } from '@/components/dashboard/DashboardNav';
 import { ModerationQueue } from '@/components/dashboard/ModerationQueue';
@@ -14,6 +14,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function ModerationPage() {
   const viewer = await getViewer();
+  const ownHandle = viewer.creatorId ? await getCreatorHandle(viewer.creatorId) : null;
 
   if (!viewer.creatorId) {
     return (
@@ -48,7 +49,7 @@ export default async function ModerationPage() {
           <h1 className="mt-2 text-[24px] font-semibold tracking-tight text-ink">
             Comment moderation
           </h1>
-          <DashboardNav active="/dashboard/moderation" />
+          <DashboardNav active="/dashboard/moderation" handle={ownHandle} />
 
           {/* The framing matters. This list exists because brands price a
               placement partly on what sits next to it — but none of it is a

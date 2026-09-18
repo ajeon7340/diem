@@ -1,6 +1,7 @@
 import Link from 'next/link';
 
 import { getViewer } from '@/lib/access/viewer';
+import { getCreatorHandle } from '@/lib/data/requests';
 import { isSupabaseConfigured } from '@/lib/supabase/server';
 import { Badge } from '@/components/ui/Badge';
 import { DemoRoleSwitcher } from './DemoRoleSwitcher';
@@ -13,6 +14,10 @@ export async function SiteHeader() {
   const viewer = await getViewer();
   const demoMode = !isSupabaseConfigured();
   const signedIn = viewer.userId !== null;
+  // The creator's own media kit is where everything about them actually is,
+  // and nothing in the header linked it — so the only way to reach your own
+  // profile was to remember your handle and type it.
+  const ownHandle = viewer.creatorId ? await getCreatorHandle(viewer.creatorId) : null;
 
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-surface/90 backdrop-blur-md">
@@ -23,9 +28,13 @@ export async function SiteHeader() {
 
         <nav className="flex items-center gap-1 text-[12px]">
           <NavLink href="/directory">Directory</NavLink>
-          <NavLink href="/pricing">Pricing</NavLink>
+          {/* Pricing sells the agency plan. A signed-in creator is not the
+              buyer, and the slot is better spent on their own pages. */}
+          {viewer.creatorId ? null : <NavLink href="/pricing">Pricing</NavLink>}
           {viewer.creatorId ? (
             <>
+              {ownHandle ? <NavLink href={`/@${ownHandle}`}>My media kit</NavLink> : null}
+              <NavLink href="/dashboard/studio">Studio</NavLink>
               <NavLink href="/dashboard/requests">Requests</NavLink>
               <NavLink href="/dashboard/offers">Offers</NavLink>
             </>
