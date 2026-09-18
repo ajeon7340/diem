@@ -2,6 +2,7 @@ import Link from 'next/link';
 
 import { getViewer } from '@/lib/access/viewer';
 import { getCreatorHandle } from '@/lib/data/requests';
+import { CREATOR_NAV } from '@/lib/nav';
 import { isSupabaseConfigured } from '@/lib/supabase/server';
 import { Badge } from '@/components/ui/Badge';
 import { DemoRoleSwitcher } from './DemoRoleSwitcher';
@@ -26,28 +27,30 @@ export async function SiteHeader() {
           adfit
         </Link>
 
-        <nav className="flex items-center gap-1 text-[12px]">
-          <NavLink href="/directory">Directory</NavLink>
-          {/* Pricing sells the agency plan. A signed-in creator is not the
-              buyer, and the slot is better spent on their own pages. */}
-          {viewer.creatorId ? null : <NavLink href="/pricing">Pricing</NavLink>}
-          {/* One link per destination, across BOTH navs.
-              Listing Studio, Requests and Offers here as well as in the
-              dashboard tabs put the same four items on screen twice on every
-              dashboard page — my own over-correction for the opposite problem,
-              which was that none of them were reachable at all.
-              The split that holds: the header carries where you are in the
-              PRODUCT (the directory, your public page, your workspace); the
-              tabs carry where you are inside the workspace. The media kit is
-              the one creator surface that is not a dashboard section — it is
-              the public page this whole thing produces — so it belongs here
-              and not there. */}
+        <nav className="-mx-1 flex min-w-0 items-center gap-1 overflow-x-auto px-1 text-[12px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {/* A creator gets every one of their own pages here and no
+              directory: the directory is where a brand shops for creators, and
+              they are not shopping. Everyone else gets the public nav.
+
+              TEMPORARY SHAPE. Everything is in one bar on purpose — it is the
+              honest version while there are few enough sections to fit. When
+              this stops fitting, the split to make is workspace-vs-public, not
+              a second copy of the same links (see CREATOR_NAV). */}
           {viewer.creatorId ? (
             <>
               {ownHandle ? <NavLink href={`/@${ownHandle}`}>My media kit</NavLink> : null}
-              <NavLink href="/dashboard">Dashboard</NavLink>
+              {CREATOR_NAV.map((item) => (
+                <NavLink key={item.href} href={item.href}>
+                  {item.label}
+                </NavLink>
+              ))}
             </>
-          ) : null}
+          ) : (
+            <>
+              <NavLink href="/directory">Directory</NavLink>
+              <NavLink href="/pricing">Pricing</NavLink>
+            </>
+          )}
         </nav>
 
         <div className="ml-auto flex items-center gap-2.5">

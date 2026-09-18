@@ -1,4 +1,3 @@
-import { AnalysisProgress } from './AnalysisProgress';
 import { Info } from 'lucide-react';
 
 import type { AIReport } from '@/types';
@@ -21,13 +20,6 @@ import { INTENT_WEIGHTS } from '@/lib/report/intent';
  * what the sample cannot support, and the risk callout surfaces a flag that
  * would otherwise sit three panels down.
  */
-export interface PendingPass {
-  note: string;
-  status: 'queued' | 'running' | 'succeeded' | 'failed';
-  done: number | null;
-  total: number | null;
-}
-
 export function MetricsStrip({
   report,
   /**
@@ -38,10 +30,8 @@ export function MetricsStrip({
    * because it IS a sufficiency gap: the same absence, with the extra fact that
    * something is on its way to filling it.
    */
-  pendingPass = null,
 }: {
   report: AIReport | null;
-  pendingPass?: PendingPass | null;
 }) {
   const locked = report === null;
   const sufficiency = report ? assessReport(report) : null;
@@ -287,18 +277,21 @@ export function MetricsStrip({
       ) : null}
 
       {/*
-        `pendingPass` opens this on its own, and has to. `overall` can come back
-        'sufficient' on a corpus that is large and entirely unclassified — a
-        channel with plenty of comments and a sponsored history clears every
+        `unclassified` opens this on its own, and has to. `overall` can come
+        back 'sufficient' on a corpus that is large and entirely unclassified —
+        a channel with plenty of comments and a sponsored history clears every
         threshold this function measures, because none of them look at whether
-        the classifier ever ran. The notice would then be hidden and the creator
-        would be told nothing at all about the pass they are waiting on.
+        the classifier ever ran. The notice would then be hidden and nothing
+        would explain why the intent figures are blank.
+
+        This used to key on the JOB, which meant the explanation appeared only
+        while a job existed. The gap is a property of the report, not of our
+        queue, and it outlives any particular run.
       */}
-      {sufficiency && (sufficiency.overall !== 'sufficient' || pendingPass) ? (
+      {sufficiency && (sufficiency.overall !== 'sufficient' || sufficiency.unclassified) ? (
         <SufficiencyNotice
           sufficiency={sufficiency}
           commentsAnalyzed={report?.commentsAnalyzed ?? 0}
-          pendingPass={pendingPass}
         />
       ) : null}
 
@@ -311,11 +304,9 @@ export function MetricsStrip({
 function SufficiencyNotice({
   sufficiency,
   commentsAnalyzed,
-  pendingPass = null,
 }: {
   sufficiency: ReportSufficiency;
   commentsAnalyzed: number;
-  pendingPass?: PendingPass | null;
 }) {
   return (
     <div className="border-t border-line bg-surface px-5 py-3.5">
@@ -336,12 +327,6 @@ function SufficiencyNotice({
             {gap}
           </li>
         ))}
-        {pendingPass ? (
-          // Last, and in the darker ink: it is the only line here that will
-          // stop being true on its own — which is also why it is the only one
-          // that refreshes itself.
-          <AnalysisProgress {...pendingPass} />
-        ) : null}
       </ul>
     </div>
   );

@@ -9,6 +9,7 @@ import { assessReport, confidenceLabel } from '@/lib/report/sufficiency';
 import { exactNumber, shortDate } from '@/lib/format';
 import { ProposalProvider } from '@/components/profile/proposal-context';
 import { AccessBanner } from '@/components/profile/AccessBanner';
+import { AnalysisBanner, type JobStatus } from '@/components/profile/AnalysisBanner';
 import { BrandSafetyPanel } from '@/components/profile/BrandSafetyPanel';
 import { PromotionsPanel } from '@/components/profile/PromotionsPanel';
 import { FitSummaryPanel } from '@/components/profile/FitSummaryPanel';
@@ -21,8 +22,8 @@ import { PublicOpinionPanel } from '@/components/profile/PublicOpinionPanel';
 import { ProfileHeader, TeaserHighlights } from '@/components/profile/ProfileHeader';
 import { ReportNav } from '@/components/profile/ReportNav';
 import { assessFitEligibility } from '@/lib/report/fit';
-import { describeJob, latestAnalysisJob } from '@/lib/ingest/jobs';
-import { createSessionClient } from '@/lib/supabase/server';
+import { latestAnalysisJob } from '@/lib/ingest/jobs';
+import { createSessionClient, isSupabaseConfigured } from '@/lib/supabase/server';
 import { OFF_PLATFORM_PANEL } from '@/lib/report/policy';
 import { StickyActionBar } from '@/components/profile/StickyActionBar';
 import { SiteHeader } from '@/components/shell/SiteHeader';
@@ -93,35 +94,45 @@ export default async function CreatorProfilePage({ params, searchParams }: PageP
       : null;
   const sufficiency = report ? assessReport(report) : null;
 
-  // WHICH absence this is, for the one person who can act on knowing.
+  // WHAT THE PIPELINE IS DOING, for the one person who can act on knowing.
   //
-  // Only for the owner, and only while the pass is actually missing. RLS scopes
-  // `analysis_jobs` to the creator, and that is the right scope: a buyer's copy
-  // already says "a missing pass, not a missing audience", which is the part
-  // that protects the creator from an absence being read as a finding. The
-  // creator, who has just signed up and is looking at their own half-filled
-  // report, is the one who needs to know whether it is coming or broken.
-  // `classify_intent`, NOT the safety census. `unclassified` means
-  // `comment_axes` is absent, and the axes are the intent pass's output — the
-  // census measures a different thing entirely and could have finished long ago
-  // while this gap is still open.
-  const pendingJob =
-    access.mode === 'owner' && sufficiency?.unclassified
-      ? await latestAnalysisJob(createSessionClient(), creator.id, 'classify_intent')
-      : null;
-  const note = describeJob(pendingJob);
-  // The numbers travel beside the sentence rather than inside it: the client
-  // draws the bar and decides when to stop polling, and both need the raw
-  // figures. `describeJob` stays the only thing that decides the WORDS.
-  const pendingPass =
-    pendingJob && note
-      ? {
-          note,
-          status: pendingJob.status,
-          done: pendingJob.progressDone,
-          total: pendingJob.progressTotal,
-        }
-      : null;
+  // Owner only. `analysis_jobs` is creator-scoped by RLS and this is
+  // operational detail about our worker — a buyer needs to know a figure is
+  // absent, which the panels say on their own, not that batch nine of
+  // seventeen is in flight.
+  //
+  // BOTH passes, not just the one behind `unclassified`. The safety census and
+  // the two-axis pass measure different things and fail independently, and a
+  // creator watching one of them finish while the other is still queued should
+  // see that rather than an empty half-report with no explanation.
+  //
+  // Shown whenever a pass is live OR has given up — not gated on a metric
+  // being missing. A pass can be running while every panel already has a
+  // figure from the previous run, and "we are rereading your comments" is
+  // still the honest thing to say about the numbers on screen.
+  const analysisJobs: JobStatus[] = [];
+  if (access.mode === 'owner' && isSupabaseConfigured()) {
+    const supabase = createSessionClient();
+    const passes = [
+      { kind: 'classify_comments' as const, name: 'Comment safety scan' },
+      { kind: 'classify_intent' as const, name: 'Comment classification' },
+    ];
+    for (const pass of passes) {
+      const job = await latestAnalysisJob(supabase, creator.id, pass.kind);
+      if (!job) continue;
+      if (job.status === 'succeeded') continue;
+      analysisJobs.push({
+        kind: pass.kind,
+        name: pass.name,
+        status: job.status,
+        stage: job.progressStage,
+        done: job.progressDone,
+        total: job.progressTotal,
+        attempts: job.attempts,
+        maxAttempts: job.maxAttempts,
+      });
+    }
+  }
 
   const contextLabel =
     access.mode === 'token'
@@ -164,6 +175,7 @@ export default async function CreatorProfilePage({ params, searchParams }: PageP
             <div className="mt-8 space-y-4">
               <TeaserHighlights creator={creator} />
               <AccessBanner access={access} />
+              <AnalysisBanner jobs={analysisJobs} />
               {/* Directly under the unlock, and only on the pro_agency branch —
                   the gatekeeper's own verdict rather than a second identity
                   read, so one source decides who sees this.
@@ -222,7 +234,7 @@ export default async function CreatorProfilePage({ params, searchParams }: PageP
               </Section>
 
               <Section id="commercial" label="Commercial fit">
-                <MetricsStrip report={report} pendingPass={pendingPass} />
+                <MetricsStrip report={report} />
                 <CommercialPanel
                   cost={report?.costEfficiency ?? null}
                   performance={report?.sponsoredPerformance ?? null}

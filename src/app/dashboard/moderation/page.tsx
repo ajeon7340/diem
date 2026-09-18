@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { getViewer } from '@/lib/access/viewer';
 import { getModerationQueue } from '@/lib/data/requests';
 import { SiteHeader } from '@/components/shell/SiteHeader';
-import { DashboardNav } from '@/components/dashboard/DashboardNav';
 import { ModerationQueue } from '@/components/dashboard/ModerationQueue';
 import { Panel } from '@/components/ui/Panel';
 import { orderQueue, queueSummary, quotaPlan } from '@/lib/report/moderation';
@@ -48,7 +47,6 @@ export default async function ModerationPage() {
           <h1 className="mt-2 text-[24px] font-semibold tracking-tight text-ink">
             Comment moderation
           </h1>
-          <DashboardNav active="/dashboard/moderation" />
 
           {/* The framing matters. This list exists because brands price a
               placement partly on what sits next to it — but none of it is a

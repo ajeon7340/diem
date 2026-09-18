@@ -5,7 +5,6 @@ import { getViewer } from '@/lib/access/viewer';
 import { getCreatorHandle } from '@/lib/data/requests';
 import { getCreatorByHandle } from '@/lib/access/gatekeeper';
 import { SiteHeader } from '@/components/shell/SiteHeader';
-import { DashboardNav } from '@/components/dashboard/DashboardNav';
 import { SettingsForm } from '@/components/dashboard/SettingsForm';
 import { Panel } from '@/components/ui/Panel';
 import { fixtureCreator } from '@/lib/data/fixtures';
@@ -53,7 +52,6 @@ export default async function SettingsPage() {
         <div className="relative mx-auto w-full max-w-3xl px-5 py-12 sm:px-8">
           <p className="rail">Dashboard</p>
           <h1 className="mt-2 text-[24px] font-semibold tracking-tight text-ink">Settings</h1>
-          <DashboardNav active="/dashboard/settings" />
 
           <div className="mt-8 space-y-4">
             <Panel
