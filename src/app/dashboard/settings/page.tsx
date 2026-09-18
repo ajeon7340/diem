@@ -16,7 +16,6 @@ export const dynamic = 'force-dynamic';
 
 export default async function SettingsPage() {
   const viewer = await getViewer();
-  const ownHandle = viewer.creatorId ? await getCreatorHandle(viewer.creatorId) : null;
 
   if (!viewer.creatorId) {
     return (
@@ -54,7 +53,7 @@ export default async function SettingsPage() {
         <div className="relative mx-auto w-full max-w-3xl px-5 py-12 sm:px-8">
           <p className="rail">Dashboard</p>
           <h1 className="mt-2 text-[24px] font-semibold tracking-tight text-ink">Settings</h1>
-          <DashboardNav active="/dashboard/settings" handle={ownHandle} />
+          <DashboardNav active="/dashboard/settings" />
 
           <div className="mt-8 space-y-4">
             <Panel

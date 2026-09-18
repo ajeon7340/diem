@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 
 import { getViewer } from '@/lib/access/viewer';
-import { getCreatorBriefs, getCreatorOffers, getCreatorHandle } from '@/lib/data/requests';
+import { getCreatorBriefs, getCreatorOffers } from '@/lib/data/requests';
 import { SiteHeader } from '@/components/shell/SiteHeader';
 import { DashboardNav } from '@/components/dashboard/DashboardNav';
 import { OfferCard } from '@/components/dashboard/OfferCard';
@@ -15,7 +15,6 @@ export const dynamic = 'force-dynamic';
 
 export default async function OffersPage() {
   const viewer = await getViewer();
-  const ownHandle = viewer.creatorId ? await getCreatorHandle(viewer.creatorId) : null;
 
   if (!viewer.creatorId) {
     return (
@@ -57,7 +56,7 @@ export default async function OffersPage() {
           <h1 className="mt-2 text-[24px] font-semibold tracking-tight text-ink">
             Offers &amp; briefs
           </h1>
-          <DashboardNav active="/dashboard/offers" handle={ownHandle} />
+          <DashboardNav active="/dashboard/offers" />
 
           <div className="mt-8 space-y-4">
             <Panel title="Open offers" meta={`${open.length} awaiting you`}>

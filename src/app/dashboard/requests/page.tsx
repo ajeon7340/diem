@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 
 import { getViewer } from '@/lib/access/viewer';
-import { getCreatorRequests, getDemographicsGrants, getCreatorHandle } from '@/lib/data/requests';
+import { getCreatorRequests, getDemographicsGrants } from '@/lib/data/requests';
 import { SiteHeader } from '@/components/shell/SiteHeader';
 import { RequestCard } from '@/components/dashboard/RequestCard';
 import { GrantCard } from '@/components/dashboard/GrantCard';
@@ -14,7 +14,6 @@ export const dynamic = 'force-dynamic';
 
 export default async function RequestsPage() {
   const viewer = await getViewer();
-  const ownHandle = viewer.creatorId ? await getCreatorHandle(viewer.creatorId) : null;
 
   if (!viewer.creatorId) {
     return (
@@ -58,7 +57,7 @@ export default async function RequestsPage() {
           <h1 className="mt-2 text-[24px] font-semibold tracking-tight text-ink">
             Collaboration requests
           </h1>
-          <DashboardNav active="/dashboard/requests" handle={ownHandle} />
+          <DashboardNav active="/dashboard/requests" />
           <p className="mt-6 max-w-[64ch] text-[13px] leading-relaxed text-ink-muted">
             Approving mints a fresh time-limited link for the requester. You can decline without
             giving a reason, an approved link expires on its own, and you can revoke one early at

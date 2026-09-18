@@ -31,12 +31,21 @@ export async function SiteHeader() {
           {/* Pricing sells the agency plan. A signed-in creator is not the
               buyer, and the slot is better spent on their own pages. */}
           {viewer.creatorId ? null : <NavLink href="/pricing">Pricing</NavLink>}
+          {/* One link per destination, across BOTH navs.
+              Listing Studio, Requests and Offers here as well as in the
+              dashboard tabs put the same four items on screen twice on every
+              dashboard page — my own over-correction for the opposite problem,
+              which was that none of them were reachable at all.
+              The split that holds: the header carries where you are in the
+              PRODUCT (the directory, your public page, your workspace); the
+              tabs carry where you are inside the workspace. The media kit is
+              the one creator surface that is not a dashboard section — it is
+              the public page this whole thing produces — so it belongs here
+              and not there. */}
           {viewer.creatorId ? (
             <>
               {ownHandle ? <NavLink href={`/@${ownHandle}`}>My media kit</NavLink> : null}
-              <NavLink href="/dashboard/studio">Studio</NavLink>
-              <NavLink href="/dashboard/requests">Requests</NavLink>
-              <NavLink href="/dashboard/offers">Offers</NavLink>
+              <NavLink href="/dashboard">Dashboard</NavLink>
             </>
           ) : null}
         </nav>

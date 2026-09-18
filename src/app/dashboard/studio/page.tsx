@@ -3,7 +3,7 @@ import Link from 'next/link';
 
 import { getViewer } from '@/lib/access/viewer';
 import { fixtureCreatorById } from '@/lib/data/fixtures';
-import { getCreatorYouTubeHandle, getCreatorHandle } from '@/lib/data/requests';
+import { getCreatorYouTubeHandle } from '@/lib/data/requests';
 import { SiteHeader } from '@/components/shell/SiteHeader';
 import { DashboardNav } from '@/components/dashboard/DashboardNav';
 import { DriverList } from '@/components/studio/DriverList';
@@ -41,7 +41,6 @@ export default async function StudioPage({
   searchParams: { region?: string; category?: string };
 }) {
   const viewer = await getViewer();
-  const ownHandle = viewer.creatorId ? await getCreatorHandle(viewer.creatorId) : null;
 
   if (!viewer.creatorId) {
     return (
@@ -98,7 +97,7 @@ export default async function StudioPage({
         <div className="relative mx-auto w-full max-w-3xl px-5 py-12 sm:px-8">
           <p className="rail">Your channel</p>
           <h1 className="mt-2 text-[24px] font-semibold tracking-tight text-ink">Studio</h1>
-          <DashboardNav active="/dashboard/studio" handle={ownHandle} />
+          <DashboardNav active="/dashboard/studio" />
 
           <p className="mt-6 max-w-[64ch] text-[13px] leading-relaxed text-ink-muted">
             What actually moves views on your channel, why any video did what it did, and what the

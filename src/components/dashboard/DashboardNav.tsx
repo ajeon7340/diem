@@ -14,25 +14,13 @@ const TABS = [
   { href: '/dashboard/settings', label: 'Settings' },
 ] as const;
 
-/**
- * @param handle The creator's own handle, so the tabs can reach their profile.
- *   Optional: fixture mode has no handle to link, and a tab pointing at `/@null`
- *   is worse than one absent.
- */
-export function DashboardNav({ active, handle }: { active: string; handle?: string | null }) {
+export function DashboardNav({ active }: { active: string }) {
   return (
     <nav aria-label="Dashboard" className="mt-6 flex items-center gap-1 border-b border-line">
-      {/* The profile is not a dashboard page, and it is the page this whole
-          product is about — the one place a creator sees everything they have.
-          It sat unlinked from every surface. */}
-      {handle ? (
-        <Link
-          href={`/@${handle}`}
-          className="-mb-px border-b-2 border-transparent px-3 py-2 text-[12px] text-ink-muted transition-colors hover:text-ink"
-        >
-          My media kit
-        </Link>
-      ) : null}
+      {/* The media kit is deliberately NOT a tab. It is not a dashboard
+          section — it is the public page the dashboard produces — and it is
+          already one click away in the header. Two links to one destination on
+          one screen is a question about which one is the real one. */}
       {TABS.map((tab) => (
         <Link
           key={tab.href}
