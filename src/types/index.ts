@@ -218,6 +218,32 @@ export type CommentIntent =
   | 'unclassified';
 
 /**
+ * The same union, at runtime.
+ *
+ * Paired to the type by the assertion below, so adding a value to one without
+ * the other stops the build — the failure mode otherwise is a cluster labelled
+ * "undefined the video" on somebody's media kit.
+ */
+export const COMMENT_INTENTS = [
+  'buy',
+  'request',
+  'ask',
+  'praise',
+  'criticise',
+  'abuse',
+  'react',
+  'unclassified',
+] as const;
+
+type _CommentIntentsCoverUnion = (typeof COMMENT_INTENTS)[number] extends CommentIntent
+  ? CommentIntent extends (typeof COMMENT_INTENTS)[number]
+    ? true
+    : never
+  : never;
+const _commentIntentsAreComplete: _CommentIntentsCoverUnion = true;
+void _commentIntentsAreComplete;
+
+/**
  * Each axis rolled up over the whole corpus.
  *
  * Stored rather than derived from `topCommentClusters`, because clusters are a

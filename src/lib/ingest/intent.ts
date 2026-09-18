@@ -2,6 +2,8 @@ import 'server-only';
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { buildClusters } from './clusters';
+
 import { aiModel, aiProvider, generateStructured } from '@/lib/ai/provider';
 import { ClaimLostError, fetchAllComments, type RawComment, type Spend } from './classify';
 import {
@@ -11,6 +13,7 @@ import {
   sentimentFromCells,
   type IntentCells,
 } from '@/lib/report/intent';
+import type { CommentCluster } from '@/types';
 import type {
   CommentAxes,
   CommentIntent,
@@ -296,6 +299,7 @@ export async function storeAxes(
   supabase: SupabaseClient,
   creatorId: string,
   rollup: AxesRollup,
+  clusters: CommentCluster[] = [],
 ): Promise<{ ok: true } | { ok: false; reason: string }> {
   const { measurement } = rollup;
 
@@ -303,6 +307,10 @@ export async function storeAxes(
     .from('report_metrics')
     .update({
       comment_axes: rollup.axes,
+      // Written in the same statement as the axes they are derived from. Two
+      // updates would leave a window where the grid and the clusters under it
+      // disagree about the same corpus.
+      top_comment_clusters: clusters,
       sentiment_score: rollup.sentiment,
       purchase_intent_rate: measurement.rate,
       purchase_intent_ci_low: measurement.ciLow,
@@ -361,7 +369,8 @@ export async function classifyIntentAndStore(
   const labels = await classifyAxes(corpus.comments, spend, options);
   const rollup = rollUpAxes(labels);
 
-  const stored = await storeAxes(supabase, creatorId, rollup);
+  const clusters = buildClusters(corpus.comments, labels);
+  const stored = await storeAxes(supabase, creatorId, rollup, clusters);
   if (!stored.ok) throw new Error(stored.reason);
 
   return {
