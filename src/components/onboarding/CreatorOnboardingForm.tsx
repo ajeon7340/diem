@@ -359,54 +359,44 @@ export function CreatorOnboardingForm() {
         </Field>
       </div>
 
-      {/* Bio beside the two choices rather than above them. Three short
-          blocks in the height of one is the difference between this form
-          fitting a laptop screen and not. */}
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Bio" htmlFor="bio" error={errors.bio}>
-          <textarea
-            id="bio"
-            name="bio"
-            rows={3}
-            maxLength={500}
-            placeholder="What you make, and who watches."
-            className={cn(FIELD, 'h-auto resize-none py-2 leading-relaxed')}
+      {/* No bio here on purpose.
+          Nothing downstream needs it: the profile renders without one, the
+          directory does not filter on it, and the report does not read it. It
+          is the only field on this form a creator could not answer from what
+          they already know, so it was the one they stopped at — and it is
+          editable in Settings the moment they land. */}
+      <div className="grid gap-2 sm:grid-cols-2">
+        <label className="flex cursor-pointer items-start gap-2.5 rounded-panel border border-line bg-paper px-3.5 py-2.5">
+          <input
+            type="checkbox"
+            name="isDirectoryVisible"
+            defaultChecked
+            className="mt-0.5 h-3.5 w-3.5 cursor-pointer accent-indigo"
           />
-        </Field>
-
-        <div className="grid content-start gap-2">
-          <label className="flex cursor-pointer items-start gap-2.5 rounded-panel border border-line bg-paper px-3.5 py-2.5">
-            <input
-              type="checkbox"
-              name="isDirectoryVisible"
-              defaultChecked
-              className="mt-0.5 h-3.5 w-3.5 cursor-pointer accent-indigo"
-            />
-            <span>
-              <span className="block text-[12px] font-medium text-ink">List me in the directory</span>
-              <span className="mt-0.5 block text-[11px] leading-snug text-ink-muted">
-                Pro agencies can find you. Off means link-only.
-              </span>
+          <span>
+            <span className="block text-[12px] font-medium text-ink">List me in the directory</span>
+            <span className="mt-0.5 block text-[11px] leading-snug text-ink-muted">
+              Pro agencies can find you. Off means link-only.
             </span>
-          </label>
+          </span>
+        </label>
 
-          <label className="flex cursor-pointer items-start gap-2.5 rounded-panel border border-line bg-paper px-3.5 py-2.5">
-            <input
-              type="checkbox"
-              name="budgetNegotiable"
-              className="mt-0.5 h-3.5 w-3.5 cursor-pointer accent-indigo"
-            />
-            <span>
-              <span className="block text-[12px] font-medium text-ink">Rather not say a price</span>
-              {/* Said plainly rather than sold. Withholding is a real choice and
-                  sometimes the right one; it also drops you out of every budget
-                  filter, and that is worth knowing before ticking it. */}
-              <span className="mt-0.5 block text-[11px] leading-snug text-ink-muted">
-                Brands filtering by budget will not see you.
-              </span>
+        <label className="flex cursor-pointer items-start gap-2.5 rounded-panel border border-line bg-paper px-3.5 py-2.5">
+          <input
+            type="checkbox"
+            name="budgetNegotiable"
+            className="mt-0.5 h-3.5 w-3.5 cursor-pointer accent-indigo"
+          />
+          <span>
+            <span className="block text-[12px] font-medium text-ink">Rather not say a price</span>
+            {/* Said plainly rather than sold. Withholding is a real choice and
+                sometimes the right one; it also drops you out of every budget
+                filter, and that is worth knowing before ticking it. */}
+            <span className="mt-0.5 block text-[11px] leading-snug text-ink-muted">
+              Brands filtering by budget will not see you.
             </span>
-          </label>
-        </div>
+          </span>
+        </label>
       </div>
 
       {state.status === 'error' && state.message ? (
@@ -417,8 +407,11 @@ export function CreatorOnboardingForm() {
 
       <SubmitButton>Publish my media kit</SubmitButton>
 
+      {/* Says where the bio went. A field that disappears without a word
+          reads as one that no longer exists. */}
       <p className="text-center text-[11px] leading-snug text-ink-faint">
-        Publishes immediately. Age, gender and geography stay empty until you connect YouTube.
+        Publishes immediately — add a bio any time in Settings. Age, gender and geography stay
+        empty until you connect YouTube.
       </p>
     </form>
   );
