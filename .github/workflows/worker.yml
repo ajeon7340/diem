@@ -24,10 +24,21 @@ name: worker
 
 on:
   schedule:
-    # Every ten minutes. GitHub's scheduler is best-effort and runs late under
-    # load, which is fine: "queued and will run shortly" is a promise this
-    # keeps, and the report is not live data.
-    - cron: '*/10 * * * *'
+    # Every ten minutes, on OFFSET minutes rather than `*/10`.
+    #
+    # GitHub's scheduler is a shared, best-effort queue: a run is dropped
+    # outright when the pool is busy, not merely delayed. Measured on this
+    # repo — three runs existed and exactly ONE came from the schedule across
+    # two and a half hours of `*/10`, on a public repo where minutes are free,
+    # so nothing was throttling it but the pool. `*/10` lands on :00 and :10,
+    # the minute marks every other repo on the platform also picked, which is
+    # the worst place to be standing.
+    #
+    # This is a mitigation, not a fix. If a creator is ever watching a signup
+    # and waiting, move to a long-lived container as the header says: the same
+    # command with no flags, picking the job up seconds after signup instead of
+    # whenever GitHub feels able.
+    - cron: '3,13,23,33,43,53 * * * *'
   workflow_dispatch:
     inputs:
       max_videos:
