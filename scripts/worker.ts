@@ -101,7 +101,10 @@ async function finish(
 ): Promise<void> {
   const { data, error } = await supabase
     .from('analysis_jobs')
-    .update({ ...fields, finished_at: new Date().toISOString() })
+    // The stage is cleared on every terminal outcome, or a succeeded job keeps
+    // rendering "classifying 4,800 of 6,369" forever. The counts stay: they are
+    // what the job did, and a finished job saying how much it read is useful.
+    .update({ ...fields, progress_stage: null, finished_at: new Date().toISOString() })
     .eq('id', jobId)
     .eq('worker', WORKER)
     .select('id');
@@ -119,12 +122,38 @@ async function finish(
  * claim is gone, and `classifyComments` turns that into a ClaimLostError before
  * the next batch rather than after it.
  */
-function heartbeat(supabase: SupabaseClient, jobId: string) {
+interface Progress {
+  done?: number;
+  total?: number;
+  stage?: 'fetching' | 'classifying' | 'storing';
+}
+
+/**
+ * Shared between the heartbeat and `onProgress`, so the number the terminal
+ * prints and the number the profile shows come from one place. They drifted
+ * apart the obvious way otherwise: --verbose printed a live count and the page
+ * showed nothing at all.
+ */
+function progressBox() {
+  const box: Progress = {};
+  return {
+    set(next: Progress) {
+      Object.assign(box, next);
+    },
+    read: () => box,
+  };
+}
+
+function heartbeat(supabase: SupabaseClient, jobId: string, progress: Progress) {
   return async () => {
     const { data, error } = await supabase.rpc('heartbeat_analysis_job', {
       p_job_id: jobId,
       p_worker: WORKER,
       p_lease_seconds: LEASE_SECONDS,
+      // Rides the beat rather than taking a write of its own — see 0029.
+      p_done: progress.done ?? null,
+      p_total: progress.total ?? null,
+      p_stage: progress.stage ?? null,
     });
     // A transport failure is not proof the claim is gone. Keep going: the lease
     // is long, the next beat will tell us, and stopping a 5-minute run on one
@@ -182,16 +211,22 @@ async function runClassifyComments(supabase: SupabaseClient, job: JobRow): Promi
   );
 
   const started = Date.now();
+  // 'fetching' before anything is classified: on a large channel the first
+  // minute is YouTube pagination with no model call in it, and silence there
+  // reads as a hang.
+  const progress = progressBox();
+  progress.set({ stage: 'fetching' });
   const result = await classifyAndStore(
     supabase,
     job.creator_id,
     { handle: creator.youtube_handle, channelId: creator.youtube_channel_id },
     {
       maxVideos,
-      stillMine: heartbeat(supabase, job.id),
-      onProgress: VERBOSE
-        ? (done, total) => process.stdout.write(`\r  classified ${done}/${total}`)
-        : undefined,
+      stillMine: heartbeat(supabase, job.id, progress.read()),
+      onProgress: (done, total) => {
+        progress.set({ done, total, stage: 'classifying' });
+        if (VERBOSE) process.stdout.write(`\r  classified ${done}/${total}`);
+      },
     },
   );
   if (VERBOSE) process.stdout.write('\r');
@@ -221,16 +256,19 @@ async function runClassifyIntent(supabase: SupabaseClient, job: JobRow): Promise
   );
 
   const started = Date.now();
+  const progress = progressBox();
+  progress.set({ stage: 'fetching' });
   const result = await classifyIntentAndStore(
     supabase,
     job.creator_id,
     { handle: creator.youtube_handle, channelId: creator.youtube_channel_id },
     {
       maxVideos,
-      stillMine: heartbeat(supabase, job.id),
-      onProgress: VERBOSE
-        ? (done, total) => process.stdout.write(`\r  classified ${done}/${total}`)
-        : undefined,
+      stillMine: heartbeat(supabase, job.id, progress.read()),
+      onProgress: (done, total) => {
+        progress.set({ done, total, stage: 'classifying' });
+        if (VERBOSE) process.stdout.write(`\r  classified ${done}/${total}`);
+      },
     },
   );
   if (VERBOSE) process.stdout.write('\r');

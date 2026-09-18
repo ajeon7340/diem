@@ -1773,6 +1773,15 @@ export interface AnalysisJob {
   commentsScanned: number | null;
   findings: number | null;
   /**
+   * How far the current stage has got. Null until the worker reports, which is
+   * NOT zero — a bar at 0% claims we know it has done nothing, and on a large
+   * channel the first minute is YouTube pagination with no count to report.
+   */
+  progressDone: number | null;
+  progressTotal: number | null;
+  /** Cleared on any terminal status, so a finished job shows no stage. */
+  progressStage: 'fetching' | 'classifying' | 'storing' | null;
+  /**
    * The worker's last error, for a log. NEVER rendered to a creator: a Postgres
    * message or an HTTP body is not a status line, and the states above already
    * say everything a person can act on.

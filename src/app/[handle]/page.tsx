@@ -101,15 +101,26 @@ export default async function CreatorProfilePage({ params, searchParams }: PageP
   // that protects the creator from an absence being read as a finding. The
   // creator, who has just signed up and is looking at their own half-filled
   // report, is the one who needs to know whether it is coming or broken.
-  const pendingPass =
+  // `classify_intent`, NOT the safety census. `unclassified` means
+  // `comment_axes` is absent, and the axes are the intent pass's output — the
+  // census measures a different thing entirely and could have finished long ago
+  // while this gap is still open.
+  const pendingJob =
     access.mode === 'owner' && sufficiency?.unclassified
-      ? describeJob(
-          // `classify_intent`, NOT the safety census. `unclassified` means
-          // `comment_axes` is absent, and the axes are the intent pass's
-          // output — the census measures a different thing entirely and could
-          // have finished long ago while this gap is still open.
-          await latestAnalysisJob(createSessionClient(), creator.id, 'classify_intent'),
-        )
+      ? await latestAnalysisJob(createSessionClient(), creator.id, 'classify_intent')
+      : null;
+  const note = describeJob(pendingJob);
+  // The numbers travel beside the sentence rather than inside it: the client
+  // draws the bar and decides when to stop polling, and both need the raw
+  // figures. `describeJob` stays the only thing that decides the WORDS.
+  const pendingPass =
+    pendingJob && note
+      ? {
+          note,
+          status: pendingJob.status,
+          done: pendingJob.progressDone,
+          total: pendingJob.progressTotal,
+        }
       : null;
 
   const contextLabel =

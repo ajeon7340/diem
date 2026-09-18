@@ -185,7 +185,7 @@ begin
   );
   perform pg_temp.check(
     'authenticated cannot heartbeat a job',
-    not has_function_privilege('authenticated', 'public.heartbeat_analysis_job(uuid, text, integer)', 'execute')
+    not has_function_privilege('authenticated', 'public.heartbeat_analysis_job(uuid, text, integer, integer, integer, text)', 'execute')
   );
 
   -- The other half of the same rule. Revoking from everyone is only correct if
@@ -197,7 +197,7 @@ begin
   );
   perform pg_temp.check(
     'the service role CAN heartbeat a job',
-    has_function_privilege('service_role', 'public.heartbeat_analysis_job(uuid, text, integer)', 'execute')
+    has_function_privilege('service_role', 'public.heartbeat_analysis_job(uuid, text, integer, integer, integer, text)', 'execute')
   );
 
   select count(*) into v_n from pg_policies

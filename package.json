@@ -37,7 +37,8 @@
     "verify:schemas": "tsx --tsconfig tsconfig.scripts.json scripts/verify-schemas.ts",
     "verify:signup": "tsx --tsconfig tsconfig.scripts.json scripts/verify-signup.ts",
     "verify:sufficiency": "tsx --tsconfig tsconfig.scripts.json scripts/verify-sufficiency.ts",
-    "worker": "tsx --env-file-if-exists=.env.local --tsconfig tsconfig.scripts.json scripts/worker.ts"
+    "worker": "tsx --env-file-if-exists=.env.local --tsconfig tsconfig.scripts.json scripts/worker.ts",
+    "worker:secrets": "bash scripts/worker-secrets.sh"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",

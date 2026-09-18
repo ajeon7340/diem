@@ -38,6 +38,9 @@ const job = (over: Partial<AnalysisJob> = {}): AnalysisJob => ({
   maxAttempts: 3,
   queuedAt: '2026-09-17T00:00:00.000Z',
   startedAt: null,
+  progressDone: null,
+  progressTotal: null,
+  progressStage: null,
   finishedAt: null,
   commentsScanned: null,
   findings: null,
@@ -319,6 +322,40 @@ check('a numeric string is read', jobMaxVideos({ maxVideos: '2' }, 30), 2);
 // An unbounded full census is a legitimate thing to queue, and this is the
 // only way to ask for one.
 check('an unbounded census is allowed', jobMaxVideos({ maxVideos: Infinity }, 30), Infinity);
+
+// ---------------------------------------------------------------------------
+// Progress
+//
+// "Running now" is true and answers nothing after two minutes. The only
+// question a creator has at that point is whether it is nearly done or stuck.
+// ---------------------------------------------------------------------------
+check(
+  'a running job says how far it got',
+  describeJob(job({ status: 'running', progressDone: 1800, progressTotal: 6369 })),
+  'The comment safety scan is running — 1,800 of 6,369 comments so far.',
+);
+check(
+  'the fetch is named rather than silent',
+  describeJob(job({ status: 'running', progressStage: 'fetching' })),
+  'The comment safety scan is reading the comment section now. Classifying starts when that finishes.',
+);
+// Null is not zero. A bar at 0% claims we know it has done nothing, and on a
+// large channel the first minute reports no count at all.
+check(
+  'no report yet falls back rather than showing 0',
+  describeJob(job({ status: 'running' })),
+  'The comment safety scan is running now — the figures appear here when it finishes.',
+);
+check(
+  'a zero total does not divide',
+  describeJob(job({ status: 'running', progressDone: 0, progressTotal: 0 })),
+  'The comment safety scan is running now — the figures appear here when it finishes.',
+);
+check(
+  'a succeeded job says nothing, progress or not',
+  describeJob(job({ status: 'succeeded', progressDone: 6369, progressTotal: 6369 })),
+  null,
+);
 
 console.log(`\n  ${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);

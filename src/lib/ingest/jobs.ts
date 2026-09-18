@@ -32,11 +32,14 @@ interface AnalysisJobRow {
   comments_scanned: number | null;
   findings: number | null;
   last_error: string | null;
+  progress_done: number | null;
+  progress_total: number | null;
+  progress_stage: 'fetching' | 'classifying' | 'storing' | null;
 }
 
 const COLUMNS =
   'id, kind, status, attempts, max_attempts, queued_at, started_at, finished_at, ' +
-  'comments_scanned, findings, last_error';
+  'comments_scanned, findings, last_error, progress_done, progress_total, progress_stage';
 
 function toJob(row: AnalysisJobRow): AnalysisJob {
   return {
@@ -51,6 +54,9 @@ function toJob(row: AnalysisJobRow): AnalysisJob {
     commentsScanned: row.comments_scanned,
     findings: row.findings,
     lastError: row.last_error,
+    progressDone: row.progress_done,
+    progressTotal: row.progress_total,
+    progressStage: row.progress_stage,
   };
 }
 
@@ -154,8 +160,19 @@ export function describeJob(job: AnalysisJob | null): string | null {
   switch (job.status) {
     case 'queued':
       return `The ${pass} is queued and will run shortly.`;
-    case 'running':
+    case 'running': {
+      // "Running now" is true and answers nothing after two minutes of it. The
+      // only question a creator has at that point is whether it is nearly done
+      // or stuck, and the pass has been reporting exactly that to its caller
+      // since it was written — the worker simply threw it away. See 0029.
+      if (job.progressStage === 'fetching') {
+        return `The ${pass} is reading the comment section now. Classifying starts when that finishes.`;
+      }
+      if (job.progressDone !== null && job.progressTotal) {
+        return `The ${pass} is running — ${job.progressDone.toLocaleString('en-US')} of ${job.progressTotal.toLocaleString('en-US')} comments so far.`;
+      }
       return `The ${pass} is running now — the figures appear here when it finishes.`;
+    }
     case 'failed':
       return job.attempts >= job.maxAttempts
         ? `The ${pass} could not be completed after ${job.attempts} attempts. Nothing about the channel is implied by this — it is our pass that failed, not their audience.`

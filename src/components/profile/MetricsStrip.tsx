@@ -1,3 +1,4 @@
+import { AnalysisProgress } from './AnalysisProgress';
 import { Info } from 'lucide-react';
 
 import type { AIReport } from '@/types';
@@ -20,6 +21,13 @@ import { INTENT_WEIGHTS } from '@/lib/report/intent';
  * what the sample cannot support, and the risk callout surfaces a flag that
  * would otherwise sit three panels down.
  */
+export interface PendingPass {
+  note: string;
+  status: 'queued' | 'running' | 'succeeded' | 'failed';
+  done: number | null;
+  total: number | null;
+}
+
 export function MetricsStrip({
   report,
   /**
@@ -33,7 +41,7 @@ export function MetricsStrip({
   pendingPass = null,
 }: {
   report: AIReport | null;
-  pendingPass?: string | null;
+  pendingPass?: PendingPass | null;
 }) {
   const locked = report === null;
   const sufficiency = report ? assessReport(report) : null;
@@ -307,7 +315,7 @@ function SufficiencyNotice({
 }: {
   sufficiency: ReportSufficiency;
   commentsAnalyzed: number;
-  pendingPass?: string | null;
+  pendingPass?: PendingPass | null;
 }) {
   return (
     <div className="border-t border-line bg-surface px-5 py-3.5">
@@ -330,8 +338,9 @@ function SufficiencyNotice({
         ))}
         {pendingPass ? (
           // Last, and in the darker ink: it is the only line here that will
-          // stop being true on its own.
-          <li className="text-[11px] leading-relaxed text-ink">{pendingPass}</li>
+          // stop being true on its own — which is also why it is the only one
+          // that refreshes itself.
+          <AnalysisProgress {...pendingPass} />
         ) : null}
       </ul>
     </div>
