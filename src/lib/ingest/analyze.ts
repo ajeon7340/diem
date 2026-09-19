@@ -71,6 +71,16 @@ export interface ChannelReport {
   channelTitle: string;
   handle: string | null;
   subscribers: number | null;
+  /**
+   * The channel's own avatar and description.
+   *
+   * A media kit that opens with grey initials and an empty line, for a channel
+   * whose picture and description are public and one field away in the same
+   * response we already make, is asking the creator to retype what YouTube
+   * already knows about them.
+   */
+  avatarUrl: string | null;
+  description: string | null;
   outputStats: PlatformOutput[];
   platformBreakdown: PlatformAnalysis[];
   promotions: Promotion[];
@@ -150,7 +160,12 @@ export async function analyzeChannel(
 
   const chan = await ytFetch<{
     id: string;
-    snippet: { title: string; customUrl?: string };
+    snippet: {
+      title: string;
+      customUrl?: string;
+      description?: string;
+      thumbnails?: { high?: { url?: string }; medium?: { url?: string }; default?: { url?: string } };
+    };
     contentDetails: { relatedPlaylists: { uploads?: string } };
     statistics: { subscriberCount?: string; hiddenSubscriberCount?: boolean; videoCount?: string };
   }>('channels', {
@@ -456,6 +471,14 @@ export async function analyzeChannel(
     channelTitle: channel.snippet.title,
     handle: channel.snippet.customUrl ?? (byHandle ? channelIdOrHandle : null),
     subscribers,
+    // Highest first: this renders at 40px on the profile and 28px in the
+    // signup card, and YouTube's default thumbnail is 88px square.
+    avatarUrl:
+      channel.snippet.thumbnails?.high?.url ??
+      channel.snippet.thumbnails?.medium?.url ??
+      channel.snippet.thumbnails?.default?.url ??
+      null,
+    description: channel.snippet.description?.trim() || null,
     outputStats,
     platformBreakdown,
     promotions,

@@ -13,6 +13,7 @@ import { buildClusters } from '@/lib/ingest/clusters';
 import type { AxisLabel } from '@/lib/ingest/intent';
 import type { RawComment } from '@/lib/ingest/classify';
 import { COMMENT_INTENTS } from '@/types';
+import { MAX_NAMED_CLUSTERS, TAIL_ID } from '@/lib/report/clusters';
 
 let pass = 0,
   fail = 0;
@@ -108,6 +109,62 @@ check('abuse is called abuse', abuse[0].label, 'Abuse aimed at the person the vi
 check('an empty corpus builds nothing', buildClusters([], []), []);
 // A label with no comment behind it must not become a cluster of zero.
 check('unlabelled comments are skipped', buildClusters(comments, []).length, 0);
+
+// ---------------------------------------------------------------------------
+// The tail is one row, not fifteen
+//
+// The grid has up to forty cells and a real channel fills fifteen to thirty —
+// but the largest eight carry 92-97% of the comments, measured across three
+// channels. Thirty boxes is not a finer reading of an audience, it is the same
+// reading made unreadable.
+// ---------------------------------------------------------------------------
+{
+  const many: RawComment[] = [];
+  const manyLabels: AxisLabel[] = [];
+  const objects = ['creator', 'content', 'product', 'subject'] as const;
+  const intents = ['praise', 'criticise', 'ask', 'request', 'buy', 'react', 'abuse'] as const;
+  let k = 0;
+  // Twenty-eight distinct cells, deliberately: eight big and twenty tiny.
+  for (const object of objects) {
+    for (const intent of intents) {
+      const size = manyLabels.length < 8 * 20 ? 20 : 2;
+      for (let i = 0; i < size; i++) {
+        many.push(comment(k++, `${object} ${intent} comment`));
+        manyLabels.push({ object, intent });
+      }
+    }
+  }
+  const rolled = buildClusters(many, manyLabels);
+  check('never more than nine rows', rolled.length <= MAX_NAMED_CLUSTERS + 1, true);
+  check('eight of them are named cells', rolled.filter((c) => c.id !== TAIL_ID).length, MAX_NAMED_CLUSTERS);
+
+  const tail = rolled.find((c) => c.id === TAIL_ID);
+  check('the tail exists and says how many it holds', /smaller groups$/.test(tail?.label ?? ''), true);
+  // It is a rollup, not a finding: no intent, no object, and no example
+  // comment, because picking one to stand for a mixture would present an
+  // aggregate as a finding.
+  check('the tail claims no intent', tail?.intent, null);
+  check('nor an object', tail?.object, null);
+  check('nor an example', [tail?.exampleComment, tail?.comments.length], ['', 0]);
+  check('nor a sentiment', tail?.sentiment, null);
+
+  // The arithmetic still closes.
+  check(
+    'shares still sum to one',
+    Math.round(rolled.reduce((s, c) => s + c.share, 0) * 1e6) / 1e6,
+    1,
+  );
+  check(
+    'counts still sum to the corpus',
+    rolled.reduce((s, c) => s + c.commentCount, 0),
+    manyLabels.length,
+  );
+
+  // Under the cap there is no tail at all — a rollup of nothing is a box that
+  // says "0 smaller groups".
+  const few = buildClusters(comments, labels);
+  check('no tail when everything fits', few.some((c) => c.id === TAIL_ID), false);
+}
 
 console.log(`\n  ${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);

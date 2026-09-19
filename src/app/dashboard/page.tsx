@@ -26,6 +26,8 @@ export default async function DashboardIndex() {
   // Studio first for a creator: every other tab needs an advertiser to already
   // exist, and Studio is the one that pays them back on day one.
   if (viewer.creatorId) redirect('/dashboard/studio');
-  if (viewer.organization) redirect('/directory');
+  // Was the directory, which answers "who could I buy from" and not "what
+  // have I asked for" — the question a returning buyer actually has.
+  if (viewer.organization) redirect('/dashboard/agency');
   redirect('/join');
 }

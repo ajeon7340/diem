@@ -129,8 +129,10 @@ export const commentClustersSchema = z
       sentiment: z.number().min(-1).max(1).nullable().optional().transform((v) => v ?? null),
       // Pre-taxonomy intent names, mapped rather than rejected so rows written
       // before the two-axis change still parse — and mapped here, at the trust
-      // boundary, so nothing downstream has to know they existed.
-      intent: legacyIntent,
+      // boundary, so nothing downstream has to know they existed. Nullable
+      // because a cluster may be an aggregate of several cells; see
+      // CommentCluster.intent.
+      intent: legacyIntent.nullable(),
       // Absent on every row written before two-axis classification. Null rather
       // than a guess: the object axis cannot be recovered from a single-axis
       // label, and inventing one would put fabricated figures under a heading

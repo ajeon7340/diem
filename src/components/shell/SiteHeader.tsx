@@ -48,6 +48,9 @@ export async function SiteHeader() {
           ) : (
             <>
               <NavLink href="/directory">Directory</NavLink>
+              {/* A buyer's own history had no link anywhere — the directory
+                  answers "who could I buy from", not "what have I asked for". */}
+              {viewer.organization ? <NavLink href="/dashboard/agency">Workspace</NavLink> : null}
               <NavLink href="/pricing">Pricing</NavLink>
             </>
           )}

@@ -395,7 +395,18 @@ export interface CommentCluster {
   sentiment: number | null;
   /** Null on rows written before two-axis classification. */
   object: CommentObject | null;
-  intent: CommentIntent;
+  /**
+   * Null when this row is an AGGREGATE of several cells rather than one.
+   *
+   * The object x intent grid has up to forty cells and a real channel fills
+   * fifteen to thirty of them — but the largest eight carry 92-97% of the
+   * comments, and the tail is a dozen boxes holding a handful each. Thirty
+   * boxes is not a finer reading of an audience, it is the same reading made
+   * unreadable, so the tail collapses into one row that says how much of the
+   * section it is. That row belongs to no single intent, and claiming one
+   * would be inventing a finding out of an arithmetic convenience.
+   */
+  intent: CommentIntent | null;
   /** The terms that actually define this cluster — makes the grouping legible. */
   keyphrases: string[];
   /** Verifiable evidence. Empty falls back to `exampleComment`. */

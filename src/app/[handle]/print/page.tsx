@@ -346,7 +346,7 @@ function Sheet({
                       <>
                         {' · '}
                         {cluster.object ? `${PRINT_OBJECT[cluster.object]} / ` : ''}
-                        {PRINT_INTENT[cluster.intent]}
+                        {cluster.intent ? PRINT_INTENT[cluster.intent] : 'mixed'}
                       </>
                     ) : null}
                     {cluster.sentiment !== null && cluster.id !== RESIDUAL_ID

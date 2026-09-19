@@ -36,9 +36,9 @@ export async function analyzeAndStore(
     // measure a channel.
     const { data: creator } = await supabase
       .from('creators')
-      .select('budget_min, budget_max')
+      .select('budget_min, budget_max, avatar_url, bio')
       .eq('id', creatorId)
-      .maybeSingle<{ budget_min: number | null; budget_max: number | null }>();
+      .maybeSingle<{ budget_min: number | null; budget_max: number | null; avatar_url: string | null; bio: string | null }>();
 
     // Has the classifier already run? Both passes read comments and they read
     // DIFFERENT AMOUNTS — this one is bounded for a signup, the classifier is
@@ -120,6 +120,22 @@ export async function analyzeAndStore(
       { onConflict: 'creator_id' },
     );
     if (error) return { ok: false, reason: error.message };
+
+    // Fill the profile from the channel, but only where the creator has not
+    // written their own. A backfill that overwrote a bio somebody edited would
+    // be the report deleting their words — and this runs on every re-analysis,
+    // not just at signup.
+    const patch: Record<string, string> = {};
+    if (!creator?.avatar_url && report.avatarUrl) patch.avatar_url = report.avatarUrl;
+    if (!creator?.bio && report.description) {
+      // A channel description is often several paragraphs of links. The bio
+      // slot is one line under a name; take the first paragraph and cap it at
+      // what the column allows.
+      patch.bio = report.description.split(/\n{2,}/)[0].trim().slice(0, 500);
+    }
+    if (Object.keys(patch).length > 0) {
+      await supabase.from('creators').update(patch).eq('id', creatorId);
+    }
 
     // The DECLARED channel row: public figures, no credential. Without it
     // `creator_public_profiles.total_followers` coalesces to 0 and the media

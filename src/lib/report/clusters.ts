@@ -25,6 +25,25 @@ import type { CommentCluster } from '@/types';
 export const RESIDUAL_ID = 'residual-unclassified';
 
 /**
+ * The tail of the grid, rolled into one row.
+ *
+ * A DIFFERENT GAP from the residual above, and conflating them would be a
+ * false finding either way. The residual is comments the model could not
+ * place. This is comments it placed perfectly well, into cells too small to
+ * be worth a box.
+ *
+ * The object x intent grid has up to forty cells and a real channel fills
+ * fifteen to thirty. Measured across three: the largest EIGHT carry 92-97% of
+ * the comments, and the remainder is a dozen boxes holding a handful each.
+ * That is not a finer reading of an audience — it is the same reading made
+ * unreadable.
+ */
+export const TAIL_ID = 'tail-smaller-groups';
+
+/** Named cells kept before the tail is rolled up. See `TAIL_ID`. */
+export const MAX_NAMED_CLUSTERS = 8;
+
+/**
  * Half a displayed percentage point. Below this the shortfall cannot change
  * any rendered integer, so naming it would add a bucket nobody can see.
  */
@@ -76,6 +95,13 @@ export function withResidual(
  */
 export function orderClusters(clusters: CommentCluster[]): CommentCluster[] {
   return [...clusters].sort((a, b) => {
+    // Both rollups sink, however big they are: neither is a perspective a
+    // reader should land on. The tail sits above the residual because it is at
+    // least made of comments somebody understood.
+    if (a.id === RESIDUAL_ID) return 1;
+    if (b.id === RESIDUAL_ID) return -1;
+    if (a.id === TAIL_ID) return 1;
+    if (b.id === TAIL_ID) return -1;
     if (a.intent === 'unclassified') return 1;
     if (b.intent === 'unclassified') return -1;
     return b.share - a.share;

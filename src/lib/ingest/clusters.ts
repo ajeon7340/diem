@@ -1,6 +1,7 @@
 import 'server-only';
 
 import type { CommentCluster, CommentIntent, CommentObject } from '@/types';
+import { MAX_NAMED_CLUSTERS, TAIL_ID } from '@/lib/report/clusters';
 import type { RawComment } from './classify';
 import type { AxisLabel } from './intent';
 
@@ -124,9 +125,11 @@ export function buildClusters(
   const total = labels.length;
   if (total === 0) return [];
 
-  return [...cells.entries()]
-    .sort((a, b) => b[1].items.length - a[1].items.length)
-    .map(([key, cell]) => {
+  const ranked = [...cells.entries()].sort((a, b) => b[1].items.length - a[1].items.length);
+  const named = ranked.slice(0, MAX_NAMED_CLUSTERS);
+  const tail = ranked.slice(MAX_NAMED_CLUSTERS);
+
+  const built = named.map(([key, cell]) => {
       // Most-liked, and `basis` says so. "Representative" would be a claim
       // about typicality that nothing here measures; most-liked is a fact
       // about the comment and is also what a visitor to the channel sees
@@ -161,5 +164,28 @@ export function buildClusters(
         })),
         exampleComment: (examples[0]?.text ?? '').slice(0, 500),
       };
-    });
+  });
+
+  if (tail.length === 0) return built;
+
+  // One row for the rest, carrying its real count so the shares still sum to
+  // one. No object, no intent and no example: it belongs to several cells, and
+  // picking one comment to stand for a mixture would present an aggregate as a
+  // finding.
+  const tailCount = tail.reduce((sum, [, cell]) => sum + cell.items.length, 0);
+  return [
+    ...built,
+    {
+      id: TAIL_ID,
+      label: `${tail.length} smaller groups`,
+      share: tailCount / total,
+      commentCount: tailCount,
+      sentiment: null,
+      object: null,
+      intent: null,
+      keyphrases: [],
+      comments: [],
+      exampleComment: '',
+    },
+  ];
 }

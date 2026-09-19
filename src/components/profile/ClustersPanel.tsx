@@ -308,7 +308,9 @@ export function ClustersPanel({
             aria-label={`${cluster.label}, ${shown[index]}%`}
             className={cn(
               'h-full rounded-sm transition-opacity',
-              INTENT_FILL[cluster.intent],
+              // A rollup belongs to no intent; neutral rather than borrowing a
+              // colour that would read as a finding.
+              cluster.intent ? INTENT_FILL[cluster.intent] : 'bg-ink/20',
               selected?.id === cluster.id ? 'opacity-100' : 'opacity-35 hover:opacity-70',
             )}
             style={{ flexGrow: Math.max(cluster.share, 0.02) }}
@@ -364,7 +366,9 @@ export function ClustersPanel({
                 {cluster.object ? (
                   <Badge tone="slate">{OBJECT_LABEL[cluster.object]}</Badge>
                 ) : null}
-                <Badge tone={INTENT_TONE[cluster.intent]}>{INTENT_LABEL[cluster.intent]}</Badge>
+                {cluster.intent ? (
+                  <Badge tone={INTENT_TONE[cluster.intent]}>{INTENT_LABEL[cluster.intent]}</Badge>
+                ) : null}
                 {/* A score only where one was actually computed. Under the
                     two-axis pass the intent badge already carries valence, and
                     a number derived from the same lexicon would restate it. */}
