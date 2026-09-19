@@ -35,9 +35,14 @@ const fmt = (s: number) =>
 export function TrendingPlayer({
   videos,
   niche,
+  region,
+  category,
 }: {
   videos: TrendingVideo[];
   niche: string | null;
+  /** Which chart these rows came from, so the summary can compare against it. */
+  region: string;
+  category: string | null;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(videos[0]?.id ?? null);
   const [state, formAction] = useFormState(explainTrendingVideo, INITIAL_TRENDING_EXPLAIN);
@@ -117,7 +122,20 @@ export function TrendingPlayer({
                 <dd className="mt-1 text-[12px] leading-relaxed text-ink-muted">
                   {summary.summary.whyClimbing}
                 </dd>
+                {/* The measured figure it rests on, quoted. A mechanism with
+                    nothing under it is a story. */}
+                <dd className="tnum mt-1 text-[11px] leading-relaxed text-ink-faint">
+                  {summary.summary.evidence}
+                </dd>
               </div>
+              {summary.summary.audience ? (
+                <div>
+                  <dt className="rail">What the comments react to</dt>
+                  <dd className="mt-1 text-[12px] leading-relaxed text-ink-muted">
+                    {summary.summary.audience}
+                  </dd>
+                </div>
+              ) : null}
               {/* Absent rather than padded. "Nothing here transfers" is a
                   useful answer and a paragraph of reaching is not. */}
               {summary.summary.forYou ? (
@@ -139,6 +157,8 @@ export function TrendingPlayer({
             <form action={formAction} className="mt-3">
               <input type="hidden" name="videoId" value={current.id} />
               <input type="hidden" name="niche" value={niche ?? ''} />
+              <input type="hidden" name="region" value={region} />
+              <input type="hidden" name="category" value={category ?? ''} />
               <AskButton />
             </form>
           )}

@@ -49,6 +49,7 @@ export const INITIAL_EXPLAIN: ExplainState = {
   status: 'idle',
   message: '',
   result: null,
+  comments: null,
   summary: null,
   summaryModel: null,
 };

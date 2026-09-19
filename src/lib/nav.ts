@@ -16,6 +16,9 @@ export const CREATOR_NAV = [
   // a creator — so on day one they are four empty pages and Studio is the only
   // surface that pays a creator back for showing up alone.
   { href: '/dashboard/studio', label: 'Studio' },
+  // Its own tab because it is its own question: Studio is what the region is
+  // watching, this is which of YOUR videos worked and what was said under it.
+  { href: '/dashboard/videos', label: 'Your videos' },
   { href: '/dashboard/requests', label: 'Requests' },
   { href: '/dashboard/offers', label: 'Offers & briefs' },
   { href: '/dashboard/moderation', label: 'Moderation' },

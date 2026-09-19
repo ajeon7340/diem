@@ -135,17 +135,34 @@ export async function summariseVideo(
 }
 
 /**
- * What a trending video is, for someone deciding whether to watch it.
+ * Why a video is on the chart, from what can actually be measured about it.
  *
- * Deliberately NOT a performance read: a chart position is a fact about
- * YouTube's ranker, not about the channel, and nothing here has that channel's
- * median to compare against. So this answers "what is this and why might it be
- * climbing", and says nothing about whether it did well — which would be a
- * comparison this pass cannot make.
+ * The first version was handed a title, a channel and three counts, and said
+ * what you would expect from a title, a channel and three counts: "gaining
+ * momentum with over 668,000 views". True, useless, and derivable without a
+ * model.
+ *
+ * A chart position is about RATE and REACTION, not totals. So this passes:
+ *
+ *   views per day since publication  — the actual climb, not the pile
+ *   the same figure for the rest of the chart — is it fast FOR THIS CHART
+ *   engagement rate, against the chart's median engagement
+ *   age in days — a week-old video holding a slot is a different story
+ *                 from a twelve-hour-old one
+ *   the description and tags — what it says it is
+ *   a sample of top comments — what viewers are actually reacting to,
+ *                 which is the only direct evidence of why it is spreading
+ *
+ * Everything except the comments is arithmetic over the chart we already
+ * fetched. The comments cost one quota unit.
  */
 export interface TrendingSummary {
   what: string;
   whyClimbing: string;
+  /** The measured signal the verdict rests on, so a reader can check it. */
+  evidence: string;
+  /** Reaction pattern in the comments, or null when none could be read. */
+  audience: string | null;
   /** How it might apply to the reader's own channel, or null when it does not. */
   forYou: string | null;
 }
@@ -153,53 +170,120 @@ export interface TrendingSummary {
 const TRENDING_SCHEMA: Record<string, unknown> = {
   type: 'object',
   properties: {
-    what: { type: 'string', description: 'One sentence: what the video is.' },
-    whyClimbing: { type: 'string', description: 'One or two sentences on why it may be trending.' },
+    what: { type: 'string', description: 'One sentence: what the video actually is.' },
+    whyClimbing: {
+      type: 'string',
+      description:
+        'Two sentences on the MECHANISM — what about it is making people click and share right now. Not a restatement of the counts.',
+    },
+    evidence: {
+      type: 'string',
+      description:
+        'The measured figure that supports it, named and quoted. e.g. "184k views/day against a chart median of 61k".',
+    },
+    audience: {
+      type: 'string',
+      description:
+        'What the comments are reacting to, in one sentence, or the exact string NONE if no comments were supplied.',
+    },
     forYou: {
       type: 'string',
       description:
-        'One sentence on what a creator in the stated niche could take from it, or the exact string NONE if nothing transfers.',
+        'One concrete thing a creator in the stated niche could take from it, or the exact string NONE if nothing transfers.',
     },
   },
-  required: ['what', 'whyClimbing', 'forYou'],
+  required: ['what', 'whyClimbing', 'evidence', 'audience', 'forYou'],
 };
+
+export interface TrendingContext {
+  /** 1-based position on the chart as fetched. */
+  rank: number;
+  chartSize: number;
+  /** Median views/day across the chart, for comparison. */
+  chartMedianViewsPerDay: number | null;
+  chartMedianEngagement: number | null;
+  description: string | null;
+  tags: string[];
+  /** Top comments by likes, text only. */
+  comments: string[];
+}
 
 export async function summariseTrending(
   video: TrendingVideo,
   niche: string | null,
+  context: TrendingContext,
 ): Promise<{ ok: true; summary: TrendingSummary } | { ok: false; reason: string }> {
+  const ageDays = Math.max(
+    0.5,
+    (Date.now() - Date.parse(video.publishedAt)) / 86_400_000,
+  );
+  const viewsPerDay = Math.round(video.views / ageDays);
+  const engagement = video.views > 0 ? (video.likes + video.comments) / video.views : 0;
+
+  const facts = [
+    `Title: ${video.title}`,
+    `Channel: ${video.channelTitle}`,
+    `Chart position: ${context.rank} of ${context.chartSize}`,
+    `Published: ${video.publishedAt} (${ageDays.toFixed(1)} days ago)`,
+    `Length: ${video.durationSec}s`,
+    `Views: ${video.views} — that is ${viewsPerDay} per day since publication`,
+    context.chartMedianViewsPerDay !== null
+      ? `Median views/day across this chart: ${context.chartMedianViewsPerDay}`
+      : '',
+    `Engagement rate (likes+comments over views): ${(engagement * 100).toFixed(2)}%`,
+    context.chartMedianEngagement !== null
+      ? `Median engagement across this chart: ${(context.chartMedianEngagement * 100).toFixed(2)}%`
+      : '',
+    context.tags.length ? `Tags the uploader set: ${context.tags.slice(0, 15).join(', ')}` : '',
+    context.description
+      ? `Description (first 600 chars):\n${context.description.slice(0, 600)}`
+      : '',
+    context.comments.length
+      ? `Top comments by likes:\n${context.comments
+          .slice(0, 25)
+          .map((c) => `- ${c.replace(/\s+/g, ' ').slice(0, 180)}`)
+          .join('\n')}`
+      : '',
+    `The reader's niche: ${niche ?? 'not stated'}`,
+  ]
+    .filter(Boolean)
+    .join('\n');
+
   try {
     const { data } = await generateStructured<TrendingSummary>({
-      system: `You describe a trending YouTube video to a creator.
+      system: `You explain why a video is on YouTube's trending chart, to a creator
+studying it.
 
-Use only the title, channel, length and counts supplied. Never invent a plot, a
-claim the video makes, or a number.
+A CHART POSITION IS ABOUT RATE AND REACTION, not totals. "It has a lot of
+views" is what put it in front of you; it is not an explanation. Reach for the
+mechanism: what the title promises, what the comments are reacting to, whether
+it is riding a release or a news cycle, whether the channel's audience alone
+accounts for it, whether the format is cheap to share.
 
-Do NOT say whether it performed well relative to its channel — you have not
-been given that channel's baseline and the chart position is a fact about
-YouTube's ranker, not about the channel.
+Use only what you are given — the figures, the description, the tags, the
+comments. Never invent a number, an event, or a claim the video makes. If the
+comments are in another language, read them; do not remark on the language.
 
-If nothing about it transfers to the reader's niche, answer NONE for forYou
-rather than reaching. Under 25 words per field.`,
-      user: [
-        `Title: ${video.title}`,
-        `Channel: ${video.channelTitle}`,
-        `Published: ${video.publishedAt}`,
-        `Length: ${video.durationSec}s`,
-        `Views: ${video.views}`,
-        `Likes: ${video.likes}`,
-        `Comments: ${video.comments}`,
-        `The reader's niche: ${niche ?? 'not stated'}`,
-      ].join('\n'),
+Compare against the CHART, not against nothing: 184k views/day is fast or slow
+depending on what the rest of the chart is doing, and you have that median.
+
+Say what is distinctive. If the honest answer is "a very large channel posted
+and its subscribers showed up", say that — it is a real finding and creators
+need to hear it more often than they need a story.
+
+No praise, no hedging, no "it resonates with viewers". Under 35 words per
+field.`,
+      user: facts,
       schema: TRENDING_SCHEMA,
       toolName: 'record_trending',
       maxTokens: 4_000,
     });
+    const none = (v: string | null) => (v?.trim().toUpperCase() === 'NONE' ? null : v);
     return {
       ok: true,
-      // "NONE" is the schema's way of declining; turn it into an absence rather
-      // than printing the word.
-      summary: { ...data, forYou: data.forYou?.trim().toUpperCase() === 'NONE' ? null : data.forYou },
+      // "NONE" is the schema's way of declining; turn it into an absence
+      // rather than printing the word.
+      summary: { ...data, forYou: none(data.forYou), audience: none(data.audience) },
     };
   } catch (error) {
     if (error instanceof AiError) return { ok: false, reason: error.message };

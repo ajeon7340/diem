@@ -170,7 +170,23 @@ export interface ChannelAnalysis {
   drivers: Driver[];
   best: DriverVideo[];
   worst: DriverVideo[];
+  /**
+   * Every upload in the sample, each against the channel's own median.
+   *
+   * The panel used to show only the aggregate — "shorter videos raise views
+   * 1.4x" — plus a best and worst three. That answers "what works here" and
+   * not "which of my videos worked", which is the question a creator actually
+   * opens the page with. The drivers are derived FROM these rows; showing the
+   * conclusion without the evidence asks them to take it on trust.
+   */
+  videos: ChannelVideo[];
   units: number;
+}
+
+export interface ChannelVideo extends DriverVideo {
+  /** Views over the channel's own median. Null when there is no median. */
+  multiple: number | null;
+  engagementRate: number;
 }
 
 /**
@@ -224,6 +240,11 @@ export async function analyseOwnChannel(handleOrId: string): Promise<Scoped<Chan
   const catalogue = peers.items.map(toDriverVideo);
   const views = catalogue.map((v) => v.views);
   const med = median(views);
+  const videos: ChannelVideo[] = catalogue.map((v) => ({
+    ...v,
+    multiple: med > 0 ? v.views / med : null,
+    engagementRate: engagement(v),
+  }));
   const ranked = [...catalogue].sort((a, b) => b.views - a.views);
 
   return scope(channel.id, {
@@ -238,6 +259,10 @@ export async function analyseOwnChannel(handleOrId: string): Promise<Scoped<Chan
     drivers: analyseDrivers(catalogue),
     best: ranked.slice(0, 3),
     worst: ranked.slice(-3).reverse(),
+    // Newest first: a creator reading their own catalogue is looking for what
+    // they just published, not for a leaderboard — the leaderboard is what
+    // `best` and `worst` are for.
+    videos: [...videos].sort((a, b) => Date.parse(b.publishedAt) - Date.parse(a.publishedAt)),
     units,
   });
 }

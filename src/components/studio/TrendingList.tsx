@@ -103,7 +103,12 @@ export function TrendingList({
           YouTube publishes no chart for this combination.
         </p>
       ) : (
-        <TrendingPlayer videos={data.videos} niche={niche} />
+        <TrendingPlayer
+          videos={data.videos}
+          niche={niche}
+          region={data.regionCode}
+          category={data.categoryId}
+        />
       )}
 
     </Panel>

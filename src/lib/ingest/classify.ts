@@ -559,3 +559,84 @@ export async function classifyAndStore(
     model: aiModel(),
   };
 }
+
+
+/**
+ * One video's comments, and only that video's.
+ *
+ * `fetchAllComments` walks a channel; this walks a single upload. The
+ * distinction matters more than the code does: a per-video read whose corpus
+ * quietly included the rest of the channel would put the channel's clusters
+ * under one video's title, and every share printed there would be a share of
+ * the wrong denominator — the mistake this repo has now found in six places.
+ *
+ * Chronological, not by relevance: YouTube's ranker surfaces the loud and the
+ * contentious, and a sample drawn through it is not a sample of the section.
+ */
+export async function fetchVideoComments(
+  apiKey: string,
+  videoId: string,
+  maxComments = 500,
+): Promise<{ comments: RawComment[]; readable: boolean }> {
+  const comments: RawComment[] = [];
+  let token: string | undefined;
+
+  do {
+    const url = new URL('https://www.googleapis.com/youtube/v3/commentThreads');
+    for (const [k, v] of Object.entries({
+      part: 'snippet',
+      videoId,
+      maxResults: '100',
+      order: 'time',
+      textFormat: 'plainText',
+      key: apiKey,
+      ...(token ? { pageToken: token } : {}),
+    })) {
+      url.searchParams.set(k, v);
+    }
+
+    const res = await fetch(url, { next: { revalidate: 900 } });
+    if (!res.ok) {
+      // Comments disabled or restricted on this video. A readable-but-empty
+      // section and an unreadable one are different facts and the caller says
+      // so differently.
+      return { comments, readable: comments.length > 0 };
+    }
+
+    const body = (await res.json()) as {
+      items?: {
+        snippet: {
+          topLevelComment: {
+            id: string;
+            snippet: {
+              textDisplay?: string;
+              authorDisplayName?: string;
+              authorChannelId?: { value?: string };
+              likeCount?: number;
+              publishedAt?: string;
+            };
+          };
+        };
+      }[];
+      nextPageToken?: string;
+    };
+
+    for (const thread of body.items ?? []) {
+      const c = thread.snippet?.topLevelComment;
+      if (!c) continue;
+      comments.push({
+        id: c.id,
+        videoId,
+        videoTitle: '',
+        text: c.snippet?.textDisplay ?? '',
+        author: c.snippet?.authorDisplayName ?? '',
+        authorChannelId: c.snippet?.authorChannelId?.value ?? null,
+        likes: c.snippet?.likeCount ?? 0,
+        publishedAt: c.snippet?.publishedAt ?? '',
+      });
+    }
+    token = body.nextPageToken;
+  } while (token && comments.length < maxComments);
+
+  return { comments, readable: true };
+}
