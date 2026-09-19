@@ -64,21 +64,28 @@ const PLACEHOLDER: PlatformOutput[] = [
   },
 ];
 
-function Row({
-  label,
-  value,
-  strong,
-}: {
-  label: string;
-  value: string;
-  strong?: boolean;
-}) {
+/**
+ * One figure, label above value.
+ *
+ * Was a full-width row with `justify-between`, which on a panel this wide
+ * pinned the label to the far left and the number to the far right with a
+ * canyon between them — twelve of those and the eye has to traverse the whole
+ * panel for every reading, and nothing lines up with anything. Stacked pairs
+ * in a grid put the label against its own number and let twelve figures be
+ * scanned in three rows instead of twelve.
+ */
+function Stat({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
   return (
-    <div className="flex items-baseline justify-between gap-3 py-[3px]">
-      <span className="text-[12px] text-ink-muted">{label}</span>
-      <span className={cn('tnum text-[12px]', strong ? 'font-medium text-ink' : 'text-ink')}>
+    <div className="min-w-0">
+      <div className="truncate text-[11px] leading-tight text-ink-muted">{label}</div>
+      <div
+        className={cn(
+          'tnum mt-0.5 truncate text-[13px] leading-tight',
+          strong ? 'font-medium text-ink' : 'text-ink',
+        )}
+      >
         {value}
-      </span>
+      </div>
     </div>
   );
 }
@@ -147,31 +154,31 @@ export function OutputPanel({
                 </span>
               </div>
 
-              <div className="mt-3 divide-y divide-line border-y border-line">
-                <Row
+              <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 border-y border-line py-3 sm:grid-cols-3">
+                <Stat
                   label="Followers"
                   value={locked || !money ? '—' : compactNumber(money.followers)}
                   strong
                 />
-                <Row
+                <Stat
                   label={`Total ${platform.unit}`}
                   value={locked ? '—' : exactNumber(platform.totalPosts)}
                   strong
                 />
-                <Row
+                <Stat
                   label={`In window`}
                   value={locked ? '—' : `${platform.postsInWindow} / ${platform.windowDays}d`}
                 />
-                <Row
+                <Stat
                   label="Avg views"
                   value={locked ? '—' : compactNumber(platform.avgViews)}
                   strong
                 />
-                <Row
+                <Stat
                   label="Median views"
                   value={locked ? '—' : compactNumber(platform.medianViews)}
                 />
-                <Row
+                <Stat
                   label="Peak views"
                   value={
                     locked
@@ -179,17 +186,17 @@ export function OutputPanel({
                       : `${compactNumber(platform.peakViews)}${spread ? ` · ${spread.toFixed(1)}×` : ''}`
                   }
                 />
-                <Row
+                <Stat
                   label="Avg likes"
                   value={locked || platform.avgLikes === null ? '—' : compactNumber(platform.avgLikes)}
                 />
-                <Row
+                <Stat
                   label="Peak likes"
                   value={
                     locked || platform.peakLikes === null ? '—' : compactNumber(platform.peakLikes)
                   }
                 />
-                <Row
+                <Stat
                   label="Avg comments"
                   value={
                     locked || platform.avgComments === null
@@ -197,7 +204,7 @@ export function OutputPanel({
                       : exactNumber(Math.round(platform.avgComments))
                   }
                 />
-                <Row
+                <Stat
                   label="Engagement rate"
                   value={
                     locked || platform.engagementRate === null
@@ -215,8 +222,8 @@ export function OutputPanel({
               {money ? (
                 <>
                   <p className="rail mt-3.5">Commercial, this platform</p>
-                  <div className="mt-1.5 divide-y divide-line border-y border-line">
-                    <Row
+                  <div className="mt-1.5 grid grid-cols-2 gap-x-4 gap-y-3 border-y border-line py-3 sm:grid-cols-3">
+                    <Stat
                       label="Purchase intent"
                       value={
                         money.purchaseIntentRate === null
@@ -224,7 +231,7 @@ export function OutputPanel({
                           : percent(money.purchaseIntentRate)
                       }
                     />
-                    <Row
+                    <Stat
                       label="Estimated CPM"
                       value={
                         money.estimatedCpm === null
@@ -232,7 +239,7 @@ export function OutputPanel({
                           : currency(Math.round(money.estimatedCpm))
                       }
                     />
-                    <Row
+                    <Stat
                       label="Sponsored retention"
                       value={
                         money.sponsoredRetention === null

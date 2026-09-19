@@ -3,11 +3,24 @@
 import { getViewer } from '@/lib/access/viewer';
 import { YouTubeError, parseVideoId } from '@/lib/youtube/client';
 import { explainVideo, type VideoExplain } from '@/lib/youtube/explain';
+import { summariseVideo, type VideoSummary } from '@/lib/youtube/summarise';
 
 export interface ExplainState {
   status: 'idle' | 'ok' | 'error';
   message: string;
   result: VideoExplain | null;
+  /**
+   * The written read, when the model could produce one.
+   *
+   * SEPARATE FROM `result`, and null is a normal outcome. The measurements are
+   * computed from the API and stand on their own; the summary is a second pass
+   * that can fail on a key, a quota or a refusal — and a page that loses its
+   * figures because a sentence could not be written would be trading the part
+   * that is checkable for the part that is not.
+   */
+  summary: VideoSummary | null;
+  /** Which model wrote it, so a later reader can tell. */
+  summaryModel: string | null;
 }
 
 /**
@@ -27,12 +40,12 @@ export async function explainPastedVideo(
 ): Promise<ExplainState> {
   const viewer = await getViewer();
   if (!viewer.creatorId) {
-    return { status: 'error', message: 'Sign in as a creator to analyse a video.', result: null };
+    return { status: 'error', message: 'Sign in as a creator to analyse a video.', result: null, summary: null, summaryModel: null };
   }
 
   const raw = String(formData.get('url') ?? '').trim();
   if (!raw) {
-    return { status: 'error', message: 'Paste a YouTube link first.', result: null };
+    return { status: 'error', message: 'Paste a YouTube link first.', result: null, summary: null, summaryModel: null };
   }
 
   const id = parseVideoId(raw);
@@ -44,12 +57,28 @@ export async function explainPastedVideo(
       message:
         'That does not look like a YouTube video link. A watch, Shorts or youtu.be link works; a channel link does not.',
       result: null,
+    summary: null,
+    summaryModel: null,
     };
   }
 
   try {
     const scoped = await explainVideo(id);
-    return { status: 'ok', message: '', result: scoped.value };
+
+    // Best effort, and its failure is not this action's failure. The figures
+    // are measured; the sentence is a second pass over them.
+    const written = await summariseVideo(scoped.value);
+    if (!written.ok) {
+      console.error('[studio/summarise] failed', { videoId: id, reason: written.reason });
+    }
+
+    return {
+      status: 'ok',
+      message: '',
+      result: scoped.value,
+      summary: written.ok ? written.summary : null,
+      summaryModel: written.ok ? written.model : null,
+    };
   } catch (err) {
     if (err instanceof YouTubeError) {
       if (err.reason === 'quotaExceeded') {
@@ -57,11 +86,13 @@ export async function explainPastedVideo(
           status: 'error',
           message: 'The daily YouTube quota is spent. This resets at midnight Pacific.',
           result: null,
+        summary: null,
+        summaryModel: null,
         };
       }
-      return { status: 'error', message: err.message, result: null };
+      return { status: 'error', message: err.message, result: null, summary: null, summaryModel: null };
     }
     console.error('[studio/explain] failed', err);
-    return { status: 'error', message: 'Could not read that video. Try again.', result: null };
+    return { status: 'error', message: 'Could not read that video. Try again.', result: null, summary: null, summaryModel: null };
   }
 }

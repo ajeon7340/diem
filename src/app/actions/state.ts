@@ -4,6 +4,7 @@ import type { OnboardingState } from './onboarding';
 import type { ProposalFormState } from './request-access';
 import type { ReviewState } from './review-request';
 import type { SettingsState, RevokeState } from './settings';
+import type { TrendingExplainState } from './trending';
 import type { ExplainState } from './studio';
 import type { MagicLinkState } from '@/lib/auth/actions';
 
@@ -38,7 +39,19 @@ export const INITIAL_PROPOSAL_STATE: ProposalFormState = { status: 'idle' };
 export const INITIAL_REVIEW_STATE: ReviewState = { status: 'idle' };
 export const INITIAL_SETTINGS_STATE: SettingsState = { status: 'idle' };
 export const INITIAL_REVOKE_STATE: RevokeState = { status: 'idle' };
-export const INITIAL_EXPLAIN: ExplainState = { status: 'idle', message: '', result: null };
+export const INITIAL_TRENDING_EXPLAIN: TrendingExplainState = {
+  status: 'idle',
+  videoId: null,
+  message: '',
+  summary: null,
+};
+export const INITIAL_EXPLAIN: ExplainState = {
+  status: 'idle',
+  message: '',
+  result: null,
+  summary: null,
+  summaryModel: null,
+};
 // Not under app/actions/, which is how it was missed: the rule is about the
 // 'use server' directive, not about the directory.
 export const INITIAL_MAGIC_LINK_STATE: MagicLinkState = { status: 'idle' };

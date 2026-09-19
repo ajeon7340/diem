@@ -3,13 +3,8 @@ import Link from 'next/link';
 import type { TrendingResult } from '@/lib/youtube/trending';
 import { CATEGORIES, REGIONS } from '@/lib/youtube/trending';
 import { Panel } from '@/components/ui/Panel';
-import { compactNumber, shortDate } from '@/lib/format';
+import { TrendingPlayer } from './TrendingPlayer';
 import { cn } from '@/lib/cn';
-
-const fmt = (s: number) =>
-  s >= 3600
-    ? `${Math.floor(s / 3600)}h${String(Math.floor((s % 3600) / 60)).padStart(2, '0')}`
-    : `${Math.floor(s / 60)}m${String(s % 60).padStart(2, '0')}`;
 
 /**
  * YouTube's own trending chart, filtered.
@@ -108,39 +103,9 @@ export function TrendingList({
           YouTube publishes no chart for this combination.
         </p>
       ) : (
-        <ol className="divide-y divide-line">
-          {data.videos.map((v, i) => (
-            <li key={v.id} className="flex items-start gap-3 px-5 py-3">
-              <span className="tnum w-5 shrink-0 pt-0.5 text-[12px] text-ink-faint">{i + 1}</span>
-              <div className="min-w-0 flex-1">
-                <a
-                  href={`https://www.youtube.com/watch?v=${v.id}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[13px] leading-snug text-ink hover:text-indigo hover:underline"
-                >
-                  {v.title}
-                </a>
-                <p className="tnum mt-1 flex flex-wrap items-center gap-x-2 text-[11px] text-ink-faint">
-                  <span className="text-ink-muted">{v.channelTitle}</span>
-                  <span aria-hidden>·</span>
-                  <span>{compactNumber(v.views)} views</span>
-                  <span aria-hidden>·</span>
-                  <span>{fmt(v.durationSec)}</span>
-                  <span aria-hidden>·</span>
-                  <span>{shortDate(v.publishedAt)}</span>
-                </p>
-              </div>
-            </li>
-          ))}
-        </ol>
+        <TrendingPlayer videos={data.videos} niche={niche} />
       )}
 
-      <p className="border-t border-line px-5 py-2.5 text-[11px] leading-relaxed text-ink-faint">
-        A high view count here is a fact about the channel&rsquo;s size as much as the video. Paste
-        one into the box above to see how it did against its own channel — several chart entries
-        sit below their own median.
-      </p>
     </Panel>
   );
 }

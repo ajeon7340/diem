@@ -111,6 +111,29 @@ export function ExplainBox() {
             </div>
           </div>
 
+          {/* The written read, above the caveats and below the figures.
+              Placed there on purpose: it is an INTERPRETATION of the numbers
+              directly above it, and a reader should meet those first. Absent
+              when the model could not write one — the measurements are the
+              product and the sentence is a second pass over them. */}
+          {state.summary ? (
+            <div className="mt-4 rounded-panel border border-indigo/25 bg-indigo/5 px-4 py-3">
+              <p className="text-[13px] font-medium leading-snug text-ink">
+                {state.summary.headline}
+              </p>
+              <p className="mt-1.5 text-[12px] leading-relaxed text-ink-muted">
+                {state.summary.verdict}
+              </p>
+              {/* Which model, and that it is a reading rather than a
+                  measurement. A sentence that looks like the figures above it
+                  but was written rather than computed has to say so. */}
+              <p className="tnum mt-2 text-[10px] text-ink-faint">
+                Written by {state.summaryModel ?? 'a model'} from the figures above · not a
+                measurement
+              </p>
+            </div>
+          ) : null}
+
           {/* The honest reading of a trending video that is below its own bar. */}
           {r.multiple !== null && r.multiple < 1 ? (
             <p className="mt-4 rounded-md bg-paper px-3 py-2 text-[12px] leading-relaxed text-ink-muted">

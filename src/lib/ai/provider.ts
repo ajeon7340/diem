@@ -175,8 +175,26 @@ async function viaGemini<T>({
     );
   }
 
+  let data: T;
+  try {
+    data = JSON.parse(text) as T;
+  } catch {
+    // A truncated answer is not a malformed one, and reporting it as
+    // "Unexpected end of JSON input" sends whoever reads the log looking at
+    // the schema instead of at the budget. `finishReason` already says which
+    // it was; the caller should not have to guess.
+    const why = candidate?.finishReason ?? 'unknown';
+    throw new AiError(
+      why === 'MAX_TOKENS'
+        ? `the answer was cut off at maxOutputTokens (${maxTokens}) — raise the budget`
+        : `the answer was not valid JSON (finishReason: ${why})`,
+      null,
+      'gemini',
+    );
+  }
+
   return {
-    data: JSON.parse(text) as T,
+    data,
     usage: {
       inputTokens: json.usageMetadata?.promptTokenCount ?? 0,
       outputTokens: json.usageMetadata?.candidatesTokenCount ?? 0,
