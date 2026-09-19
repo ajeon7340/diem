@@ -10,12 +10,15 @@
  */
 import {
   assessFitEligibility,
+  buildFitInput,
   isStale,
   resolveMetric,
   verifyClaims,
   type FitClaim,
 } from '@/lib/report/fit';
-import type { AIReport, IntentMeasurement } from '@/types';
+import type { AIReport, Creator, IntentMeasurement } from '@/types';
+import { businessOnboardingSchema } from '@/lib/schemas';
+import { readFileSync } from 'node:fs';
 import { FIT_METRICS, FIT_SCHEMA, fitOutputSchema } from '@/lib/report/fit-schema';
 import { deriveCostEfficiency } from '@/lib/report/cost';
 import { sponsorshipState } from '@/lib/report/sponsorship';
@@ -372,6 +375,122 @@ check(
   check('one placement is enough to stop saying never', sponsorshipState(null, 1), 'unmeasurable');
   // A figure wins over the count: if it could be measured, it was measured.
   check('a measurement outranks the count', sponsorshipState(perf, 0), 'measured');
+}
+
+// ---------------------------------------------------------------------------
+// climatePreference: a narrower vocabulary than the report's own ClimateLabel
+// ---------------------------------------------------------------------------
+//
+// A buyer chooses from two real answers plus none — never "hostile", because
+// nobody buying media is choosing to affirmatively want a hostile section.
+// See migration 0030.
+{
+  const parse = (v: unknown) =>
+    businessOnboardingSchema.safeParse({
+      organizationName: 'Northbeam Media',
+      climatePreference: v,
+    });
+
+  check('warm is accepted', parse('warm').success && parse('warm').data?.climatePreference, 'warm');
+  check(
+    'edgy_ok is accepted',
+    parse('edgy_ok').success && parse('edgy_ok').data?.climatePreference,
+    'edgy_ok',
+  );
+  check('absent becomes null, not a validation error', parse(undefined).data?.climatePreference, null);
+  // Not offered as a form option, and a stray or forged value must not sneak
+  // through as though it were — it becomes absence, same as never answering.
+  check('an unrecognised value becomes null', parse('hostile').data?.climatePreference, null);
+  check('garbage becomes null', parse('not-a-real-value').data?.climatePreference, null);
+}
+
+// ---------------------------------------------------------------------------
+// buildFitInput: the preference and the measured read travel to two different
+// places in the prompt, and neither may be dropped silently.
+// ---------------------------------------------------------------------------
+{
+  const creator: Creator = {
+    id: 'cr1',
+    handle: 'jooshica',
+    displayName: 'Jooshica',
+    avatarUrl: null,
+    niche: 'beauty',
+    bio: null,
+    isVerified: true,
+    isDirectoryVisible: true,
+    budgetMin: null,
+    budgetMax: null,
+    budgetNegotiable: false,
+    minimumBudget: null,
+    totalFollowers: 500_000,
+    platforms: [],
+    teaserHighlights: [],
+    hasReport: true,
+    lastAnalyzedAt: '2026-09-10T00:00:00.000Z',
+  };
+  const eligibility = assessFitEligibility(deepReport, true);
+  if (!eligibility.ok) throw new Error('fixture report unexpectedly ineligible');
+
+  const withPreference = buildFitInput({
+    creator,
+    report: report({ climate: { ...deepReport.climate, label: 'rough' } }),
+    organizationName: 'Northbeam Media',
+    profile: {
+      industry: null,
+      sells: null,
+      audience: null,
+      categories: [],
+      objectives: [],
+      climatePreference: 'edgy_ok',
+    },
+    brief: null,
+    category: null,
+    eligibility,
+  });
+
+  check('the STATED preference reaches buyer', withPreference.buyer.climatePreference, 'edgy_ok');
+  check('the MEASURED climate reaches context, separately', withPreference.context.climate.label, 'rough');
+
+  const noProfile = buildFitInput({
+    creator,
+    report: deepReport,
+    organizationName: 'Northbeam Media',
+    profile: null,
+    brief: null,
+    category: null,
+    eligibility,
+  });
+  check('no profile means no preference, not an invented one', noProfile.buyer.climatePreference, null);
+  // The measured climate still reaches context even with no buyer profile at
+  // all — it describes the CREATOR, not the buyer, and is not conditional on
+  // one existing.
+  check(
+    'the measured climate is independent of the buyer profile existing',
+    noProfile.context.climate.label,
+    deepReport.climate.label,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// The prompt's instructions for using the two together, pinned structurally —
+// a prompt has no type, and re-narrowing this back to a single sentence is a
+// one-line edit nothing else here would catch.
+// ---------------------------------------------------------------------------
+{
+  const prompt = readFileSync(
+    new URL('../src/app/actions/fit-summary.ts', import.meta.url),
+    'utf8',
+  );
+  check(
+    'the prompt compares stated preference against the MEASURED climate',
+    /against the creator's MEASURED climate/.test(prompt),
+    true,
+  );
+  check(
+    'an "edgy is fine" preference is told to settle the question, not hedge',
+    /do not raise climate as a concern/.test(prompt),
+    true,
+  );
 }
 
 console.log(`\n  ${pass} passed, ${fail} failed`);

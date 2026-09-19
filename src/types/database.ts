@@ -144,6 +144,7 @@ export interface OrganizationRow {
   audience: string | null;
   categories: string[] | null;
   objectives: string[] | null;
+  climate_preference: string | null;
   id: string;
   name: string;
   billing_plan: BillingPlan;

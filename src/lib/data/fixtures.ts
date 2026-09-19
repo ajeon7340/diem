@@ -3487,6 +3487,9 @@ export function demoViewer(): Viewer {
         audience: 'Women 22–35 in the UK and Ireland, skincare-literate, price-conscious',
         categories: ['beauty'],
         objectives: ['consideration', 'launch'],
+        // Set so the demo also exercises the "buyer stated a preference"
+        // branch of the fit-summary prompt, not just the profile fields.
+        climatePreference: 'warm',
         createdAt: '2026-08-01T00:00:00.000Z',
       },
       isProAgency: role === 'pro_agency',

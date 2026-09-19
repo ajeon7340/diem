@@ -11,6 +11,7 @@
     "ai:check": "tsx --env-file=.env.local --tsconfig tsconfig.scripts.json scripts/ai-check.ts",
     "analyze": "tsx --env-file=.env.local --tsconfig tsconfig.scripts.json scripts/analyze-creator.ts",
     "dev:session": "tsx --env-file=.env.local --tsconfig tsconfig.scripts.json scripts/dev-session.ts",
+    "dev:pro": "tsx --env-file=.env.local --tsconfig tsconfig.scripts.json scripts/dev-pro.ts",
     "opinion:press": "tsx --env-file=.env.local --tsconfig tsconfig.scripts.json scripts/opinion-press.ts",
     "retention": "tsx --env-file=.env.local --tsconfig tsconfig.scripts.json scripts/retention.ts",
     "scan:comments": "tsx --env-file=.env.local --tsconfig tsconfig.scripts.json scripts/scan-comments.ts",

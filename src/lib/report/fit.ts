@@ -250,7 +250,7 @@ export function buildFitInput(input: {
   /** The buyer's own profile — what they sell and who to. May be empty. */
   profile: Pick<
     Organization,
-    'industry' | 'sells' | 'audience' | 'categories' | 'objectives'
+    'industry' | 'sells' | 'audience' | 'categories' | 'objectives' | 'climatePreference'
   > | null;
   brief: InboundBrief | null;
   /** What the campaign is FOR. Pairs with the creator's own niche. */
@@ -269,6 +269,11 @@ export function buildFitInput(input: {
       audience: profile?.audience ?? null,
       buysIn: (profile?.categories ?? []).map((c) => CATEGORY_LABEL[c]),
       objectives: (profile?.objectives ?? []).map((o) => OBJECTIVE_LABEL[o]),
+      // Not a FitMetric: `climate.label` in context below is a string enum,
+      // not a number, so it sits outside the numeric citation mechanism —
+      // same bucket as brandSafetyFlags and promotions, given as supporting
+      // fact rather than a cited figure.
+      climatePreference: profile?.climatePreference ?? null,
       category: category
         ? {
             key: category,
@@ -320,6 +325,12 @@ export function buildFitInput(input: {
       // the question is whether a given advertiser belongs here.
       promotions: report.promotions,
       platformBreakdown: report.platformBreakdown,
+      // The MEASURED read, beside the buyer's STATED preference above. Passed
+      // through as-is — `null` when too little was read to say — so a model
+      // told "warm matters to me" against a null climate argues from the
+      // figures it does have rather than inventing a temperature nobody
+      // measured.
+      climate: report.climate,
       // Named gaps, so the model argues from the report's own limits rather
       // than inventing confidence the sufficiency notice contradicts.
       gaps: eligibility.sufficiency.gaps,

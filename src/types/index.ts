@@ -318,6 +318,21 @@ export interface CommentRegister {
 export type ClimateLabel = 'warm' | 'ordinary' | 'rough' | 'hostile';
 
 /**
+ * What a BUYER says they want, as opposed to what a report MEASURES.
+ *
+ * Deliberately narrower than `ClimateLabel`. A report has to be able to say
+ * `hostile` about a real comment section — hiding that is the mistake this
+ * codebase refuses everywhere else. Nobody buying media is choosing to
+ * affirmatively WANT a hostile section, so offering it as a preference option
+ * would be a control that does nothing except make a form look complete.
+ *
+ * `null` is not a third value meaning "neutral" — it means the field was never
+ * answered, same as every other optional buyer-profile field. See migration
+ * 0030.
+ */
+export type ClimatePreference = 'warm' | 'edgy_ok';
+
+/**
  * Secondary characteristics, orthogonal to the label.
  *
  * `polarised` is the one worth a sentence: it is high praise and high
@@ -1392,6 +1407,9 @@ export interface Organization {
   audience: string | null;
   categories: CampaignCategory[];
   objectives: CampaignObjective[];
+  /** See `ClimatePreference`. Optional, store-only — feeds the fit-summary
+   *  prompt, does not filter or gate anything. */
+  climatePreference: ClimatePreference | null;
   /** Server-only. Never projected into a client component. */
   stripeCustomerId?: string | null;
   createdAt: string;

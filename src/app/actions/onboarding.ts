@@ -344,6 +344,7 @@ export async function createOrganization(
     audience: formData.get('audience'),
     categories: formData.getAll('categories'),
     objectives: formData.getAll('objectives'),
+    climatePreference: formData.get('climatePreference'),
   });
 
   if (!parsed.success) {
@@ -391,14 +392,26 @@ export async function createOrganization(
   }
 
   const orgId = (created as { organization_id: string }[] | null)?.[0]?.organization_id;
-  const { industry, sells, audience, categories, objectives } = parsed.data;
+  const { industry, sells, audience, categories, objectives, climatePreference } = parsed.data;
   const hasProfile =
-    industry || sells || audience || categories.length > 0 || objectives.length > 0;
+    industry ||
+    sells ||
+    audience ||
+    categories.length > 0 ||
+    objectives.length > 0 ||
+    climatePreference !== null;
 
   if (orgId && hasProfile) {
     const { error: profileError } = await supabase
       .from('organizations')
-      .update({ industry, sells, audience, categories, objectives })
+      .update({
+        industry,
+        sells,
+        audience,
+        categories,
+        objectives,
+        climate_preference: climatePreference,
+      })
       .eq('id', orgId);
 
     // The workspace exists either way, and sending them back to a blank form

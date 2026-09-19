@@ -841,6 +841,14 @@ export const businessOnboardingSchema = z.object({
   audience: optionalText(400),
   categories: fromChecklist(CAMPAIGN_CATEGORIES),
   objectives: fromChecklist(CAMPAIGN_OBJECTIVES),
+  // A radio group, not a checklist: this is one answer or none, not a set.
+  // An unrecognised value (a stray form submission, a stale client) becomes
+  // absence rather than a validation error — the field is optional, so the
+  // safe reading of "I don't understand this" is "no preference stated".
+  climatePreference: z
+    .string()
+    .optional()
+    .transform((v) => (v === 'warm' || v === 'edgy_ok' ? v : null)),
 });
 
 export type BusinessOnboardingParsed = z.output<typeof businessOnboardingSchema>;

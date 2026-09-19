@@ -2,7 +2,7 @@ import 'server-only';
 
 import { cache } from 'react';
 
-import type { CampaignCategory, CampaignObjective, Viewer } from '@/types';
+import type { CampaignCategory, CampaignObjective, ClimatePreference, Viewer } from '@/types';
 import { CAMPAIGN_CATEGORIES, CAMPAIGN_OBJECTIVES } from '@/types';
 import type { OrganizationMemberRow } from '@/types/database';
 import { createSessionClient, isSupabaseConfigured } from '@/lib/supabase/server';
@@ -66,6 +66,15 @@ export const getViewer = cache(async (): Promise<Viewer> => {
           objectives: (org.objectives ?? []).filter((o): o is CampaignObjective =>
             (CAMPAIGN_OBJECTIVES as readonly string[]).includes(o),
           ),
+          // Narrowed against the fixed vocabulary rather than trusted, same
+          // reasoning as categories/objectives above: a stale or malformed
+          // value must not reach the fit-summary prompt as though it still
+          // meant something.
+          climatePreference: (['warm', 'edgy_ok'] as const).includes(
+            org.climate_preference as ClimatePreference,
+          )
+            ? (org.climate_preference as ClimatePreference)
+            : null,
           createdAt: org.created_at,
         }
       : null,

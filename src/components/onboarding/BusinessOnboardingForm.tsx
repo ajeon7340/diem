@@ -43,6 +43,40 @@ function Chip({ name, value, label }: { name: string; value: string; label: stri
   );
 }
 
+/** One radio styled as a selectable row — for a single answer, not a set. */
+function RadioRow({
+  name,
+  value,
+  label,
+  hint,
+}: {
+  name: string;
+  value: string;
+  label: string;
+  hint: string;
+}) {
+  return (
+    <label
+      className={cn(
+        'flex cursor-pointer items-start gap-3 rounded-md border border-line bg-surface px-3 py-2.5',
+        'transition-colors hover:border-line-strong',
+        'has-[:checked]:border-indigo has-[:checked]:bg-indigo/5',
+      )}
+    >
+      <input
+        type="radio"
+        name={name}
+        value={value}
+        className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-indigo"
+      />
+      <span>
+        <span className="block text-[13px] text-ink">{label}</span>
+        <span className="mt-0.5 block text-[11px] leading-relaxed text-ink-faint">{hint}</span>
+      </span>
+    </label>
+  );
+}
+
 const FIELD = cn(
   'h-11 w-full rounded-md border border-line bg-surface px-3 text-[13px] text-ink',
   'placeholder:text-ink-faint outline-none transition-colors',
@@ -165,6 +199,38 @@ export function BusinessOnboardingForm() {
             </p>
           </div>
         </div>
+      </div>
+
+      {/* A separate panel from "what do you buy for" on purpose — this is
+          about the comment section an ad sits beside, not about the campaign.
+          Every report already measures this per creator; nothing captured it
+          on the buyer's side to compare against. */}
+      <div className="rounded-panel border border-line bg-paper px-4 py-4">
+        <p className="text-[13px] font-medium text-ink">What atmosphere are you looking for?</p>
+        <p className="mt-1 text-[12px] leading-relaxed text-ink-muted">
+          Optional. Every report reads the comment section&apos;s climate — warm, ordinary, rough
+          or hostile — and this lets the written pitch address it directly instead of leaving you
+          to work it out from the figures.
+        </p>
+
+        <div className="mt-3 space-y-2">
+          <RadioRow
+            name="climatePreference"
+            value="warm"
+            label="Warm matters to me"
+            hint="A positive-skewing, low-friction comment section is important for this placement."
+          />
+          <RadioRow
+            name="climatePreference"
+            value="edgy_ok"
+            label="A rougher section doesn't rule a creator out"
+            hint="A combative or blunt audience is fine — don't screen creators out on tone alone."
+          />
+        </div>
+        <p className="mt-2 text-[11px] leading-relaxed text-ink-faint">
+          Leave both unselected for a general read. This never filters or excludes a creator by
+          itself.
+        </p>
       </div>
 
       {state.status === 'error' && state.message ? (
