@@ -1,19 +1,84 @@
-# adfit — Verified AI Media Kit & Collaboration Hub
+# adfit — creator analysis for advertisers and agencies
 
-MVP: a public creator media kit whose numbers stay locked, and two ways to unlock them.
+A customer describes one campaign, pastes the public YouTube channels they are weighing, and gets
+each one read against that brief. **No creator signup, no approval, no OAuth** is on the required
+path — everything the comparison needs is public.
 
 ```bash
 npm run dev      # runs on built-in fixtures when no Supabase env is set
-npm run verify   # 16 assertion suites, ~450 checks, no network or database
+npm run verify   # 23 assertion suites and 977 checks, plus a 33-migration replay and two behavioural probes
+npm run worker   # the long model passes; needs Node 22 and the service key
 ```
 
-`/dashboard/studio` and the disclosure read call the YouTube Data API. Put a key in `.env.local`:
+The required flow is three pages:
 
-```
-YOUTUBE_API_KEY=...
-```
+| URL | What it is |
+| --- | --- |
+| `/campaigns` | The customer's campaigns |
+| `/campaigns/new` | The brief — only a name is required; every other field changes the read |
+| `/campaigns/[id]` | Add candidates by URL or handle, compare them on one table, read each against the brief |
 
-Without it those two surfaces render their "could not read" states and everything else works.
+Adding a candidate runs the bounded public pass inline (25 uploads, 600 comments, ~3–4s measured)
+and queues the two model passes for the worker. The page is useful before the worker has run, and
+says which columns are empty *because they have not been measured* rather than leaving a reader to
+infer a low score.
+
+### What it will not say
+
+These are enforced in the schema, the prompt, and `npm run verify:candidates`, not only in copy:
+
+- **Never who is watching.** No age, gender or location. Public data does not supply them.
+- **Never a conversion.** A comment containing purchase language is interest expressed in a
+  comment. It is reported as a share *of a named denominator* — measured on two real channels in
+  one pass as 19.5% of 361 product comments and 43.8% of 4, which as bare percentages would rank
+  the wrong way round.
+- **Never commenters as a sample of viewers.** Commenters are a small self-selected slice, and
+  every surface that shows a comment figure says so.
+- **Never an invented fee or CPM.** A CPM appears only when the customer entered a fee they were
+  quoted, and the arithmetic is shown.
+- **Never sponsorship as certain, or as a cause.** "Disclosed" is YouTube's own paid-placement
+  flag; anything else is marked as our inference. A view difference on sponsored uploads is an
+  observation, not a measured effect.
+- **Never an empty corpus as a clean one.** A channel with comments disabled comes back with a
+  pass that ran and read zero. That is stated as an empty corpus from which no safety conclusion
+  follows — distinct both from "not scanned yet" and from "nothing found".
+
+### Who can see what
+
+Three tables, and the split is the point (`supabase/migrations/0031_campaigns.sql`):
+
+- `channel_analyses` — public data about a public channel, keyed by channel id and **shared across
+  customers**. Nothing in it came from any customer, and making each org re-fetch the same comment
+  section would multiply the API cost by the number of customers for one answer.
+- `campaigns` and `campaign_candidates` — the brief, the shortlist, the notes, the fee they were
+  quoted, and the read written against that brief. **Org-private**: which creators an agency is
+  looking at is competitive information.
+
+Enforced in RLS and probed behaviourally by `scripts/probe-campaigns.sql`, which runs two
+organisations against one shared creator inside `npm run verify:migrations`.
+
+### The creator side still exists
+
+`creators`, the media kit at `/@handle`, the directory, access requests, offers and the moderation
+queue all still work and nothing was deleted. A creator account adds what public data cannot reach
+— their own analytics and a moderation queue over their comments — but no buyer action depends on
+one existing.
+
+## Configuration
+
+| Variable | Without it |
+| --- | --- |
+| `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Fixture mode: nothing is saved, and every page says so |
+| `SUPABASE_SERVICE_ROLE_KEY` | Candidates are added but no model pass is ever queued |
+| `YOUTUBE_API_KEY` | A candidate can be added and never read — the card says the public read is missing |
+| `GEMINI_API_KEY` (or `ANTHROPIC_API_KEY` with `ADFIT_AI_PROVIDER=anthropic`) | The worker refuses the pass; comment columns stay empty and are labelled unmeasured |
+
+`ADFIT_AI_PROVIDER` / `ADFIT_AI_MODEL` select the model; the default is `gemini` /
+`gemini-3.8-flash`. The worker is a plain Node process (**Node 22 required** — supabase-js aborts
+on 20 with "native WebSocket not found") because a pass holds a lease for minutes, which is the one
+shape a serverless function does not have.
+
+**Not built:** payment. The pricing page says so rather than printing a figure we have not set.
 
 In fixture mode the header carries a **demo role switcher** (Anon / Free agency / Pro agency /
 Creator) so every access mode is walkable without an auth provider. With Supabase configured the
@@ -33,7 +98,8 @@ switcher disappears and the viewer comes from the session cookie.
 | `/offers/new?handle=…&token=…` | Formal offer composer |
 | `/dashboard/offers` | Creator: offers + inbound campaign briefs |
 | `/dashboard/settings` | Creator: profile, budget range, directory opt-in |
-| `/dashboard/studio` | Creator: what moves views on their channel, any video explained, trending |
+| `/dashboard/studio` | Creator: any video explained, trending |
+| `/dashboard/videos` | Creator: their uploads against their own median |
 | `/dashboard/moderation` | Creator: risky comments on their videos, theirs to remove |
 | `/@marahwoods/print?token=…` | One-page media kit, selectable text, A4 |
 

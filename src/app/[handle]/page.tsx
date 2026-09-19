@@ -12,6 +12,10 @@ import { AccessBanner } from '@/components/profile/AccessBanner';
 import { AnalysisBanner, type JobStatus } from '@/components/profile/AnalysisBanner';
 import { BrandSafetyPanel } from '@/components/profile/BrandSafetyPanel';
 import { PromotionsPanel } from '@/components/profile/PromotionsPanel';
+import { CollaborationPanel } from '@/components/profile/CollaborationPanel';
+import { assessCollaboration } from '@/lib/report/collaboration';
+import { analyseOwnChannel } from '@/lib/youtube/explain';
+import { getViewer } from '@/lib/access/viewer';
 import { FitSummaryPanel } from '@/components/profile/FitSummaryPanel';
 import { ClustersPanel } from '@/components/profile/ClustersPanel';
 import { CommercialPanel } from '@/components/profile/CommercialPanel';
@@ -92,7 +96,35 @@ export default async function CreatorProfilePage({ params, searchParams }: PageP
     access.mode === 'pro_agency'
       ? await getFitSummary(creator.id, access.organization.id)
       : null;
+  const viewer = await getViewer();
   const sufficiency = report ? assessReport(report) : null;
+
+  // Format guidance needs the creator's public catalogue, which is a network
+  // read — so it is scoped to viewers who already have the report, cached by
+  // `ytFetch`, and allowed to fail without taking the page with it.
+  const youtubeHandle = creator.platforms.find((p) => p.platform === 'youtube')?.handle ?? null;
+  const collaboration =
+    report && youtubeHandle
+      ? await analyseOwnChannel(youtubeHandle)
+          .then((scoped) =>
+            assessCollaboration(
+              scoped.value,
+              creator.niche,
+              report.commentAxes,
+              viewer.organization
+                ? {
+                    industry: viewer.organization.industry,
+                    sells: viewer.organization.sells,
+                    categories: viewer.organization.categories,
+                  }
+                : null,
+            ),
+          )
+          .catch((e: unknown) => {
+            console.error('[profile] collaboration read failed', e);
+            return null;
+          })
+      : null;
 
   // WHAT THE PIPELINE IS DOING, for the one person who can act on knowing.
   //
@@ -251,6 +283,11 @@ export default async function CreatorProfilePage({ params, searchParams }: PageP
                     costs: the retention figures here are the evidence for the
                     ad-fatigue read stated above them. */}
                 <PromotionsPanel promotions={report?.promotions ?? []} locked={locked} />
+                {/* Last in the section, because it reads everything above it.
+                    Format guidance is the step AFTER deciding this creator is
+                    worth buying, and putting it earlier would have a buyer
+                    planning content for someone they have not yet chosen. */}
+                <CollaborationPanel collaboration={collaboration} locked={locked} />
               </Section>
 
               <Section id="risk" label="Risk &amp; brief">

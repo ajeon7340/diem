@@ -10,100 +10,111 @@ import { cn } from '@/lib/cn';
 export const metadata: Metadata = {
   title: 'Pricing',
   description:
-    'Free for creators, free for brands to propose. Pro Agency adds directory search, instant access to opted-in creators, and bulk briefs.',
+    'Free to analyse a channel and compare a shortlist. Paid tiers add analysis volume, saved campaigns and team access.',
 };
 
 /**
- * Pricing page. Its job is to answer "which one is me?" fast, so the plans are
- * ordered by who the reader is rather than by price, and the recommended plan
- * is the free one for most visitors — the paid tier only makes sense above a
- * throughput threshold, and saying so converts better than pushing it.
+ * Pricing page.
  *
- * Copy follows .agents/product-marketing.md. No invented customer counts or
- * testimonials: this is pre-launch.
+ * WHAT IS BEING SOLD CHANGED. The old tiers sold access to a directory of
+ * creators who had opted in — a paywall over other people's participation,
+ * which is worth nothing on the day nobody has signed up. What actually costs
+ * us money is analysis: a YouTube read and thousands of comments through a
+ * metered model, per channel. So the axis is analysis volume, saved campaigns,
+ * reporting and team seats.
+ *
+ * NO NUMBERS ARE PRINTED HERE THAT WE HAVE NOT SET. Payment is not integrated
+ * and the paid tiers are not priced, so this page says exactly that rather
+ * than showing a figure that would be an invention. Same rule as the rest of
+ * the site: no customer counts, no testimonials, no competitive claims, and
+ * nothing about performance we have not measured.
  */
 
 const PLANS = [
   {
+    name: 'Analyse',
+    price: 'Free',
+    cadence: 'while we are in early access',
+    tagline: 'For a shortlist you already have.',
+    highlight: true,
+    cta: { label: 'Create a campaign', href: '/campaigns/new', variant: 'primary' as const },
+    features: [
+      'Paste any public YouTube channel — no creator signup or approval',
+      'Public read: uploads, reach, disclosed sponsorships, comment corpus',
+      'One comparison table across the candidates on a campaign',
+      'A written fit read against your brief, with its own confidence',
+      'Your brief, notes and quoted fees stay inside your workspace',
+    ],
+    note: 'Analysis is metered on our side — a YouTube read plus thousands of comments through a model, per channel. Early access is free while we find out what a fair unit is.',
+  },
+  {
+    name: 'Team',
+    price: 'Not yet priced',
+    cadence: 'pricing not set',
+    tagline: 'For agencies running several campaigns at once.',
+    cta: { label: 'Create a campaign', href: '/campaigns/new', variant: 'secondary' as const },
+    features: [
+      'Everything in Analyse',
+      'Higher analysis volume and deeper comment reads per channel',
+      'Several campaigns side by side, each with its own standard',
+      'Shared workspace so a colleague sees the same shortlist',
+      'Exportable candidate reports for internal approval',
+    ],
+    note: 'Payment is not integrated yet, so there is nothing to buy on this page. We would rather say that than print a number we have not committed to.',
+  },
+  {
     name: 'Creator',
     price: 'Free',
     cadence: 'always',
-    tagline: 'For anyone publishing a media kit.',
-    cta: { label: 'Publish my media kit', href: '/join/creator', variant: 'secondary' as const },
+    tagline: 'Optional, for creators who want to add to their public read.',
+    cta: { label: 'Claim my channel', href: '/join/creator', variant: 'secondary' as const },
     features: [
-      'Verified profile at /@yourhandle',
-      'YouTube and Instagram connection',
-      'Full AI ad-fit report on your own audience',
-      'Approve or decline every brand individually',
-      'Time-limited, revocable access links',
-      'Optional agency directory listing',
+      'A profile at /@yourhandle that you control',
+      'Your own view and engagement history',
+      'A moderation queue over your comment section',
+      'Approve or decline each brand individually',
+      'Agency directory listing — opt-in, off by default',
     ],
-    note: 'Free permanently. Creators are the supply side — charging them would be charging the wrong half of the marketplace.',
-  },
-  {
-    name: 'Brand',
-    price: 'Free',
-    cadence: 'no account required to read',
-    tagline: 'For in-house teams running a handful of creators.',
-    highlight: true,
-    cta: { label: 'Create a free workspace', href: '/join/business', variant: 'primary' as const },
-    features: [
-      'Open any creator link — no account needed',
-      'Unlimited 1:1 proposals',
-      'Full report on every creator who approves you',
-      'Time-limited access links by email',
-      'Workspace for your team’s proposal history',
-    ],
-    note: 'If you evaluate creators one at a time and already know who you’re considering, this is the whole product. Most teams never need more.',
-  },
-  {
-    name: 'Pro Agency',
-    price: 'Paid',
-    cadence: 'per workspace',
-    tagline: 'For agencies evaluating creators at volume.',
-    cta: { label: 'Talk to us', href: '/join/business', variant: 'secondary' as const },
-    features: [
-      'Everything in Brand',
-      'Directory search across opted-in creators',
-      'Filter by purchase intent, ad fatigue, demographics, CPM ceiling',
-      'Instant unlocked reports — no per-creator approval wait',
-      'Bulk briefs to up to 100 creators at once',
-    ],
-    note: 'Worth it above roughly ten creator evaluations a quarter, when waiting on individual approvals becomes the bottleneck.',
+    note: 'Free permanently. Nothing a buyer does requires a creator account; this adds what public data cannot reach.',
   },
 ];
 
-const COMPARISON: { label: string; creator: boolean | string; brand: boolean | string; pro: boolean | string }[] = [
-  { label: 'Read a public creator teaser', creator: true, brand: true, pro: true },
-  { label: 'Send 1:1 proposals', creator: false, brand: 'Unlimited', pro: 'Unlimited' },
-  { label: 'Full report after creator approval', creator: 'Own only', brand: true, pro: true },
-  { label: 'Directory search and filters', creator: false, brand: false, pro: true },
-  { label: 'Instant access to opted-in creators', creator: false, brand: false, pro: true },
-  { label: 'Bulk campaign briefs', creator: false, brand: false, pro: 'Up to 100' },
-  { label: 'Connect YouTube / Instagram', creator: true, brand: false, pro: false },
-  { label: 'Control who sees your metrics', creator: true, brand: false, pro: false },
+const COMPARISON: { label: string; analyse: boolean | string; team: boolean | string; creator: boolean | string }[] = [
+  { label: 'Analyse a channel nobody has signed up', analyse: true, team: true, creator: false },
+  { label: 'Compare candidates on one brief', analyse: true, team: true, creator: false },
+  { label: 'Written fit read per candidate', analyse: true, team: true, creator: false },
+  { label: 'Analysis volume', analyse: 'Early access', team: 'Higher', creator: 'Own channel' },
+  { label: 'Several campaigns at once', analyse: true, team: true, creator: false },
+  { label: 'Shared workspace for a team', analyse: 'Owner only', team: true, creator: false },
+  { label: 'Exportable candidate report', analyse: false, team: true, creator: false },
+  { label: 'Moderation queue over your comments', analyse: false, team: false, creator: true },
+  { label: 'Control who sees your locked metrics', analyse: false, team: false, creator: true },
 ];
 
 const FAQ = [
   {
-    q: 'Why is it free for brands?',
-    a: 'The 1:1 funnel is how creators get value from being here — a brand that can’t reach them is worth nothing to them. We charge for volume and speed, not for access.',
+    q: 'Do the creators have to agree to this?',
+    a: 'No, and nothing here asks them to. Everything analysed is public: uploads, view counts, the comment section, and YouTube’s own paid-placement disclosures. What we deliberately do NOT have without a creator account is their analytics — so we never state who watches, and never report a conversion.',
   },
   {
-    q: 'What stops a creator from inflating their own numbers?',
-    a: 'They never touch them. Demographics come from OAuth-authorised platform analytics, and the qualitative scores are written by our pipeline. A creator can edit their bio and their minimum budget. They cannot edit a metric, and they cannot award themselves the verified badge.',
+    q: 'What am I paying for, once there is something to pay for?',
+    a: 'Analysis. Each channel is a YouTube read plus thousands of comments through a metered model, and that cost scales with how many candidates you compare and how deeply each is read. Not access to other people — the analysis of a public channel is shared between customers, so two agencies looking at the same creator do not pay for it twice.',
   },
   {
-    q: 'Do I need Pro to read a specific creator I already know?',
-    a: 'No. Open their link, send a proposal, and read the full report once they approve. Pro exists for discovery and throughput, not to paywall individual creators.',
+    q: 'Is my shortlist visible to other customers?',
+    a: 'No. The channel analysis is shared; your campaign, your notes, the fee you were quoted and the read written against your brief are scoped to your workspace and enforced in the database, not in the interface.',
   },
   {
-    q: 'Can a creator hide from agencies?',
-    a: 'Yes, and that’s the default. Directory listing is opt-in. A creator who leaves it off stays reachable by direct link and approves every brand one at a time.',
+    q: 'Why is there no price on the Team tier?',
+    a: 'Because we have not set one. Payment is not integrated and no checkout exists on this site. A figure here would be an invention, and this is the same page that promises we do not print figures we have not measured.',
   },
   {
-    q: 'What happens when an access link expires?',
-    a: 'The report re-locks. Links are time-limited by design — the page tells the holder it expired rather than pretending it never existed, and you can request a fresh one.',
+    q: 'Can I get a CPM out of this?',
+    a: 'Only if you enter a fee you were quoted. Nothing public reveals what a creator charges. Give us the fee and we divide it by their median views and show the arithmetic; give us none and the column stays empty.',
+  },
+  {
+    q: 'What happens when a channel has almost no comments?',
+    a: 'It says so. A candidate with a thin corpus is reported as insufficient evidence rather than as a weak fit — those are different purchases, and a dash is never rendered as a zero.',
   },
 ];
 
@@ -124,11 +135,13 @@ export default function PricingPage() {
         <div className="relative mx-auto w-full max-w-shell px-5 py-14 sm:px-8">
           <p className="rail">Pricing</p>
           <h1 className="mt-2.5 max-w-[22ch] text-[28px] font-semibold leading-tight tracking-tight text-ink">
-            Free unless you&apos;re doing this at volume.
+            You pay for analysis, not for access to people.
           </h1>
-          <p className="mt-3 max-w-[60ch] text-[13px] leading-relaxed text-ink-muted">
-            Creators never pay. Brands never pay to evaluate a creator they already know. The paid
-            tier is for agencies who need to find creators rather than look them up.
+          <p className="mt-3 max-w-[64ch] text-[13px] leading-relaxed text-ink-muted">
+            Analysing a channel costs us a YouTube read and thousands of comments through a metered
+            model, so that is what the tiers are about: how many candidates you compare, how deeply
+            each is read, and who on your team can see it. Creators never pay. Nothing on this page
+            can be bought yet — checkout is not built.
           </p>
 
           <div className="mt-10 grid gap-4 lg:grid-cols-3">
@@ -142,7 +155,7 @@ export default function PricingPage() {
               >
                 <div className="flex items-center gap-2.5">
                   <h2 className="text-[15px] font-semibold tracking-tight text-ink">{plan.name}</h2>
-                  {plan.highlight ? <Badge tone="indigo">Most teams</Badge> : null}
+                  {plan.highlight ? <Badge tone="indigo">Start here</Badge> : null}
                 </div>
                 <p className="mt-1.5 text-[12px] text-ink-muted">{plan.tagline}</p>
 
@@ -182,7 +195,7 @@ export default function PricingPage() {
                 <thead>
                   <tr className="border-b border-line">
                     <th scope="col" className="rail px-5 py-3">Capability</th>
-                    {['Creator', 'Brand', 'Pro Agency'].map((head) => (
+                    {['Analyse', 'Team', 'Creator'].map((head) => (
                       <th key={head} scope="col" className="rail px-4 py-3 text-center">{head}</th>
                     ))}
                   </tr>
@@ -193,9 +206,9 @@ export default function PricingPage() {
                       <th scope="row" className="px-5 py-3 text-[13px] font-normal text-ink-muted">
                         {row.label}
                       </th>
+                      <td className="px-4 py-3 text-center"><Cell value={row.analyse} /></td>
+                      <td className="px-4 py-3 text-center"><Cell value={row.team} /></td>
                       <td className="px-4 py-3 text-center"><Cell value={row.creator} /></td>
-                      <td className="px-4 py-3 text-center"><Cell value={row.brand} /></td>
-                      <td className="px-4 py-3 text-center"><Cell value={row.pro} /></td>
                     </tr>
                   ))}
                 </tbody>
@@ -219,17 +232,18 @@ export default function PricingPage() {
 
           <section className="mt-12 rounded-panel border border-line bg-paper px-6 py-8 text-center">
             <h2 className="text-[17px] font-semibold tracking-tight text-ink">
-              Start with a real profile
+              Start with the shortlist you already have
             </h2>
-            <p className="mx-auto mt-2 max-w-[48ch] text-[12px] leading-relaxed text-ink-muted">
-              Read a teaser, send a proposal, decide later whether you need the directory.
+            <p className="mx-auto mt-2 max-w-[52ch] text-[12px] leading-relaxed text-ink-muted">
+              One brief, the channels you were sent, and a table that compares them on the same
+              terms.
             </p>
             <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
-              <Link href="/@marahwoods">
-                <Button>View a sample profile</Button>
+              <Link href="/campaigns/new">
+                <Button>Create a campaign</Button>
               </Link>
-              <Link href="/join/business">
-                <Button variant="secondary">Create a free workspace</Button>
+              <Link href="/@marahwoods">
+                <Button variant="secondary">See a sample report</Button>
               </Link>
             </div>
           </section>

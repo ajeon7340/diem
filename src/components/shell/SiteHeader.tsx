@@ -47,9 +47,14 @@ export async function SiteHeader() {
             </>
           ) : (
             <>
+              {/* Campaigns first, and for everyone: it is the required path
+                  now, and a signed-out visitor who clicks it is asked for a
+                  workspace rather than told they may not look. */}
+              <NavLink href="/campaigns">Campaigns</NavLink>
+              {/* The directory is the OPTIONAL half — it only ever contained
+                  creators who opted in, so it answers "who else is there",
+                  never "is this candidate right". Kept, demoted. */}
               <NavLink href="/directory">Directory</NavLink>
-              {/* A buyer's own history had no link anywhere — the directory
-                  answers "who could I buy from", not "what have I asked for". */}
               {viewer.organization ? <NavLink href="/dashboard/agency">Workspace</NavLink> : null}
               <NavLink href="/pricing">Pricing</NavLink>
             </>
@@ -77,11 +82,14 @@ export async function SiteHeader() {
           ) : (
             <>
               <NavLink href="/signin">Sign in</NavLink>
+              {/* One CTA across the site, and it names the thing rather than
+                  the paperwork: "Create account" asked for a commitment before
+                  showing anything, and the account is a step inside this. */}
               <Link
-                href="/join"
+                href="/campaigns/new"
                 className="rounded-md bg-indigo px-3 py-1.5 text-[12px] font-medium text-white transition-colors hover:bg-indigo-hover"
               >
-                Create account
+                Create a campaign
               </Link>
             </>
           )}

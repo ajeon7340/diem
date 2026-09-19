@@ -1,4 +1,5 @@
 import type { BriefFormState } from './campaign-brief';
+import type { CampaignState, CandidateState } from './campaign';
 import type { OfferFormState, OfferDecisionState } from './offer';
 import type { OnboardingState } from './onboarding';
 import type { ProposalFormState } from './request-access';
@@ -32,6 +33,8 @@ import type { MagicLinkState } from '@/lib/auth/actions';
  */
 
 export const INITIAL_BRIEF_STATE: BriefFormState = { status: 'idle' };
+export const INITIAL_CAMPAIGN_STATE: CampaignState = { status: 'idle' };
+export const INITIAL_CANDIDATE_STATE: CandidateState = { status: 'idle' };
 export const INITIAL_OFFER_STATE: OfferFormState = { status: 'idle' };
 export const INITIAL_OFFER_DECISION: OfferDecisionState = { status: 'idle' };
 export const INITIAL_ONBOARDING_STATE: OnboardingState = { status: 'idle' };

@@ -30,6 +30,10 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 import { aiModel, aiProvider } from '@/lib/ai/provider';
 import { ClaimLostError, classifyAndStore } from '@/lib/ingest/classify';
+import {
+  classifyChannelAndStore,
+  classifyChannelIntentAndStore,
+} from '@/lib/ingest/channel-classify';
 import { classifyIntentAndStore } from '@/lib/ingest/intent';
 import { jobMaxComments, jobMaxVideos, positiveEnv } from '@/lib/ingest/worker-config';
 import type { AnalysisJobKind } from '@/types';
@@ -69,7 +73,14 @@ let stopping = false;
 
 interface JobRow {
   id: string;
-  creator_id: string;
+  /**
+   * Exactly one of these is set — 0031 enforces it with a check constraint.
+   * A creator job writes the signed-up creator's report; a channel job writes
+   * the shared `channel_analyses` row an advertiser is waiting on. Same queue,
+   * same lease, same retries.
+   */
+  creator_id: string | null;
+  channel_id: string | null;
   kind: AnalysisJobKind;
   status: string;
   attempts: number;
@@ -209,7 +220,8 @@ async function requireChannel(
 }
 
 async function runClassifyComments(supabase: SupabaseClient, job: JobRow): Promise<void> {
-  const creator = await requireChannel(supabase, job.creator_id);
+  if (job.channel_id) return runChannelClassify(supabase, job);
+  const creator = await requireChannel(supabase, job.creator_id!);
 
   const maxVideos = jobMaxVideos(job.params, DEFAULT_MAX_VIDEOS);
   const maxComments = jobMaxComments(job.params, DEFAULT_MAX_COMMENTS);
@@ -226,7 +238,7 @@ async function runClassifyComments(supabase: SupabaseClient, job: JobRow): Promi
   progress.set({ stage: 'fetching' });
   const result = await classifyAndStore(
     supabase,
-    job.creator_id,
+    job.creator_id!,
     { handle: creator.youtube_handle, channelId: creator.youtube_channel_id },
     {
       maxVideos,
@@ -256,7 +268,8 @@ async function runClassifyComments(supabase: SupabaseClient, job: JobRow): Promi
 }
 
 async function runClassifyIntent(supabase: SupabaseClient, job: JobRow): Promise<void> {
-  const creator = await requireChannel(supabase, job.creator_id);
+  if (job.channel_id) return runChannelIntent(supabase, job);
+  const creator = await requireChannel(supabase, job.creator_id!);
   const maxVideos = jobMaxVideos(job.params, DEFAULT_MAX_VIDEOS);
   const maxComments = jobMaxComments(job.params, DEFAULT_MAX_COMMENTS);
 
@@ -270,7 +283,7 @@ async function runClassifyIntent(supabase: SupabaseClient, job: JobRow): Promise
   progress.set({ stage: 'fetching' });
   const result = await classifyIntentAndStore(
     supabase,
-    job.creator_id,
+    job.creator_id!,
     { handle: creator.youtube_handle, channelId: creator.youtube_channel_id },
     {
       maxVideos,
@@ -301,6 +314,79 @@ async function runClassifyIntent(supabase: SupabaseClient, job: JobRow): Promise
     comments_scanned: result.commentsClassified,
     // "Findings" for this pass is what a brand can act on: comments attached to
     // something purchasable. Zero is a real and useful result here.
+    findings: result.productComments,
+  });
+}
+
+/**
+ * The same two passes for a channel nobody has signed up.
+ *
+ * Split by destination rather than by pipeline: everything up to the write is
+ * the identical code path (see `channel-classify.ts`), so a fix to batching or
+ * concurrency reaches both. What differs is the row that is updated and the
+ * fact that there is no moderation queue to carry forward.
+ */
+async function runChannelClassify(supabase: SupabaseClient, job: JobRow): Promise<void> {
+  const channelId = job.channel_id!;
+  const maxVideos = jobMaxVideos(job.params, DEFAULT_MAX_VIDEOS);
+  const maxComments = jobMaxComments(job.params, DEFAULT_MAX_COMMENTS);
+  log(`channel ${channelId} · ${aiProvider()} ${aiModel()} · ${maxComments} comments max`);
+
+  const started = Date.now();
+  const progress = progressBox();
+  progress.set({ stage: 'fetching' });
+  const result = await classifyChannelAndStore(supabase, channelId, {
+    maxVideos,
+    maxComments,
+    stillMine: heartbeat(supabase, job.id, progress.read()),
+    onProgress: (done, total) => {
+      progress.set({ done, total, stage: 'classifying' });
+      if (VERBOSE) process.stdout.write(`\r  classified ${done}/${total}`);
+    },
+  });
+  if (VERBOSE) process.stdout.write('\r');
+
+  log(
+    `channel ${channelId} done · ${result.commentsScanned.toLocaleString('en-US')} comments · ` +
+      `${result.flagged} flagged · ${result.spend.calls} calls · ` +
+      `${Math.round((Date.now() - started) / 1000)}s`,
+  );
+  await finish(supabase, job.id, {
+    status: 'succeeded',
+    comments_scanned: result.commentsScanned,
+    findings: result.flagged,
+  });
+}
+
+async function runChannelIntent(supabase: SupabaseClient, job: JobRow): Promise<void> {
+  const channelId = job.channel_id!;
+  const maxVideos = jobMaxVideos(job.params, DEFAULT_MAX_VIDEOS);
+  const maxComments = jobMaxComments(job.params, DEFAULT_MAX_COMMENTS);
+  log(`channel ${channelId} intent · ${aiProvider()} ${aiModel()}`);
+
+  const started = Date.now();
+  const progress = progressBox();
+  progress.set({ stage: 'fetching' });
+  const result = await classifyChannelIntentAndStore(supabase, channelId, {
+    maxVideos,
+    maxComments,
+    stillMine: heartbeat(supabase, job.id, progress.read()),
+    onProgress: (done, total) => {
+      progress.set({ done, total, stage: 'classifying' });
+      if (VERBOSE) process.stdout.write(`\r  classified ${done}/${total}`);
+    },
+  });
+  if (VERBOSE) process.stdout.write('\r');
+
+  log(
+    `channel ${channelId} intent done · ${result.commentsClassified.toLocaleString('en-US')} classified · ` +
+      `${result.productComments} about a product · ` +
+      `intent ${result.rate === null ? 'unmeasurable' : `${(result.rate * 100).toFixed(1)}%`} · ` +
+      `${Math.round((Date.now() - started) / 1000)}s`,
+  );
+  await finish(supabase, job.id, {
+    status: 'succeeded',
+    comments_scanned: result.commentsClassified,
     findings: result.productComments,
   });
 }
@@ -431,7 +517,7 @@ async function enqueueMissing(supabase: SupabaseClient): Promise<void> {
 async function showStatus(supabase: SupabaseClient): Promise<void> {
   const { data, error } = await supabase
     .from('analysis_jobs')
-    .select('kind, status, attempts, max_attempts, queued_at, comments_scanned, findings, last_error, creators(handle)')
+    .select('kind, status, attempts, max_attempts, queued_at, comments_scanned, findings, last_error, creator_id, channel_id, creators(handle)')
     .order('queued_at', { ascending: false })
     .limit(40);
 
@@ -451,7 +537,12 @@ async function showStatus(supabase: SupabaseClient): Promise<void> {
     last_error: string | null;
     creators: { handle: string } | null;
   })[]) {
-    const who = row.creators?.handle ? `@${row.creators.handle}` : row.creator_id;
+    // A channel job has no creator to name, and printing an empty column
+    // for it would read as a broken row rather than a different subject.
+    const who =
+      (row.creators?.handle ? `@${row.creators.handle}` : row.creator_id) ??
+      row.channel_id ??
+      '(no subject)';
     const detail =
       row.status === 'succeeded'
         ? `${(row.comments_scanned ?? 0).toLocaleString('en-US')} comments · ${row.findings ?? 0} flagged`

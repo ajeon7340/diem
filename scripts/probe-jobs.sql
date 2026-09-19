@@ -157,6 +157,51 @@ begin
   end;
 
   -- ---------------------------------------------------------------------
+  -- A job is about exactly one subject (0031)
+  --
+  -- The advertiser flow queues jobs for channels nobody has signed up. Both
+  -- columns nullable with no constraint would let a job point at a creator AND
+  -- a channel, and the worker branches on `channel_id` first — so such a row
+  -- would silently analyse the channel and write the creator's report never.
+  -- ---------------------------------------------------------------------
+  begin
+    insert into public.analysis_jobs (creator_id, channel_id, kind)
+      values (v_creator2, 'UCprobe', 'classify_intent');
+    perform pg_temp.check('a job cannot have two subjects', false);
+  exception when check_violation then
+    perform pg_temp.check('a job cannot have two subjects', true);
+  end;
+
+  begin
+    insert into public.analysis_jobs (kind) values ('classify_intent');
+    perform pg_temp.check('a job cannot have no subject', false);
+  exception when check_violation then
+    perform pg_temp.check('a job cannot have no subject', true);
+  end;
+
+  insert into public.analysis_jobs (channel_id, kind) values ('UCprobe', 'classify_comments');
+  perform pg_temp.check('a channel job needs no creator', true);
+
+  begin
+    insert into public.analysis_jobs (channel_id, kind) values ('UCprobe', 'classify_comments');
+    perform pg_temp.check('a second live job per channel is rejected', false);
+  exception when unique_violation then
+    perform pg_temp.check('a second live job per channel is rejected', true);
+  end;
+
+  -- A different channel, and the same channel under a different pass, are
+  -- both unaffected: the index is per channel per kind.
+  insert into public.analysis_jobs (channel_id, kind) values ('UCprobe', 'classify_intent');
+  insert into public.analysis_jobs (channel_id, kind) values ('UCother', 'classify_comments');
+  perform pg_temp.check('other channels and other kinds still queue', true);
+
+  -- And the worker takes them through the same claim path as a creator job.
+  v_job := public.claim_analysis_job('worker-ch', 900);
+  perform pg_temp.check('a channel job is claimable', v_job.id is not null);
+  update public.analysis_jobs
+    set status = 'succeeded', finished_at = now() where id = v_job.id;
+
+  -- ---------------------------------------------------------------------
   -- Privileges: a row here spends money, so clients may only read
   -- ---------------------------------------------------------------------
   perform pg_temp.check(
@@ -200,9 +245,16 @@ begin
     has_function_privilege('service_role', 'public.heartbeat_analysis_job(uuid, text, integer, integer, integer, text)', 'execute')
   );
 
+  -- The invariant is not "one policy" — 0032 adds a second, for the customer
+  -- watching a channel job they are waiting on. The invariant is that NO
+  -- policy here grants anything but SELECT: a row in this table spends money.
+  select count(*) into v_n from pg_policies
+   where schemaname = 'public' and tablename = 'analysis_jobs' and cmd <> 'SELECT';
+  perform pg_temp.check('no policy grants more than SELECT', v_n = 0);
+
   select count(*) into v_n from pg_policies
    where schemaname = 'public' and tablename = 'analysis_jobs';
-  perform pg_temp.check('exactly one policy, and it is read-only', v_n = 1);
+  perform pg_temp.check('both read policies are present', v_n = 2);
 
   select relrowsecurity into v_ok from pg_class where oid = 'public.analysis_jobs'::regclass;
   perform pg_temp.check('row level security is on', v_ok);

@@ -61,3 +61,11 @@ echo
 echo "  claim rules:"
 psql -d "${DB}" -v ON_ERROR_STOP=1 -q -f "${HERE}/probe-jobs.sql" 2>&1 |
   sed -E -e 's/^psql:[^ ]+ (NOTICE|ERROR):  ?//' -e 's/^(NOTICE|ERROR):  ?//'
+
+# The advertiser flow's access model. Unlike the claim rules these are row
+# admission checks — two organisations, one shared creator, and the question
+# of what each may see of the other.
+echo
+echo "  campaign isolation:"
+psql -d "${DB}" -v ON_ERROR_STOP=1 -q -f "${HERE}/probe-campaigns.sql" 2>&1 |
+  sed -E -e 's/^psql:[^ ]+ (NOTICE|ERROR):  ?//' -e 's/^(NOTICE|ERROR):  ?//'
