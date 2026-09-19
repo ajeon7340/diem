@@ -20,8 +20,8 @@ export default async function BusinessOnboardingPage() {
   return (
     <AuthShell
       eyebrow="Brand or agency · Step 2 of 2"
+      width="checklist"
       title="Name your workspace"
-      intro="Proposals you send are attributed to this workspace, and it's what a Pro Agency subscription attaches to."
       footer={null}
     >
       <BusinessOnboardingForm />

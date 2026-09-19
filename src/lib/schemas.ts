@@ -838,12 +838,30 @@ const fromChecklist = <T extends readonly string[]>(allowed: T) =>
       return raw.filter((x): x is T[number] => (allowed as readonly string[]).includes(x));
     });
 
+/**
+ * An optional free-text field, as a FORM actually delivers it.
+ *
+ * `.optional()` alone accepts `undefined`, and `formData.get()` never returns
+ * undefined — it returns NULL for a field the form does not render. So an
+ * optional field that the markup simply does not have failed the whole schema:
+ *
+ *     industry: Invalid input: expected string, received null
+ *
+ * Business onboarding had no `industry` input while the action read one, so
+ * every submission through the browser died on a field nobody could see, with
+ * "Check the highlighted fields" and no field highlighted. It only ever passed
+ * from a test that posted the key by hand.
+ *
+ * `.nullable()` is not a nicety here. It is what "optional" means on the only
+ * transport this schema is ever fed from.
+ */
 const optionalText = (max: number) =>
   z
     .string()
     .trim()
     .max(max)
     .optional()
+    .nullable()
     .transform((v) => (v ? v : null));
 
 export const businessOnboardingSchema = z.object({
@@ -864,9 +882,12 @@ export const businessOnboardingSchema = z.object({
   // An unrecognised value (a stray form submission, a stale client) becomes
   // absence rather than a validation error — the field is optional, so the
   // safe reading of "I don't understand this" is "no preference stated".
+  // Nullable for the same reason as `optionalText`: an unticked radio group
+  // arrives from FormData as null, not undefined.
   climatePreference: z
     .string()
     .optional()
+    .nullable()
     .transform((v) => (v === 'warm' || v === 'edgy_ok' ? v : null)),
 });
 

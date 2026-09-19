@@ -140,5 +140,63 @@ check('1-char org rejected', businessOnboardingSchema.safeParse({ organizationNa
   check('no figure at all is fine', parse({ budgetMin: '', budgetMax: '' }).success, true);
 }
 
+// ---------------------------------------------------------------------------
+// `optional` has to mean optional over FORMDATA
+//
+// `formData.get()` never returns undefined. It returns NULL for a field the
+// markup does not render and for an unticked radio. `.optional()` alone
+// accepts only undefined, so an optional field the form simply did not have
+// failed the whole schema:
+//
+//     industry: Invalid input: expected string, received null
+//
+// Business onboarding read an `industry` the form never rendered, so every
+// submission through a browser died on an invisible field with "Check the
+// highlighted fields" and nothing highlighted. It passed only from tests that
+// posted the key by hand. Both forms are now fed exactly what a browser sends.
+// ---------------------------------------------------------------------------
+{
+  const asFormData = (present: Record<string, unknown>, optional: string[]) => ({
+    ...present,
+    ...Object.fromEntries(optional.map((k) => [k, null])),
+  });
+
+  const business = businessOnboardingSchema.safeParse(
+    asFormData({ organizationName: 'Northwind Audio', categories: [], objectives: [] }, [
+      'industry', 'sells', 'audience', 'climatePreference',
+    ]),
+  );
+  check('business parses with every optional absent', business.success, true);
+  check(
+    'and every absent field lands as null',
+    business.success ? [business.data.industry, business.data.sells, business.data.audience, business.data.climatePreference] : null,
+    [null, null, null, null],
+  );
+
+  const creator = creatorOnboardingSchema.safeParse(
+    asFormData({ handle: 'someone', displayName: 'Someone' }, [
+      'niche', 'bio', 'youtubeHandle', 'budgetMin', 'budgetMax', 'budgetNegotiable', 'isDirectoryVisible',
+    ]),
+  );
+  check('creator parses with every optional absent', creator.success, true);
+
+  // An unticked checkbox group arrives as [] from getAll, not as null.
+  check(
+    'an empty checkbox group is empty, not invalid',
+    businessOnboardingSchema.safeParse(
+      asFormData({ organizationName: 'Xy', categories: [], objectives: [] }, ['industry', 'sells', 'audience', 'climatePreference']),
+    ).success,
+    true,
+  );
+  // And the one required field is still required.
+  check(
+    'the company name is still required',
+    businessOnboardingSchema.safeParse(
+      asFormData({ organizationName: '', categories: [], objectives: [] }, ['industry', 'sells', 'audience', 'climatePreference']),
+    ).success,
+    false,
+  );
+}
+
 console.log(`\n  ${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);

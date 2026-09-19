@@ -19,7 +19,7 @@ export function AuthShell({
   children: ReactNode;
   aside?: ReactNode;
   footer?: ReactNode;
-  width?: 'narrow' | 'form' | 'wide';
+  width?: 'narrow' | 'form' | 'checklist' | 'wide';
 }) {
   return (
     <div className="flex min-h-screen flex-col">
@@ -29,11 +29,11 @@ export function AuthShell({
         <div className="grid-rule pointer-events-none absolute inset-x-0 top-0 h-48" aria-hidden />
 
         <div
-          className={`relative mx-auto w-full px-5 py-5 sm:px-8 sm:py-6 ${
+          className={`relative mx-auto w-full px-5 py-4 sm:px-8 sm:py-5 ${
             // 'form' is for a screen that must not scroll: wide enough that the
             // paired fields actually sit side by side rather than wrapping into
             // twice the rows, which is what pushed creator signup off one page.
-            width === 'wide' ? 'max-w-shell' : width === 'form' ? 'max-w-[680px]' : 'max-w-[460px]'
+            width === 'wide' ? 'max-w-shell' : width === 'form' ? 'max-w-[680px]' : width === 'checklist' ? 'max-w-[840px]' : 'max-w-[460px]'
           }`}
         >
           <p className="rail">{eyebrow}</p>
@@ -44,7 +44,7 @@ export function AuthShell({
             <p className="mt-2 text-[13px] leading-relaxed text-ink-muted">{intro}</p>
           ) : null}
 
-          <div className="mt-4 rounded-panel border border-line bg-surface p-4 sm:p-5">{children}</div>
+          <div className="mt-3 rounded-panel border border-line bg-surface p-4">{children}</div>
 
           {aside}
 
