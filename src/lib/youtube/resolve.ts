@@ -47,7 +47,23 @@ export async function resolveChannel(handle: string): Promise<ResolveResult> {
       ...(byId ? { id: handle } : { forHandle: handle }),
     });
 
-    const channel = items[0];
+    let channel = items[0];
+
+    // A legacy /user/NAME link normalises to @NAME, which `forHandle` will not
+    // find because the two namespaces are different. `forUsername` is the
+    // endpoint for it, and costs one more unit only when the first lookup came
+    // back empty — so a modern handle never pays for this.
+    if (!channel && !byId) {
+      const legacy = await ytFetch<{
+        id: string;
+        snippet: { title: string; customUrl?: string; thumbnails?: { default?: { url?: string } } };
+        statistics: { subscriberCount?: string; hiddenSubscriberCount?: boolean };
+      }>('channels', {
+        part: 'snippet,statistics',
+        forUsername: handle.replace(/^@/, ''),
+      }).catch(() => null);
+      channel = legacy?.items[0] ?? channel;
+    }
     if (!channel) {
       return {
         ok: false,

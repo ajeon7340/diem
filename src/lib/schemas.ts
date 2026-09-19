@@ -766,7 +766,17 @@ export const youtubeHandleSchema = z
     // Stop at the first path separator or query: /@handle/videos and
     // /@handle?sub_confirmation=1 are both links people actually copy.
     const byHandle = value.match(/youtube\.com\/(@[^/?#\s]+)/iu);
-    const raw = byHandle ? byHandle[1] : value;
+
+    // The two URL shapes YouTube served for a decade before handles existed.
+    // They are still all over the web and in people's bookmarks, and pasting
+    // one returned "Check the highlighted fields" — a validation error for a
+    // link that identifies the channel perfectly well. `/user/` maps to
+    // channels.list?forUsername; `/c/` has no API of its own, but the custom
+    // name became the handle for most channels that had one, so it is tried as
+    // a handle and fails with a real lookup error rather than a form error.
+    const legacy = value.match(/youtube\.com\/(?:c|user)\/([^/?#\s]+)/iu);
+
+    const raw = byHandle ? byHandle[1] : legacy ? legacy[1] : value;
     const name = raw.replace(/^@/, '').trim();
     return name ? `@${name}` : null;
   })
@@ -799,7 +809,16 @@ export const creatorOnboardingSchema = z.object({
   isDirectoryVisible: z
     .union([z.literal('on'), z.literal('true'), z.literal(''), z.undefined(), z.null()])
     .transform((value) => value === 'on' || value === 'true'),
-});
+})
+  // A published range that runs downwards. `budgetRange` prints
+  // "$25,000-$15,000" for it, and a creator reading their own media kit sees a
+  // number they did not mean to say. The settings form has always refused
+  // this; signup did not, because the field only became a range later.
+  .refine(
+    (value) =>
+      value.budgetMin === null || value.budgetMax === null || value.budgetMin <= value.budgetMax,
+    { message: 'The low end cannot be above the high end', path: ['budgetMin'] },
+  );
 
 export type CreatorOnboardingParsed = z.output<typeof creatorOnboardingSchema>;
 

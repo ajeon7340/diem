@@ -73,5 +73,23 @@ check(
   'Paste your channel URL or your @handle, like youtube.com/@jooshica6178',
 );
 
+// ---------------------------------------------------------------------------
+// The URLs YouTube served before handles existed
+//
+// /c/Name and /user/Name are all over the web and in people's bookmarks, and
+// pasting one returned "Check the highlighted fields" — a validation error for
+// a link that identifies the channel perfectly well. Both normalise to a name
+// the lookup can try; /user/ has its own endpoint (forUsername) and /c/ names
+// became handles for most channels that had one.
+// ---------------------------------------------------------------------------
+check('a legacy /c/ URL', ok('https://youtube.com/c/MarquesBrownlee'), '@MarquesBrownlee');
+check('a legacy /user/ URL', ok('https://www.youtube.com/user/marquesbrownlee'), '@marquesbrownlee');
+check('with a tab on the end', ok('https://www.youtube.com/c/MarquesBrownlee/videos'), '@MarquesBrownlee');
+check('and a mobile host', ok('https://m.youtube.com/@mkbhd'), '@mkbhd');
+
+// A video is not a channel, and saying so is better than resolving something.
+check('a watch URL is still refused', ok('https://www.youtube.com/watch?v=dQw4w9WgXcQ'), 'REJECTED');
+check('a youtu.be link is still refused', ok('https://youtu.be/dQw4w9WgXcQ'), 'REJECTED');
+
 console.log(`\n  ${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);

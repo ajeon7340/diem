@@ -61,10 +61,10 @@ function Field({
   );
 }
 
-function SubmitButton({ children }: { children: React.ReactNode }) {
+function SubmitButton({ blocked, children }: { blocked: boolean; children: React.ReactNode }) {
   const { pending } = useFormStatus();
   return (
-    <Button type="submit" size="lg" disabled={pending} className="w-full">
+    <Button type="submit" size="lg" disabled={pending || blocked} className="w-full">
       {pending ? 'Reading your channel…' : children}
     </Button>
   );
@@ -141,101 +141,108 @@ export function CreatorOnboardingForm() {
     });
   }
 
+  // Submitting with an unresolved URL in the box posts the raw string, which
+  // the schema then rejects with "Check the highlighted fields" — a validation
+  // error for a link that was never checked. Blurring the field starts a
+  // lookup, so clicking straight through used to race it.
+  //
+  // Empty is still allowed: a creator with no channel can finish signing up,
+  // which is why `youtubeHandle` is optional in the first place.
+  const needsLookup = url.trim().length > 0 && channel === null;
+
   const errors = state.fieldErrors ?? {};
 
   return (
     <form action={formAction} className="space-y-2.5">
-      {/* --- 1. The channel ------------------------------------------------ */}
-      <Field
-        label="Your YouTube channel"
-        htmlFor="youtubeHandle"
-        error={lookupError ?? errors.youtubeHandle}
-        hint={channel ? undefined : 'Paste the address of your channel page. We read the rest from it.'}
-      >
-        <div className="flex gap-2">
-          <input
-            id="youtubeHandle"
-            name="youtubeHandle"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            onBlur={() => !channel && lookup()}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                // Enter in this field means "look it up", not "submit the form
-                // with three empty fields below".
-                e.preventDefault();
-                lookup();
-              }
-            }}
-            placeholder="https://www.youtube.com/@yourchannel"
-            autoCapitalize="off"
-            autoCorrect="off"
-            spellCheck={false}
-            className={FIELD}
-          />
-          <button
-            type="button"
-            onClick={lookup}
-            disabled={looking || !url.trim()}
-            className={cn(
-              'inline-flex h-10 shrink-0 items-center gap-1.5 rounded-md border border-line px-3',
-              'text-[12px] font-medium text-ink transition-colors hover:bg-paper disabled:opacity-50',
-            )}
-          >
-            {looking ? (
-              <LoaderCircle className="h-3.5 w-3.5 animate-spin" aria-hidden />
-            ) : (
-              <Search className="h-3.5 w-3.5" aria-hidden />
-            )}
-            Find
-          </button>
-        </div>
-      </Field>
-
-      {/* The acknowledgement. A lookup that silently fills two fields leaves
-          the creator unsure whether we found THEIR channel or someone else's
-          — so show what we found, with the subscriber count as the thing they
-          can check at a glance. */}
-      {channel ? (
-        <div className="flex items-center gap-3 rounded-panel border border-emerald/30 bg-emerald-wash px-4 py-3">
-          {channel.thumbnail ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={channel.thumbnail}
-              alt=""
-              width={36}
-              height={36}
-              className="h-9 w-9 shrink-0 rounded-full"
+      {/* --- 1. The channel, and what we found in it ----------------------
+          Side by side. The acknowledgement is a response to the field beside
+          it, and stacking them cost a whole row on a form that has to fit one
+          screen. */}
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field
+          label="Your YouTube channel"
+          htmlFor="youtubeHandle"
+          error={lookupError ?? errors.youtubeHandle}
+          hint={channel ? undefined : 'Paste your channel address.'}
+        >
+          <div className="flex gap-2">
+            <input
+              id="youtubeHandle"
+              name="youtubeHandle"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              onBlur={() => !channel && lookup()}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  // Enter means "look it up", not "submit with three empty
+                  // fields below".
+                  e.preventDefault();
+                  lookup();
+                }
+              }}
+              placeholder="youtube.com/@yourchannel"
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck={false}
+              className={FIELD}
             />
-          ) : (
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-ink/5 text-[12px] text-ink-muted">
-              {channel.title.slice(0, 1)}
+            <button
+              type="button"
+              onClick={lookup}
+              disabled={looking || !url.trim()}
+              className={cn(
+                'inline-flex h-10 shrink-0 items-center gap-1.5 rounded-md border border-line px-3',
+                'text-[12px] font-medium text-ink transition-colors hover:bg-paper disabled:opacity-50',
+              )}
+            >
+              {looking ? (
+                <LoaderCircle className="h-3.5 w-3.5 animate-spin" aria-hidden />
+              ) : (
+                <Search className="h-3.5 w-3.5" aria-hidden />
+              )}
+              Find
+            </button>
+          </div>
+        </Field>
+
+        {/* A lookup that silently fills two fields leaves the creator unsure
+            whether we found THEIR channel. The subscriber count is the thing
+            they can check at a glance. */}
+        {channel ? (
+          <div className="flex items-center gap-2.5 self-end rounded-panel border border-emerald/30 bg-emerald-wash px-3 py-2">
+            {channel.thumbnail ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={channel.thumbnail} alt="" width={28} height={28} className="h-7 w-7 shrink-0 rounded-full" />
+            ) : (
+              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-ink/5 text-[11px] text-ink-muted">
+                {channel.title.slice(0, 1)}
+              </span>
+            )}
+            <span className="min-w-0 flex-1">
+              <span className="flex items-center gap-1 text-[12px] font-medium text-ink">
+                <Check className="h-3 w-3 shrink-0 text-emerald" aria-hidden />
+                <span className="truncate">{channel.title}</span>
+              </span>
+              <span className="tnum block truncate text-[10px] text-ink-muted">
+                {channel.youtubeHandle}
+                {channel.subscribers !== null
+                  ? ` · ${compactNumber(channel.subscribers)} subs`
+                  : ' · subs hidden'}
+              </span>
             </span>
-          )}
-          <span className="min-w-0 flex-1">
-            <span className="flex items-center gap-1.5 text-[13px] font-medium text-ink">
-              <Check className="h-3.5 w-3.5 shrink-0 text-emerald" aria-hidden />
-              <span className="truncate">{channel.title}</span>
-            </span>
-            <span className="tnum mt-0.5 block truncate text-[11px] text-ink-muted">
-              {channel.youtubeHandle}
-              {channel.subscribers !== null
-                ? ` · ${compactNumber(channel.subscribers)} subscribers`
-                : ' · subscriber count hidden'}
-            </span>
-          </span>
-          <button
-            type="button"
-            onClick={() => {
-              setChannel(null);
-              setLookupError(null);
-            }}
-            className="shrink-0 text-[11px] text-ink-faint underline-offset-4 hover:underline"
-          >
-            Not me
-          </button>
-        </div>
-      ) : null}
+            <button
+              type="button"
+              onClick={() => {
+                setChannel(null);
+                setLookupError(null);
+              }}
+              className="shrink-0 text-[10px] text-ink-faint underline-offset-4 hover:underline"
+            >
+              Not me
+            </button>
+          </div>
+        ) : null}
+      </div>
 
       {/* --- 2. Identity, proposed from the channel ------------------------ */}
       <div className="grid gap-4 sm:grid-cols-2">
@@ -405,13 +412,14 @@ export function CreatorOnboardingForm() {
         </p>
       ) : null}
 
-      <SubmitButton>Publish my media kit</SubmitButton>
+      <SubmitButton blocked={needsLookup}>
+        {needsLookup ? 'Confirm your channel to continue' : 'Publish my media kit'}
+      </SubmitButton>
 
-      {/* Says where the bio went. A field that disappears without a word
-          reads as one that no longer exists. */}
+      {/* One line, and it still says where the bio went: a field that
+          disappears without a word reads as one that no longer exists. */}
       <p className="text-center text-[11px] leading-snug text-ink-faint">
-        Publishes immediately — add a bio any time in Settings. Age, gender and geography stay
-        empty until you connect YouTube.
+        Publishes immediately. Bio and demographics come later.
       </p>
     </form>
   );

@@ -29,7 +29,7 @@ export function AuthShell({
         <div className="grid-rule pointer-events-none absolute inset-x-0 top-0 h-48" aria-hidden />
 
         <div
-          className={`relative mx-auto w-full px-5 py-6 sm:px-8 sm:py-8 ${
+          className={`relative mx-auto w-full px-5 py-5 sm:px-8 sm:py-6 ${
             // 'form' is for a screen that must not scroll: wide enough that the
             // paired fields actually sit side by side rather than wrapping into
             // twice the rows, which is what pushed creator signup off one page.
@@ -44,7 +44,7 @@ export function AuthShell({
             <p className="mt-2 text-[13px] leading-relaxed text-ink-muted">{intro}</p>
           ) : null}
 
-          <div className="mt-5 rounded-panel border border-line bg-surface p-5">{children}</div>
+          <div className="mt-4 rounded-panel border border-line bg-surface p-4 sm:p-5">{children}</div>
 
           {aside}
 

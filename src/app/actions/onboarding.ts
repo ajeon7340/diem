@@ -255,9 +255,31 @@ export async function createCreatorProfile(
   if (error) {
     // 23505 covers both unique indexes on the table: handle and user_id.
     if (error.code === '23505') {
-      return error.message.includes('user_id')
-        ? { status: 'error', message: 'This account already has a creator profile.' }
-        : { status: 'error', fieldErrors: { handle: 'That handle is taken' } };
+      // BY CONSTRAINT, not by elimination. Everything that was not a user_id
+      // collision used to be reported as "That handle is taken" — so someone
+      // whose CHANNEL was already claimed (0022 puts a unique index on
+      // `youtube_channel_id`, and it is right to: two accounts holding one
+      // channel is impersonation) was told to pick a different handle. They
+      // can pick a hundred and none of them will work.
+      if (error.message.includes('user_id')) {
+        return { status: 'error', message: 'This account already has a creator profile.' };
+      }
+      if (error.message.includes('youtube_channel')) {
+        return {
+          status: 'error',
+          fieldErrors: {
+            youtubeHandle:
+              'That YouTube channel is already connected to another adfit account. If it is yours, sign in with the account that claimed it.',
+          },
+        };
+      }
+      if (error.message.includes('handle')) {
+        return { status: 'error', fieldErrors: { handle: 'That handle is taken' } };
+      }
+      // A constraint nobody anticipated. Say that, rather than blaming a field
+      // at random — a wrong field name sends someone editing the wrong thing.
+      console.error('[creators] unexpected unique violation', error.message);
+      return { status: 'error', message: 'Something about this profile collides with an existing one.' };
     }
     if (error.code === '23514') {
       return { status: 'error', fieldErrors: { handle: 'That handle is not allowed' } };

@@ -28,7 +28,6 @@ export default async function CreatorOnboardingPage() {
     <AuthShell
       eyebrow="Creator · Step 2 of 2"
       title="Connect your channel"
-      intro="Paste your channel — we read the rest from it."
       width="form"
       footer={null}
     >

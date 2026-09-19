@@ -114,5 +114,31 @@ check('1-char org rejected', businessOnboardingSchema.safeParse({ organizationNa
   check('a non-array still yields empty', commentClustersSchema.parse('nope'), []);
 }
 
+// ---------------------------------------------------------------------------
+// A price range that runs downwards
+//
+// `budgetRange` prints "$25,000-$15,000" for it and a creator reads a number
+// they did not mean to say. The settings form has always refused this; signup
+// did not, because the field only became a range later.
+// ---------------------------------------------------------------------------
+{
+  const base = {
+    handle: 'someone', displayName: 'Someone', niche: 'Music',
+    youtubeHandle: '', bio: null, budgetNegotiable: null, isDirectoryVisible: 'on',
+  };
+  const parse = (over: Record<string, unknown>) => creatorOnboardingSchema.safeParse({ ...base, ...over });
+  check('a rising range is fine', parse({ budgetMin: '15000', budgetMax: '25000' }).success, true);
+  check('equal ends are a single price', parse({ budgetMin: '15000', budgetMax: '15000' }).success, true);
+  check('a falling range is refused', parse({ budgetMin: '25000', budgetMax: '15000' }).success, false);
+  check(
+    'and the error points at the field',
+    parse({ budgetMin: '25000', budgetMax: '15000' }).error?.issues[0]?.path.join('.'),
+    'budgetMin',
+  );
+  // One figure and no figure both stay legal: the range is optional.
+  check('one figure alone is fine', parse({ budgetMin: '15000', budgetMax: '' }).success, true);
+  check('no figure at all is fine', parse({ budgetMin: '', budgetMax: '' }).success, true);
+}
+
 console.log(`\n  ${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);
