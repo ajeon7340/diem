@@ -101,7 +101,7 @@ export default async function CampaignPage({
           <div className="mt-6 print:hidden"><PrintReport/></div>
           <LiveReport active={[...jobs.values()].flat().some(j=>j.status==='queued'||j.status==='running')}/>
           <details className="mt-6 rounded border bg-surface p-5 print:hidden"><summary className="cursor-pointer text-sm">Edit campaign brief</summary><div className="mt-4"><CampaignForm campaign={campaign} customerType={viewer?.organization?.customerType??null}/></div></details>
-          {!AMENDMENT_ACCEPTED&&<p className="mt-5 text-sm text-ink-muted">Campaign suitability and comment analysis remain gated until applicable YouTube approval is configured. Review public source evidence directly.</p>}
+          {!AMENDMENT_ACCEPTED&&<p className="mt-5 text-sm text-ink-muted">Suitability and comment analysis are gated until YouTube approval is configured. Public evidence is below.</p>}
           <div className="mt-8 space-y-4">
             <Panel title="Add a candidate" meta="no creator signup required">
               <CandidateForm campaignId={campaign.id} />
@@ -110,7 +110,7 @@ export default async function CampaignPage({
             <ComparisonTable rows={rows} candidates={candidates} />
 
             {candidates.map((candidate, i) => (
-              <details key={candidate.id} className="candidate-detail rounded border bg-surface p-4"><summary className="cursor-pointer text-sm">{candidate.analysis?.title??candidate.submittedAs??'Pending channel'} · Campaign evaluation and review status</summary><div className="mt-4"><CandidateCard
+              <details key={candidate.id} className="candidate-detail rounded border bg-surface p-4"><summary className="cursor-pointer text-sm">{candidate.analysis?.title??candidate.submittedAs??'Pending channel'}</summary><div className="mt-4"><CandidateCard
                 campaignId={campaign.id}
                 candidate={candidate}
                 row={rows[i]}
@@ -120,7 +120,7 @@ export default async function CampaignPage({
           </div>
 
           <div className="campaign-print-details hidden print:block">{printReports.map(report=><div key={report.channelId} className="campaign-print-creator"><ChannelReport report={report}/></div>)}</div>
-          <p className="mt-5 text-xs text-ink-muted">Comparison generated {new Date().toISOString()}. Private notes, budgets and quoted fees are excluded from PDF output. Refresh or delete exported evidence by each report’s printed data deadline.</p>
+          <p className="mt-5 text-xs text-ink-muted">Generated {new Date().toISOString()}. PDFs exclude private notes, budgets and fees. Refresh or delete exports by each report’s printed deadline.</p>
           {/* Planning sits BELOW the candidate work, deliberately. Choosing who
               to brief is the decision this page exists for; what to make with
               them is the step after it, and putting it above would have a buyer

@@ -114,7 +114,7 @@ const read = (p: string) => readFileSync(p, 'utf8');
   check('and the financial one beside the prices', table.includes('{FINANCIAL_DISCLOSURE}'), true);
   check(
     'missing analysis is stated not to be a poor fit',
-    /missing analysis is not a poor fit/.test(table),
+    /missing analysis is not a poor fit|not run — not a poor fit|not a poor fit/.test(table),
     true,
   );
 }

@@ -11,6 +11,7 @@
 import { readFileSync } from 'node:fs';
 
 import { channelDestination, channelInput, freshData, nextStep, reportState } from '@/lib/channel/state';
+import { progressView, stageIndex } from '@/components/channel/AnalysisProgress';
 import type { AnalysisJob } from '@/types';
 
 let pass = 0, fail = 0;
@@ -166,6 +167,47 @@ check(
     /Each campaign can name a different one/.test(campaignForm),
     true,
   );
+}
+
+// ---------------------------------------------------------------------------
+// The progress bar may never estimate
+//
+// A bar is the most natural place in a product to start inventing a percentage
+// and a finishing time. This report has refused both everywhere else, and the
+// only honest fill here is a measured count of comments already analysed.
+// ---------------------------------------------------------------------------
+{
+  const run = (over: Partial<AnalysisJob>) => ({ status: 'running', progressStage: null, progressDone: null, progressTotal: null, ...over }) as AnalysisJob;
+
+  check('nothing running and nothing queued shows no bar', progressView([]), null);
+  check('a succeeded job shows no bar', progressView([{ status: 'succeeded' } as AnalysisJob]), null);
+
+  const queuedOnly = progressView([{ status: 'queued' } as AnalysisJob])!;
+  check('a queued job shows the bar but no stage', [queuedOnly.running, queuedOnly.stage], [false, -1]);
+  check('and no ratio', queuedOnly.ratio, null);
+
+  check('a stage with no counts yields no ratio', progressView([run({ progressStage: 'fetching' })])!.ratio, null);
+  check('a done count with no total yields no ratio', progressView([run({ progressDone: 40 })])!.ratio, null);
+  check('a zero total is not a denominator', progressView([run({ progressDone: 0, progressTotal: 0 })])!.ratio, null);
+
+  const measured = progressView([run({ progressStage: 'classifying', progressDone: 300, progressTotal: 1200 })])!;
+  check('a real count fills the bar', measured.ratio, 0.25);
+  check('and reports the figures it used', [measured.done, measured.total], [300, 1200]);
+  check(
+    'a count beyond the total is clamped rather than overflowing',
+    progressView([run({ progressDone: 99, progressTotal: 10 })])!.ratio,
+    1,
+  );
+
+  // Stage ordering, including the two names the worker uses for one step.
+  check('resolution is first', stageIndex('resolution'), 0);
+  check('comments and fetching are the same step', [stageIndex('comments'), stageIndex('fetching')], [2, 2]);
+  check('analysis and classifying are the same step', [stageIndex('analysis'), stageIndex('classifying')], [3, 3]);
+  check('report and storing are the same step', [stageIndex('report'), stageIndex('storing')], [4, 4]);
+  // The expensive direction to be wrong in: an unknown stage must not read as
+  // nearly finished.
+  check('an unrecognised stage is the beginning, not the end', stageIndex('something-new'), 0);
+  check('and so is no stage at all', stageIndex(null), 0);
 }
 
 console.log(`\n  ${pass} passed, ${fail} failed`);
