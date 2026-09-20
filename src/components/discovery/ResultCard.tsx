@@ -7,13 +7,23 @@ import {
 } from '@/lib/discovery/types';
 
 /**
- * One candidate, with its evidence one click away and its caveats not.
+ * One creator, as a row you can scan rather than a page you have to read.
  *
- * WHAT IS ALWAYS VISIBLE: who this is, why it appeared, when it was collected,
- * and — where ranking ran — how well supported the ranking is. WHAT IS BEHIND A
- * DISCLOSURE: the individual videos. Nothing that qualifies a claim hides
- * behind a tooltip; a limitation somebody has to hover to find is a limitation
- * most readers never see.
+ * WHAT LEADS: the picture, the name, the handle, what the channel is about, and
+ * why this search surfaced it. WHAT FOLLOWS, quietly: subscribers, uploads,
+ * views, collection time. A buyer scanning twenty rows is asking "is this the
+ * kind of creator I want" — subscriber count answers a later question, and
+ * putting it in the same weight as the reason makes the list sort itself by
+ * size in the reader's head.
+ *
+ * NOTHING LONG IS OPEN BY DEFAULT. The supporting videos, the collaboration
+ * records and the score breakdown are all one disclosure away, and the full
+ * read of the channel is a different page. A list that expands three reports
+ * inline is a list nobody scrolls.
+ *
+ * What is NOT behind a disclosure is any sentence that qualifies a claim. A
+ * limitation you have to open something to find is a limitation most readers
+ * never see.
  */
 
 const BAND_TONE: Record<Relevance['band'], 'emerald' | 'indigo' | 'slate' | 'amber'> = {
@@ -27,7 +37,7 @@ const BAND_LABEL: Record<Relevance['band'], string> = {
   strong: 'Strong match',
   moderate: 'Moderate match',
   weak: 'Weak match',
-  provisional: 'Provisional — thin evidence',
+  provisional: 'Provisional',
 };
 
 export function ResultCard({
@@ -42,195 +52,199 @@ export function ResultCard({
   /** Whether OUR scoring ran. False renders YouTube's order and says so. */
   ranked: boolean;
   selected?: boolean;
-  /** Actions, supplied by the list so selection stays in one place. */
   children?: React.ReactNode;
 }) {
   const relevance = candidate.relevance;
+  const disclosed = candidate.collaborations.filter((r) => r.classification === 'explicit_paid').length;
 
   return (
     <article
-      className={`surface-card p-4 transition-colors sm:p-5 ${selected ? 'border-indigo/40 bg-indigo-wash/30' : ''}`}
+      className={`rounded-xl border bg-surface p-3.5 transition-colors sm:p-4 ${
+        selected ? 'border-indigo/40 bg-indigo-wash/25' : 'border-line hover:border-line-strong'
+      }`}
     >
-      <div className="flex flex-wrap items-start gap-4">
+      <div className="flex gap-3.5">
         {candidate.avatar ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={candidate.avatar} alt="" width={48} height={48} className="h-12 w-12 shrink-0 rounded-full" />
+          <img src={candidate.avatar} alt="" width={44} height={44} className="h-11 w-11 shrink-0 rounded-full" />
         ) : (
           <div
             aria-hidden
-            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-paper text-[13px] font-semibold text-ink-faint"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-paper text-[13px] font-semibold text-ink-faint"
           >
             {candidate.title.slice(0, 1)}
           </div>
         )}
 
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-            <h3 className="truncate text-[15px] font-semibold text-ink">{candidate.title}</h3>
-            {candidate.handle ? (
-              <span className="truncate text-[12px] text-ink-muted">{candidate.handle}</span>
-            ) : null}
+          <div className="flex flex-wrap items-baseline gap-x-2">
+            <h3 className="text-[14px] font-semibold text-ink">{candidate.title}</h3>
+            {candidate.handle ? <span className="text-[12px] text-ink-muted">{candidate.handle}</span> : null}
+            {ranked && relevance ? (
+              <Badge tone={BAND_TONE[relevance.band]} className="ml-auto shrink-0">
+                {BAND_LABEL[relevance.band]}
+              </Badge>
+            ) : (
+              <span className="tnum ml-auto shrink-0 text-[11px] text-ink-faint">#{position + 1}</span>
+            )}
+          </div>
+
+          {candidate.description ? (
+            <p className="mt-1 line-clamp-1 text-[12px] text-ink-muted">{candidate.description}</p>
+          ) : null}
+
+          <p className="mt-1.5 line-clamp-2 text-[13px] leading-relaxed text-ink">{candidate.reason}</p>
+
+          {/* Secondary by design: figures a buyer needs later, not while
+              deciding whether this is the right kind of creator at all. */}
+          <dl className="tnum mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-[11px] text-ink-faint">
+            <Stat
+              label="subs"
+              value={
+                candidate.hiddenSubscribers
+                  ? 'hidden'
+                  : candidate.subscribers === null
+                    ? 'not reported'
+                    : compact(candidate.subscribers)
+              }
+            />
+            <Stat label="uploads" value={candidate.videoCount === null ? 'not reported' : compact(candidate.videoCount)} />
+            <Stat label="views" value={candidate.viewCount === null ? 'not reported' : compact(candidate.viewCount)} />
+            {candidate.collectedAt ? <Stat label="read" value={candidate.collectedAt.slice(0, 10)} /> : null}
+          </dl>
+
+          <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-2">
+            {children}
             <a
               href={candidate.url}
               target="_blank"
               rel="noreferrer noopener"
-              className="text-[12px] text-indigo underline-offset-4 hover:underline"
+              className="text-[12px] text-ink-muted underline-offset-4 hover:text-ink hover:underline"
             >
-              Open on YouTube
+              YouTube
             </a>
+            {candidate.collaborations.length > 0 ? (
+              <Disclosure label={`Evidence (${candidate.collaborations.length}${disclosed ? `, ${disclosed} disclosed` : ''})`}>
+                <ul className="space-y-3">
+                  {candidate.collaborations.map((record) => (
+                    <li key={`${record.brand}-${record.videoId}`} className="border-t border-line pt-3 first:border-0 first:pt-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge tone={record.classification === 'explicit_paid' ? 'emerald' : 'slate'}>
+                          {EVIDENCE_CLASS_LABEL[record.classification]}
+                        </Badge>
+                        <span className="text-[12px] font-medium text-ink">{record.brand}</span>
+                        {record.product ? <span className="text-[12px] text-ink-muted">· {record.product}</span> : null}
+                      </div>
+                      <a
+                        href={record.videoUrl}
+                        target="_blank"
+                        rel="noreferrer noopener"
+                        className="mt-1.5 block text-[12px] text-indigo underline-offset-4 hover:underline"
+                      >
+                        {record.videoTitle}
+                      </a>
+                      {record.excerpt ? (
+                        <blockquote className="mt-1.5 border-l-2 border-line pl-3 text-[12px] leading-relaxed text-ink-muted">
+                          {record.excerpt}
+                        </blockquote>
+                      ) : null}
+                      <p className="mt-1.5 text-[11px] leading-relaxed text-ink-faint">
+                        {record.ambiguity} {EVIDENCE_CLASS_LIMIT[record.classification]}
+                      </p>
+                      <p className="tnum mt-1 text-[11px] text-ink-faint">
+                        {record.publishedAt ? `Published ${record.publishedAt.slice(0, 10)} · ` : ''}
+                        Collected {record.collectedAt.slice(0, 10)} · {record.source}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              </Disclosure>
+            ) : null}
+
+            {candidate.evidence.length > 0 ? (
+              <Disclosure label={`Videos (${candidate.evidence.length})`}>
+                <ul className="space-y-2">
+                  {candidate.evidence.map((video) => (
+                    <li key={video.videoId} className="text-[12px]">
+                      <a
+                        href={`https://www.youtube.com/watch?v=${video.videoId}`}
+                        target="_blank"
+                        rel="noreferrer noopener"
+                        className="text-indigo underline-offset-4 hover:underline"
+                      >
+                        {video.title}
+                      </a>
+                      <p className="mt-0.5 text-[11px] text-ink-faint">
+                        {video.matchedTerms.length
+                          ? `Matched ${video.matchedTerms.slice(0, 4).map((t) => `“${t}”`).join(', ')} in the ${video.matchedIn}`
+                          : 'Returned by the search; none of your terms appear in the text read'}
+                        {video.publishedAt ? ` · ${video.publishedAt.slice(0, 10)}` : ''}
+                        {video.paidPromotion === true ? ' · YouTube flags paid promotion on this video' : ''}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              </Disclosure>
+            ) : null}
+
+            {ranked && relevance ? (
+              <Disclosure label={`Score — ${Math.round(relevance.evidenceCoverage * 100)}% measured`}>
+                <ul className="space-y-1.5">
+                  {relevance.parts.map((part) => (
+                    <li key={part.key} className="flex flex-wrap items-baseline justify-between gap-2 text-[12px]">
+                      <span className="text-ink-muted">{part.label}</span>
+                      <span className={`tnum ${part.value === null ? 'text-ink-faint' : 'text-ink'}`}>
+                        {part.value === null ? 'Not measured' : `${Math.round(part.value * 100)}%`}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                {relevance.missing.length ? (
+                  <p className="mt-2.5 text-[11px] leading-relaxed text-ink-faint">
+                    Not measured here: {relevance.missing.join(' ')}
+                  </p>
+                ) : null}
+                <p className="mt-2 text-[11px] leading-relaxed text-ink-faint">
+                  Results in group {relevance.tiedGroup} are not distinguished — their order inside it is arbitrary.
+                </p>
+              </Disclosure>
+            ) : null}
           </div>
-
-          <dl className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-[12px]">
-            <Stat
-              label="Subscribers"
-              value={
-                candidate.hiddenSubscribers
-                  ? 'Hidden by the creator'
-                  : candidate.subscribers?.toLocaleString('en-US') ?? 'Not reported'
-              }
-            />
-            <Stat label="Public uploads" value={candidate.videoCount?.toLocaleString('en-US') ?? 'Not reported'} />
-            <Stat label="Channel views" value={candidate.viewCount?.toLocaleString('en-US') ?? 'Not reported'} />
-          </dl>
-
-          <p className="mt-3 max-w-[70ch] text-[13px] leading-relaxed text-ink">{candidate.reason}</p>
-
-          {candidate.description ? (
-            <p className="mt-2 max-w-[70ch] truncate text-[12px] text-ink-muted">{candidate.description}</p>
-          ) : null}
-        </div>
-
-        <div className="flex shrink-0 flex-col items-end gap-2">
-          <span className="tnum text-[11px] text-ink-faint">
-            {ranked && relevance ? `Group ${relevance.tiedGroup}` : `#${position + 1} as YouTube returned`}
-          </span>
-          {ranked && relevance ? (
-            <Badge tone={BAND_TONE[relevance.band]}>{BAND_LABEL[relevance.band]}</Badge>
-          ) : null}
         </div>
       </div>
-
-      {ranked && relevance ? <RelevanceDetail relevance={relevance} /> : null}
-
-      {candidate.collaborations.length > 0 ? (
-        <details className="mt-3 rounded-xl border border-line bg-paper px-3 py-2">
-          <summary className="cursor-pointer text-[12px] font-medium text-ink">
-            Collaboration evidence ({candidate.collaborations.length})
-          </summary>
-          <ul className="mt-3 space-y-3">
-            {candidate.collaborations.map((record) => (
-              <li key={`${record.brand}-${record.videoId}`} className="border-t border-line pt-3 first:border-0 first:pt-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge tone={record.classification === 'explicit_paid' ? 'emerald' : 'slate'}>
-                    {EVIDENCE_CLASS_LABEL[record.classification]}
-                  </Badge>
-                  <span className="text-[12px] font-medium text-ink">{record.brand}</span>
-                  {record.product ? <span className="text-[12px] text-ink-muted">· {record.product}</span> : null}
-                </div>
-                <a
-                  href={record.videoUrl}
-                  target="_blank"
-                  rel="noreferrer noopener"
-                  className="mt-1.5 block text-[12px] text-indigo underline-offset-4 hover:underline"
-                >
-                  {record.videoTitle}
-                </a>
-                {record.excerpt ? (
-                  <blockquote className="mt-1.5 border-l-2 border-line pl-3 text-[12px] leading-relaxed text-ink-muted">
-                    {record.excerpt}
-                  </blockquote>
-                ) : null}
-                <p className="mt-1.5 text-[11px] leading-relaxed text-ink-faint">
-                  {record.ambiguity} {EVIDENCE_CLASS_LIMIT[record.classification]}
-                </p>
-                <p className="tnum mt-1 text-[11px] text-ink-faint">
-                  {record.publishedAt ? `Published ${record.publishedAt.slice(0, 10)} · ` : ''}
-                  Collected {record.collectedAt.slice(0, 10)} · {record.source}
-                </p>
-              </li>
-            ))}
-          </ul>
-        </details>
-      ) : null}
-
-      {candidate.evidence.length > 0 ? (
-        <details className="mt-2 rounded-xl border border-line bg-paper px-3 py-2">
-          <summary className="cursor-pointer text-[12px] font-medium text-ink">
-            Supporting videos ({candidate.evidence.length})
-          </summary>
-          <ul className="mt-3 space-y-2">
-            {candidate.evidence.map((video) => (
-              <li key={video.videoId} className="text-[12px]">
-                <a
-                  href={`https://www.youtube.com/watch?v=${video.videoId}`}
-                  target="_blank"
-                  rel="noreferrer noopener"
-                  className="text-indigo underline-offset-4 hover:underline"
-                >
-                  {video.title}
-                </a>
-                <p className="mt-0.5 text-[11px] text-ink-faint">
-                  {video.matchedTerms.length
-                    ? `Matched ${video.matchedTerms.map((t) => `“${t}”`).join(', ')} in the ${video.matchedIn}`
-                    : 'Returned by the search; none of your terms appear in the text read'}
-                  {video.publishedAt ? ` · published ${video.publishedAt.slice(0, 10)}` : ''}
-                  {video.paidPromotion === true ? ' · YouTube flags paid promotion on this video' : ''}
-                </p>
-              </li>
-            ))}
-          </ul>
-        </details>
-      ) : null}
-
-      <p className="tnum mt-3 text-[11px] text-ink-faint">
-        Collected {candidate.collectedAt ? candidate.collectedAt.slice(0, 16).replace('T', ' ') : 'unknown'} UTC
-      </p>
-
-      {children ? <div className="mt-3 flex flex-wrap items-center gap-2">{children}</div> : null}
     </article>
+  );
+}
+
+/** A `details` styled as a quiet inline toggle rather than a panel. */
+function Disclosure({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <details className="group w-full">
+      <summary className="inline-flex cursor-pointer list-none items-center text-[12px] text-ink-muted underline-offset-4 hover:text-ink hover:underline">
+        {label}
+      </summary>
+      <div className="mt-2.5 rounded-lg border border-line bg-paper px-3 py-2.5">{children}</div>
+    </details>
   );
 }
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div>
-      <dt className="text-ink-faint">{label}</dt>
-      <dd className="tnum font-medium text-ink">{value}</dd>
+    <div className="flex items-baseline gap-1">
+      <dt className="sr-only">{label}</dt>
+      <dd>
+        {value} <span className="text-[10px] uppercase tracking-wide">{label}</span>
+      </dd>
     </div>
   );
 }
 
 /**
- * The score, taken apart.
- *
- * A single number is not checkable; its parts are. A signal with no evidence
- * shows as "not measured" and NOT as a zero — the two sort identically on a bar
- * chart and mean opposite things.
+ * 76,500 reads as 76.5K in a row of four figures. The exact number is on the
+ * channel's own report; this column is for scanning.
  */
-function RelevanceDetail({ relevance }: { relevance: Relevance }) {
-  return (
-    <details className="mt-3 rounded-xl border border-line bg-paper px-3 py-2">
-      <summary className="cursor-pointer text-[12px] font-medium text-ink">
-        How this was scored — {Math.round(relevance.evidenceCoverage * 100)}% of the signals had evidence
-      </summary>
-      <ul className="mt-3 space-y-1.5">
-        {relevance.parts.map((part) => (
-          <li key={part.key} className="flex flex-wrap items-baseline justify-between gap-2 text-[12px]">
-            <span className="text-ink-muted">{part.label}</span>
-            <span className={`tnum ${part.value === null ? 'text-ink-faint' : 'text-ink'}`}>
-              {part.value === null ? 'Not measured' : `${Math.round(part.value * 100)}%`}
-            </span>
-          </li>
-        ))}
-      </ul>
-      {relevance.missing.length ? (
-        <p className="mt-2.5 text-[11px] leading-relaxed text-ink-faint">
-          Not measured here: {relevance.missing.join(' ')}
-        </p>
-      ) : null}
-      <p className="mt-2 text-[11px] leading-relaxed text-ink-faint">
-        Results in the same group are not distinguished — their order inside it is arbitrary.
-      </p>
-    </details>
-  );
+function compact(value: number): string {
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(value >= 10_000_000 ? 0 : 1)}M`;
+  if (value >= 1_000) return `${(value / 1_000).toFixed(value >= 10_000 ? 0 : 1)}K`;
+  return String(value);
 }

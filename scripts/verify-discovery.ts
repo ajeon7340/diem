@@ -921,6 +921,59 @@ void (async () => {
   const worker = readFileSync('scripts/worker.ts', 'utf8');
   check('collect_channel finally has a handler', worker.includes('collect_channel: runCollection'), true);
 
+  // ---------------------------------------------------------------------------
+  // The workspace layout, pinned where it is load-bearing
+  //
+  // Not styling for its own sake. Each of these is a rule somebody will undo
+  // with a plausible tidy-up: collapsing the rail's two regions makes Search
+  // scroll away on a laptop, dropping `min-w-0` makes one long Korean channel
+  // name push the whole results column sideways, and adding a sort option is
+  // how a control that reorders fifteen retrieved rows starts reading as a way
+  // to search all of YouTube.
+  // ---------------------------------------------------------------------------
+
+  const panel = readFileSync('src/components/discovery/FilterPanel.tsx', 'utf8');
+  check('the filter rail is a fixed width at lg', panel.includes('lg:w-[300px]'), true);
+  check('and is bounded by the viewport so it can scroll inside', panel.includes('lg:max-h-[calc(100vh-7rem)]'), true);
+  check('below lg it is a drawer, not a squeezed column', panel.includes('lg:hidden') && panel.includes('aria-controls="discovery-filters"'), true);
+  check('Escape closes it', panel.includes("event.key === 'Escape'"), true);
+  check('and focus returns to the control that opened it', panel.includes('opener.current?.focus()'), true);
+
+  const forms = readFileSync('src/components/discovery/SearchForms.tsx', 'utf8');
+  check('fields scroll in their own region', forms.includes('overflow-y-auto'), true);
+  check('while submit and reset sit outside it', forms.includes('shrink-0 border-t border-line bg-surface'), true);
+  check('reset is the native one, so it restores what was searched for', forms.includes('type="reset"'), true);
+  check('optional filters are folded away', forms.includes('More filters'), true);
+  check(
+    'nothing fires a request while typing — every mode is a plain submit',
+    /onChange|onInput|useEffect/.test(forms),
+    false,
+  );
+
+  const list = readFileSync('src/components/discovery/ResultList.tsx', 'utf8');
+  check('the results column cannot be pushed sideways by a long name', list.includes('min-w-0 flex-1'), true);
+  check('the result count leads the results header', list.includes('creator{candidates.length === 1'), true);
+  // Only the sort control's own options, not the campaign picker's.
+  const sortOptions = list
+    .slice(list.indexOf('value={order}'), list.indexOf('</select>', list.indexOf('value={order}')))
+    .match(/<option value="([^"]*)"/g) ?? [];
+  check(
+    'sorting offers only what exists: the search order, and the figure we hold',
+    sortOptions,
+    ['<option value="search"', '<option value="subscribers"'],
+  );
+  check('and says it reorders this page rather than re-searching', list.includes('It does not run a new search.'), true);
+  check('a hidden subscriber count sorts last, not as zero', list.includes('(b.subscribers ?? -1) - (a.subscribers ?? -1)'), true);
+
+  const card = readFileSync('src/components/discovery/ResultCard.tsx', 'utf8');
+  check(
+    'the reason outranks the figures in the card',
+    card.indexOf('{candidate.reason}') < card.indexOf('label="subs"'),
+    true,
+  );
+  check('long evidence stays collapsed in the list', card.includes('<details'), true);
+  check('a hidden subscriber count is never printed as a number', card.includes("? 'hidden'"), true);
+
   console.log(`\n  ${pass} passed, ${fail} failed`);
   console.log('  All checks ran against fixtures. No live API call was made.');
   process.exit(fail === 0 ? 0 : 1);
