@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 
+import { AMENDMENT_ACCEPTED } from '@/lib/report/policy';
 import { getViewer } from '@/lib/access/viewer';
 import { getCampaign } from '@/lib/data/campaigns';
 import { createSessionClient, isSupabaseConfigured } from '@/lib/supabase/server';
@@ -42,6 +43,7 @@ export async function analyseReference(
   _prev: ReferenceState,
   formData: FormData,
 ): Promise<ReferenceState> {
+  if (!AMENDMENT_ACCEPTED) return { ...INITIAL_REFERENCE,status:'error',message:'Derived analysis requires configured YouTube approval.' };
   const viewer = await getViewer();
   if (!viewer.organization) {
     return { ...INITIAL_REFERENCE, status: 'error', message: 'Sign in to a workspace first.' };
@@ -92,6 +94,7 @@ export async function saveReference(
   _prev: ReferenceState,
   formData: FormData,
 ): Promise<ReferenceState> {
+  if (!AMENDMENT_ACCEPTED) return { ...INITIAL_REFERENCE,status:'error',message:'Derived analysis requires configured YouTube approval.' };
   const viewer = await getViewer();
   if (!viewer.organization || !isSupabaseConfigured()) {
     return { ...INITIAL_REFERENCE, status: 'error', message: 'Sign in to a workspace first.' };

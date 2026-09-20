@@ -1,3 +1,5 @@
+import { AMENDMENT_ACCEPTED } from '@/lib/report/policy';
+import { freshData } from '@/lib/channel/state';
 import 'server-only';
 
 import { createSessionClient, isSupabaseConfigured } from '@/lib/supabase/server';
@@ -17,6 +19,7 @@ export interface Campaign {
   name: string;
   brand: string | null;
   product: string | null;
+  useCase?: string | null;
   audience: string | null;
   objective: string | null;
   avoidTopics: string | null;
@@ -72,7 +75,7 @@ export interface Candidate {
   proposedFee: number | null;
   feeCurrency: string;
   notes: string | null;
-  status: 'considering' | 'shortlisted' | 'rejected';
+  status: 'considering' | 'shortlisted' | 'hold' | 'rejected';
   fit: CandidateFit | null;
   fitModel: string | null;
   fitWrittenAt: string | null;
@@ -114,6 +117,7 @@ function toCampaign(row: Record<string, unknown>): Campaign {
     name: row.name as string,
     brand: (row.brand as string) ?? null,
     product: (row.product as string) ?? null,
+    useCase: (row.use_case as string) ?? null,
     audience: (row.audience as string) ?? null,
     objective: (row.objective as string) ?? null,
     avoidTopics: (row.avoid_topics as string) ?? null,
@@ -154,7 +158,7 @@ export async function getCandidates(campaignId: string): Promise<Candidate[]> {
     .select('*')
     .in('channel_id', ids)
     .returns<Record<string, unknown>[]>();
-  const byChannel = new Map((analyses ?? []).map((a) => [a.channel_id as string, a]));
+  const byChannel = new Map((analyses ?? []).filter(a=>freshData(a.data_fetched_at)).map((a) => [a.channel_id as string, a]));
 
   return (rows ?? []).map((row) => {
     const raw = byChannel.get(row.channel_id as string);
@@ -166,7 +170,7 @@ export async function getCandidates(campaignId: string): Promise<Candidate[]> {
       feeCurrency: (row.fee_currency as string) ?? 'USD',
       notes: (row.notes as string) ?? null,
       status: row.status as Candidate['status'],
-      fit: (row.fit_summary as CandidateFit) ?? null,
+      fit: AMENDMENT_ACCEPTED && raw ? (row.fit_summary as CandidateFit) ?? null : null,
       fitModel: (row.fit_model as string) ?? null,
       fitWrittenAt: (row.fit_written_at as string) ?? null,
       addedAt: row.added_at as string,
@@ -176,6 +180,7 @@ export async function getCandidates(campaignId: string): Promise<Candidate[]> {
 }
 
 function toAnalysis(row: Record<string, unknown>): ChannelAnalysis {
+  row = AMENDMENT_ACCEPTED ? row : { ...row, moderation:null, comment_axes:null, top_comment_clusters:[], comment_risks:[], sentiment_score:null,purchase_intent_rate:null,intent_comments_scored:null,analysed_at:null };
   const moderation = (row.moderation ?? null) as { commentsScanned?: number } | null;
   const axes = (row.comment_axes ?? null) as { total?: number } | null;
   return {
@@ -186,7 +191,7 @@ function toAnalysis(row: Record<string, unknown>): ChannelAnalysis {
     description: (row.description as string) ?? null,
     subscribers: row.subscribers === null ? null : Number(row.subscribers),
     outputStats: (row.output_stats ?? []) as PlatformOutput[],
-    promotions: (row.promotions ?? []) as Promotion[],
+    promotions: ((row.promotions ?? []) as Promotion[]).filter(p=>AMENDMENT_ACCEPTED||p.disclosure==='explicit'),
     // Parsed through the same schemas the creator path uses, so one bad row
     // degrades one cluster instead of the panel.
     clusters: commentClustersSchema.parse(row.top_comment_clusters ?? []),
@@ -205,7 +210,7 @@ function toAnalysis(row: Record<string, unknown>): ChannelAnalysis {
     // The axes are the model pass's output. Without them the report has
     // counts and no reading, and every surface has to say which it is.
     classified: (axes?.total ?? 0) > 0,
-    analysisRan: row.analysed_at !== null,
+    analysisRan: row.analysed_at != null,
   };
 }
 
@@ -263,6 +268,10 @@ export async function getChannelJobs(channelIds: string[]): Promise<Map<string, 
       progressStage: (row.progress_stage as AnalysisJob['progressStage']) ?? null,
     });
     out.set(channelId, list);
+  }
+  for (const [id, jobs] of out) {
+    const collection = jobs.find(j=>j.kind==='collect_channel');
+    if (collection) out.set(id,jobs.filter(j=>j.kind==='collect_channel'||j.queuedAt>=collection.queuedAt));
   }
   return out;
 }

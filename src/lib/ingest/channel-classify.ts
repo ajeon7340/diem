@@ -1,3 +1,5 @@
+import { describeContent } from '@/lib/channel/content-profile';
+import type { VideoEvidence } from './analyze';
 import 'server-only';
 
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -7,6 +9,7 @@ import { AMENDMENT_ACCEPTED } from '@/lib/report/policy';
 import { aiModel, aiProvider } from '@/lib/ai/provider';
 import {
   classifyComments,
+  ClaimLostError,
   type FetchedCorpus,
   rollUp,
   type ClassifyRunOptions,
@@ -48,21 +51,21 @@ function requireKeys(): void {
   if (!process.env[keyVar]) throw new Error(`${keyVar} is required for ${aiProvider()}.`);
 }
 
-async function storedCorpus(supabase: SupabaseClient, channelId: string): Promise<FetchedCorpus> {
+async function storedCorpus(supabase: SupabaseClient, channelId: string): Promise<FetchedCorpus & { fetchedAt:string }> {
   const { data, error } = await supabase.from('channel_analyses')
     .select('comment_corpus,evidence,data_fetched_at').eq('channel_id',channelId).maybeSingle();
   if (error || !data || !freshData(data.data_fetched_at) || !Array.isArray(data.comment_corpus)) {
     throw Object.assign(new Error('Refresh channel data before analysing comments.'), { terminal: true });
   }
   return { comments: data.comment_corpus, videos: data.evidence?.videos?.length ?? 0,
-    unreadable: data.evidence?.unreadable ?? 0, channelId };
+    unreadable: data.evidence?.unreadable ?? 0, channelId, fetchedAt:data.data_fetched_at };
 }
 
 /** Brand safety over a channel's comments. Never swallows — the worker marks the job. */
 export async function classifyChannelAndStore(
   supabase: SupabaseClient,
   channelId: string,
-  options: ClassifyRunOptions & { maxVideos?: number; maxComments?: number } = {},
+  options: ClassifyRunOptions & { maxVideos?: number; maxComments?: number; jobId?:string; worker?:string } = {},
 ): Promise<ChannelClassifyResult> {
   requireKeys();
 
@@ -73,16 +76,15 @@ export async function classifyChannelAndStore(
   // honest value here, not a stand-in for one we failed to read.
   const rollup = rollUp(corpus.comments, flagged, corpus.channelId);
 
-  if (options.stillMine && !(await options.stillMine())) throw new Error('Job lease lost before storing.');
-  const { error } = await supabase
-    .from('channel_analyses')
-    .update({
+  if (options.stillMine && !(await options.stillMine())) throw new ClaimLostError();
+  const { data: committed, error } = await supabase.rpc('commit_channel_classification', {
+    p_job:options.jobId,p_worker:options.worker,p_fetched_at:corpus.fetchedAt,p_fields:{
       comment_risks: rollup.risks,
       comment_register: rollup.register,
       moderation: rollup.moderation,
       analysed_at: new Date().toISOString(),
-    })
-    .eq('channel_id', channelId);
+    }});
+  if (!error && !committed) throw new ClaimLostError();
   if (error) throw new Error(`channel_analyses write failed: ${error.message}`);
 
   return {
@@ -106,7 +108,7 @@ export interface ChannelIntentResult {
 export async function classifyChannelIntentAndStore(
   supabase: SupabaseClient,
   channelId: string,
-  options: IntentRunOptions & { maxVideos?: number; maxComments?: number } = {},
+  options: IntentRunOptions & { maxVideos?: number; maxComments?: number; jobId?:string; worker?:string } = {},
 ): Promise<ChannelIntentResult> {
   requireKeys();
 
@@ -116,11 +118,13 @@ export async function classifyChannelIntentAndStore(
   const rollup = rollUpAxes(labels);
   const clusters = buildClusters(corpus.comments, labels);
   const { measurement } = rollup;
+  const { data: source } = await supabase.from('channel_analyses').select('evidence').eq('channel_id',channelId).maybeSingle();
+  const contentProfile = await describeContent((source?.evidence?.videos??[]) as VideoEvidence[]);
 
-  if (options.stillMine && !(await options.stillMine())) throw new Error('Job lease lost before storing.');
-  const { error } = await supabase
-    .from('channel_analyses')
-    .update({
+  if (options.stillMine && !(await options.stillMine())) throw new ClaimLostError();
+  const { data: committed, error } = await supabase.rpc('commit_channel_classification', {
+    p_job:options.jobId,p_worker:options.worker,p_fetched_at:corpus.fetchedAt,p_fields:{
+      content_profile: contentProfile,
       comment_axes: rollup.axes,
       top_comment_clusters: clusters,
       sentiment_score: rollup.sentiment,
@@ -135,8 +139,8 @@ export async function classifyChannelIntentAndStore(
       comments_analyzed: rollup.axes.total,
       model_version: `${aiProvider()}:${aiModel()}`,
       analysed_at: new Date().toISOString(),
-    })
-    .eq('channel_id', channelId);
+    }});
+  if (!error && !committed) throw new ClaimLostError();
   if (error) throw new Error(`channel_analyses write failed: ${error.message}`);
 
   return {

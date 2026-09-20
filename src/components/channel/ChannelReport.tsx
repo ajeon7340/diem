@@ -1,3 +1,4 @@
+import { DERIVED_DISCLOSURE } from '@/lib/report/policy';
 import type { ReactNode } from 'react';
 import type { ChannelReportView } from '@/lib/channel/report';
 import { performance } from '@/lib/channel/report';
@@ -5,7 +6,7 @@ import { safeExternalUrl } from '@/lib/format';
 const date=(value:string|null)=>value?new Date(value).toLocaleDateString('en-US',{timeZone:'UTC'}):'Not recorded';
 const number=(value:number|null)=>value===null?'Unavailable':value.toLocaleString('en-US');
 function Section({title,report,children,limitation}:{title:string;report:ChannelReportView;children:ReactNode;limitation:string}) {
- return <section className="report-section rounded-lg border bg-surface p-6"><h2 className="mb-4 text-lg font-semibold">{title}</h2>{children}<p className="mt-5 border-t pt-3 text-xs leading-relaxed text-ink-muted">Source: official YouTube Data API · Collected {date(report.fetchedAt)} · Period {date(report.start)}–{date(report.end)} · Sample: {report.videos.length} videos, {report.comments} comments. {limitation}</p></section>;
+ return <section className="report-section rounded-lg border bg-surface p-6"><h2 className="mb-4 text-lg font-semibold">{title}</h2>{children}<p className="mt-5 border-t pt-3 text-xs leading-relaxed text-ink-muted">Source: {report.channelId==='sample'?'Illustrative fixture, not collected from YouTube':'official YouTube Data API'} · Collected {date(report.fetchedAt)} · Period {date(report.start)}–{date(report.end)} · Sample: {report.videos.length} videos, {report.comments} comments. {limitation}</p></section>;
 }
 export function ChannelReport({report,sample=false,format='all'}:{report:ChannelReportView;sample?:boolean;format?:string}) {
  const selected=report.videos.filter(v=>format==='all'||v.format===format);
@@ -18,14 +19,15 @@ export function ChannelReport({report,sample=false,format='all'}:{report:Channel
  {report.avatar&&<img src={report.avatar} alt="" className="h-16 w-16 rounded-full"/>}
  <div><p className="rail">YouTube channel report</p><h1 className="mt-2 text-3xl font-semibold">{report.title}</h1><p className="mt-1 text-sm text-ink-muted">{report.handle}</p></div></header>
  <Section title="Executive summary" report={report} limitation="The report describes this bounded public sample, independently of any campaign.">
- <p>{report.description||'No channel description available.'}</p>
+ <p>{report.contentProfile?.summary||report.description||'No channel description available.'}</p>
  <dl className="my-5 grid gap-4 sm:grid-cols-3"><div><dt className="text-sm text-ink-muted">Subscribers</dt><dd className="mt-1 text-xl">{number(report.subscribers)}</dd></div><div><dt className="text-sm text-ink-muted">Recent uploads sampled</dt><dd className="mt-1 text-xl">{report.videos.length}</dd></div><div><dt className="text-sm text-ink-muted">Public paid-promotion disclosures</dt><dd className="mt-1 text-xl">{explicit.length}</dd></div></dl>
  <p className="text-sm">{report.clusters.length?`Observed comment themes: ${report.clusters.slice(0,3).map(c=>c.label).join('; ')}.`:'Comment interests and questions have not been established.'}</p>
  <p className="mt-3 text-sm">Confirm product experience, proposed format, usage rights and availability before contracting. Public data cannot establish audience demographics, sales or future results.</p>
  </Section>
  <Section title="Content profile" report={report} limitation="Titles are creator-provided evidence. Recurring topics and series are not inferred without approved analysis.">
+ {report.contentProfile?.topics.map((topic,i)=><details key={i} open className="mb-3 rounded border p-3"><summary className="text-sm font-medium">{topic.label}</summary><p className="mt-2 text-sm text-ink-muted">{topic.limitation}</p><ul className="mt-2 text-sm">{topic.videoIds.map(id=><li key={id}><a className="text-indigo" href={`https://www.youtube.com/watch?v=${encodeURIComponent(id)}`}>{report.videos.find(v=>v.id===id)?.title??'Supporting video'}</a></li>)}</ul></details>)}
  <p className="mb-3 text-sm">Supporting videos from the selected period. {report.truncated?'Collection is capped; older uploads in this period may be missing.':''}</p>
- <details open><summary className="cursor-pointer text-sm">View supporting videos ({selected.length})</summary><ul className="mt-3 space-y-2 text-sm">{selected.map(v=><li key={v.id}><a href={`https://www.youtube.com/watch?v=${encodeURIComponent(v.id)}`} target="_blank" rel="noopener noreferrer" className="text-indigo">{v.title}</a><span className="ml-2 text-ink-muted">{date(v.publishedAt)} · {number(v.views)} views</span></li>)}</ul></details>
+ <details open><summary className="cursor-pointer text-sm">View supporting videos ({selected.length})</summary><ul className="mt-3 space-y-2 text-sm">{selected.map(v=><li key={v.id}><a href={sample?undefined:`https://www.youtube.com/watch?v=${encodeURIComponent(v.id)}`} target="_blank" rel="noopener noreferrer" className="text-indigo">{v.title}</a><span className="ml-2 text-ink-muted">{date(v.publishedAt)} · {number(v.views)} views</span></li>)}</ul></details>
  </Section>
  <Section title="Performance" report={report} limitation="Views accumulate with age. Compare within age bands; these are observations, not forecasts. Cadence is a lower bound when the upload cap is reached.">
  <p className="mb-4 text-sm">Shorts cannot be identified reliably from duration alone in the public API. Short videos (≤3 minutes) are a proxy and can include non-Shorts; longer videos are shown separately.</p>
@@ -45,8 +47,10 @@ export function ChannelReport({report,sample=false,format='all'}:{report:Channel
  <h3 className="mt-5 font-medium">Customer-provided collaboration records</h3><p className="mt-2 text-sm">Not part of the reusable public-source report. Ask the creator or consult your workspace’s records.</p>
  </Section>
  <Section title="Pre-contact review" report={report} limitation="Third-party comment behavior must not be attributed to the creator. Missing evidence does not establish suitability or unsuitability.">
+ <ul className="mb-3 list-disc pl-5 text-sm">{report.contentProfile?.questions.map((q,i)=><li key={i}>{q}</li>)}</ul>
  <p className="text-sm">No creator-behavior conclusion has been established from this report. Review the linked creator content in context.</p><ul className="mt-3 list-disc space-y-2 pl-5 text-sm"><li>Which products has the creator personally used, and what can they substantiate?</li><li>Which collaboration format fits your product use case?</li><li>Are there current brand exclusivity or disclosure obligations?</li><li>What are the quoted fee, deliverables, usage rights and approval terms?</li></ul>
  </Section>
+ {report.derivedAllowed&&<p className="text-xs text-ink-muted">{DERIVED_DISCLOSURE}</p>}
  <footer className="text-xs leading-relaxed text-ink-muted">Generated {new Date().toISOString()} · Underlying data collected {date(report.fetchedAt)}. Refresh or delete this report and any exported copies by {date(new Date(Date.parse(report.fetchedAt)+30*86400000).toISOString())}. Exports do not update or revoke automatically. No demographic estimates, fake-subscriber percentages, sales forecasts or aggregate influence scores are produced.</footer>
  </article>;
 }

@@ -30,6 +30,7 @@ export interface Fetched<T> {
   items: T[];
   /** Units this call consumed, so a caller can budget a multi-step flow. */
   units: number;
+  nextPageToken?: string;
 }
 
 export async function ytFetch<T = unknown>(
@@ -49,6 +50,7 @@ export async function ytFetch<T = unknown>(
 
   const body = (await res.json().catch(() => ({}))) as {
     items?: T[];
+    nextPageToken?: string;
     error?: { message?: string; errors?: Array<{ reason?: string }> };
   };
 
@@ -61,7 +63,7 @@ export async function ytFetch<T = unknown>(
     );
   }
 
-  return { items: body.items ?? [], units: COST[endpoint.split('/')[0]] ?? 1 };
+  return { items: body.items ?? [], nextPageToken: body.nextPageToken, units: COST[endpoint.split('/')[0]] ?? 1 };
 }
 
 export { parseDuration, parseVideoId } from './parse';

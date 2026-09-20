@@ -1,3 +1,4 @@
+import { AMENDMENT_ACCEPTED } from '@/lib/report/policy';
 import 'server-only';
 
 import { AiError, aiModel, generateStructured } from '@/lib/ai/provider';
@@ -107,6 +108,7 @@ function facts(v: VideoExplain): string {
 export async function summariseVideo(
   explain: VideoExplain,
 ): Promise<{ ok: true; summary: VideoSummary; model: string } | { ok: false; reason: string }> {
+  if (!AMENDMENT_ACCEPTED) return { ok:false,reason:'YouTube derived-analysis approval is not configured.' };
   try {
     const { data } = await generateStructured<VideoSummary>({
       system: SYSTEM,
@@ -249,6 +251,7 @@ export async function summariseTrending(
     .filter(Boolean)
     .join('\n');
 
+  if (!AMENDMENT_ACCEPTED) return { ok:false,reason:'YouTube derived-analysis approval is not configured.' };
   try {
     const { data } = await generateStructured<TrendingSummary>({
       system: `You explain why a video is on YouTube's trending chart, to a creator

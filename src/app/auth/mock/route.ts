@@ -26,10 +26,10 @@ export async function GET(request: NextRequest) {
   const raw = searchParams.get('next') ?? '/';
   // Same-origin absolute paths only — an open redirect here would authenticate
   // a victim and then bounce them to a look-alike host.
-  const next = raw.startsWith('/') && !raw.startsWith('//') ? raw : '/';
+  const next = raw.startsWith('/') && !raw.startsWith('//') && !raw.includes('\\') && !/[\r\n]/.test(raw) ? raw : '/';
 
   if (!tokenHash) {
-    return NextResponse.redirect(`${origin}/signin?error=missing_code`);
+    return NextResponse.redirect(`${origin}/signin?error=missing_code&channel=${encodeURIComponent(new URL(next, origin).searchParams.get('channel') ?? '')}`);
   }
 
   const supabase = createSessionClient();
@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
 
   if (error) {
     console.error('[auth] mock verify failed', error.message);
-    return NextResponse.redirect(`${origin}/signin?error=link_expired`);
+    return NextResponse.redirect(`${origin}/signin?error=link_expired&channel=${encodeURIComponent(new URL(next, origin).searchParams.get('channel') ?? '')}`);
   }
 
   return NextResponse.redirect(`${origin}${next}`);

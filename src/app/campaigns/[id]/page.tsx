@@ -1,3 +1,9 @@
+import { createSessionClient } from '@/lib/supabase/server';
+import { publicReport } from '@/lib/channel/report';
+import { ChannelReport } from '@/components/channel/ChannelReport';
+import { CampaignForm } from '@/components/campaign/CampaignForm';
+import { LiveReport, PrintReport } from '@/components/channel/ReportActions';
+import { AMENDMENT_ACCEPTED } from '@/lib/report/policy';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -33,6 +39,8 @@ export default async function CampaignPage({
 
   const candidates = await getCandidates(campaign.id);
   const rows = candidates.map(toRow);
+  const {data: publicRows} = candidates.length ? await createSessionClient().from('channel_analyses').select('*').in('channel_id',candidates.map(c=>c.channelId)) : {data:[]};
+  const printReports = (publicRows??[]).map(r=>publicReport(r)).filter((r):r is NonNullable<typeof r>=>!!r);
   const jobs = await getChannelJobs(candidates.map((c) => c.channelId));
   const brief = standard(campaign);
   const stated = brief.filter((b) => b.value !== null);
@@ -45,11 +53,11 @@ export default async function CampaignPage({
   // Both are auxiliary: a spent quota or an unreachable chart costs this page
   // one panel, never the candidate work it sits under.
   const [references, trending] = await Promise.all([
-    getReferences(campaign.id),
-    fetchTrending(region, category).catch((e: unknown) => {
+    AMENDMENT_ACCEPTED ? getReferences(campaign.id) : Promise.resolve([]),
+    AMENDMENT_ACCEPTED ? fetchTrending(region, category).catch((e: unknown) => {
       console.error('[campaign] trending failed', e);
       return null;
-    }),
+    }) : Promise.resolve(null),
   ]);
   const readAt = new Date().toISOString();
 
@@ -79,7 +87,7 @@ export default async function CampaignPage({
               </p>
             ) : (
               stated.map((item) => (
-                <div key={item.label} className="max-w-[40ch]">
+                <div key={item.label} className={`max-w-[40ch] ${item.label==='Budget'?'print:hidden':''}`}>
                   <p className="rail">{item.label}</p>
                   <p className="mt-0.5 text-[12px] leading-relaxed text-ink">{item.value}</p>
                 </div>
@@ -87,29 +95,34 @@ export default async function CampaignPage({
             )}
           </div>
 
+          <div className="mt-6 print:hidden"><PrintReport/></div>
+          <LiveReport active={[...jobs.values()].flat().some(j=>j.status==='queued'||j.status==='running')}/>
+          <details className="mt-6 rounded border bg-surface p-5 print:hidden"><summary className="cursor-pointer text-sm">Edit campaign brief</summary><div className="mt-4"><CampaignForm campaign={campaign}/></div></details>
+          {!AMENDMENT_ACCEPTED&&<p className="mt-5 text-sm text-ink-muted">Campaign suitability and comment analysis remain gated until applicable YouTube approval is configured. Review public source evidence directly.</p>}
           <div className="mt-8 space-y-4">
-            <Panel title="Add a candidate" meta="no signup required">
+            <Panel title="Add a candidate" meta="no creator signup required">
               <CandidateForm campaignId={campaign.id} />
             </Panel>
 
-            <ComparisonTable rows={rows} />
+            <ComparisonTable rows={rows} candidates={candidates} />
 
             {candidates.map((candidate, i) => (
-              <CandidateCard
-                key={candidate.id}
+              <details key={candidate.id} className="candidate-detail rounded border bg-surface p-4"><summary className="cursor-pointer text-sm">{candidate.analysis?.title??candidate.submittedAs??'Pending channel'} · Campaign evaluation and review status</summary><div className="mt-4"><CandidateCard
                 campaignId={campaign.id}
                 candidate={candidate}
                 row={rows[i]}
                 jobs={jobs.get(candidate.channelId) ?? []}
-              />
+              /></div></details>
             ))}
           </div>
 
+          <div className="campaign-print-details hidden print:block">{printReports.map(report=><div key={report.channelId} className="campaign-print-creator"><ChannelReport report={report}/></div>)}</div>
+          <p className="mt-5 text-xs text-ink-muted">Comparison generated {new Date().toISOString()}. Private notes, budgets and quoted fees are excluded from PDF output. Refresh or delete exported evidence by each report’s printed data deadline.</p>
           {/* Planning sits BELOW the candidate work, deliberately. Choosing who
               to brief is the decision this page exists for; what to make with
               them is the step after it, and putting it above would have a buyer
               planning content for someone they have not chosen. */}
-          <div className="mt-10 space-y-4">
+          {AMENDMENT_ACCEPTED && <div className="mt-10 space-y-4 print:hidden">
             <p className="rail">Planning</p>
             <ReferenceBox
               campaignId={campaign.id}
@@ -126,7 +139,7 @@ export default async function CampaignPage({
               }))}
             />
             <ContentIdeas data={trending} campaignId={campaign.id} readAt={readAt} />
-          </div>
+          </div>}
         </div>
       </main>
     </div>

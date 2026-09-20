@@ -128,6 +128,7 @@ const AFFILIATE_MARKERS =
 
 function classifyDisclosure(video: RawVideo): PromotionDisclosure | null {
   if (video.paidProductPlacementDetails?.hasPaidProductPlacement === true) return 'explicit';
+  if (!AMENDMENT_ACCEPTED) return null;
   const description = video.snippet?.description ?? '';
   if (AFFILIATE_MARKERS.test(description)) return 'affiliate';
   if (DISCLOSURE_MARKERS.test(description)) return 'inferred';
@@ -451,7 +452,7 @@ export async function analyzeChannel(
           : null,
       estimatedCpm: null,
       dominantIntent: null,
-      bestFormat: bestFormat(videos),
+      bestFormat: AMENDMENT_ACCEPTED ? bestFormat(videos) : null,
       note: '',
     },
   ];
@@ -519,15 +520,27 @@ export async function analyzeChannel(
  * Which length of video performs best on this channel, by median views.
  *
  * Median rather than mean, and null rather than a guess when one bucket has
- * too few posts to say anything: "Shorts work for you" off two uploads is a
- * recommendation built on noise.
+ * too few posts to say anything: "under a minute works for you" off two
+ * uploads is a recommendation built on noise.
+ *
+ * BUCKETS ARE NAMED BY DURATION, NOT BY FORMAT. This one said "Shorts", which
+ * is a claim the public API cannot support — nothing in it identifies a Short,
+ * and the report elsewhere is careful to call its ≤3-minute split a proxy. Two
+ * different thresholds (60s here, 180s there) under one word is worse than
+ * either alone: whichever surface rendered second would contradict the first
+ * while looking authoritative. Naming the bucket after the thing actually
+ * measured means any future render is honest without having to remember this.
  */
 function bestFormat(videos: RawVideo[]): string | null {
-  const buckets: Record<string, number[]> = { Shorts: [], 'Mid-length': [], 'Long-form': [] };
+  const buckets: Record<string, number[]> = {
+    'Under 1 minute': [],
+    '1–10 minutes': [],
+    'Over 10 minutes': [],
+  };
   for (const v of videos) {
     const seconds = v.contentDetails?.duration ? parseDuration(v.contentDetails.duration) : 0;
     if (!seconds) continue;
-    const key = seconds <= 60 ? 'Shorts' : seconds <= 600 ? 'Mid-length' : 'Long-form';
+    const key = seconds <= 60 ? 'Under 1 minute' : seconds <= 600 ? '1–10 minutes' : 'Over 10 minutes';
     buckets[key].push(Number(v.statistics?.viewCount ?? 0));
   }
   const ranked = Object.entries(buckets)

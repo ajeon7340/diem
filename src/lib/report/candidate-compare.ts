@@ -1,3 +1,4 @@
+import { AMENDMENT_ACCEPTED } from './policy';
 import type { Candidate, Campaign } from '@/lib/data/campaigns';
 import type { PlatformOutput } from '@/types';
 
@@ -100,7 +101,7 @@ export function toRow(candidate: Candidate): CandidateRow {
       channelId: candidate.channelId,
       // What they typed, so a row that failed to resolve is still recognisable
       // as the thing they asked for rather than as an opaque channel id.
-      title: candidate.submittedAs ?? candidate.channelId,
+      title: candidate.submittedAs && !/^UC[\w-]{22}$/.test(candidate.submittedAs) ? candidate.submittedAs : 'Pending channel',
       handle: null,
       status: candidate.status,
       subscribers: null,
@@ -150,7 +151,7 @@ export function toRow(candidate: Candidate): CandidateRow {
     disclosedPromotions: a.promotions.filter((p) => p.disclosure === 'explicit').length,
     inferredPromotions: a.promotions.filter((p) => p.disclosure !== 'explicit').length,
     fee,
-    cpm: cpmFromFee(fee, medianViews),
+    cpm: AMENDMENT_ACCEPTED ? cpmFromFee(fee, medianViews) : null,
     classified: a.classified,
     analysisRan: a.analysisRan,
     missing: false,
@@ -227,6 +228,7 @@ export function standard(campaign: Campaign): { label: string; value: string | n
   return [
     { label: 'Brand', value: campaign.brand },
     { label: 'Product', value: campaign.product },
+    { label: 'Use case', value: campaign.useCase ?? null },
     { label: 'Audience', value: campaign.audience },
     { label: 'Objective', value: campaign.objective },
     { label: 'Avoid', value: campaign.avoidTopics },

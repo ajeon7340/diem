@@ -80,7 +80,7 @@ async function main() {
   // read path uses, rather than stored on the row: a deadline written once and
   // a deadline computed on read can disagree, and the one that decides whether
   // we are in breach has to be the one the application honours.
-  const expired = (data ?? []).filter((row) => isPastRetention(refreshDueAt(row.data_fetched_at)));
+  const expired = (data ?? []).filter((row) => isPastRetention(verbatimDueAt(row.data_fetched_at)));
 
   console.log(`  horizon        ${retentionDays()} days`);
   console.log(`  past horizon   ${expired.length} of ${data?.length ?? 0} analysed channels`);
@@ -104,7 +104,8 @@ async function main() {
       const { error: deleteError } = await supabase
         .from('channel_analyses')
         .delete()
-        .eq('channel_id', row.channel_id);
+        .eq('channel_id', row.channel_id)
+        .eq('data_fetched_at',row.data_fetched_at);
       if (deleteError) {
         console.error(`  FAILED ${row.channel_id}: ${deleteError.message}`);
         continue;
@@ -112,6 +113,63 @@ async function main() {
       purged++;
     }
     console.log(`\n  Deleted ${purged} of ${expired.length}.`);
+  }
+
+  // The three private owners of expired API-derived data. Previewed in a dry
+  // run and not only acted on under --apply: a dry run that silently skips two
+  // thirds of the sweep tells an operator the job is smaller than it is, and
+  // the whole point of the dry run is to be believed before it is scheduled.
+  const shareCutoff = new Date().toISOString();
+  const derivedCutoff = new Date(Date.now() - 30 * 86_400_000).toISOString();
+
+  const counts = await Promise.all([
+    supabase.from('report_shares').select('token', { count: 'exact', head: true }).lt('expires_at', shareCutoff),
+    supabase.from('campaign_references').select('id', { count: 'exact', head: true }).lt('analysed_at', derivedCutoff),
+    supabase.from('campaign_candidates').select('id', { count: 'exact', head: true }).lt('fit_written_at', derivedCutoff),
+  ]);
+  const [shares, references, fits] = counts;
+
+  // A table this job expects and cannot see is not "nothing to do". It means
+  // the migrations this deployment runs against are older than this script,
+  // and continuing would report a clean sweep over data it never looked at.
+  //
+  // THE CHECK IS ON `count === null`, NOT ON `error`. Measured against a live
+  // project missing these tables: supabase-js returned `error: none` and
+  // `count: null` for a table that does not exist, while a real empty table
+  // returned `count: 0`. Guarding on `error` alone printed "expired shares 0"
+  // for a table with no rows because it had no existence — absence rendered as
+  // zero, in the one job whose whole purpose is deleting things on a deadline.
+  for (const [label, result] of [
+    ['report_shares', shares],
+    ['campaign_references', references],
+    ['campaign_candidates', fits],
+  ] as const) {
+    if (result.error || result.count === null) {
+      console.error(`\n  [retention] cannot read ${label}: ${result.error?.message ?? 'table not present'}`);
+      console.error('  This deployment is missing migrations this job depends on. Apply them');
+      console.error('  before scheduling retention, or expired private data is never swept.');
+      process.exit(1);
+    }
+  }
+
+  console.log(`\n  expired shares        ${shares.count}`);
+  console.log(`  stale references      ${references.count}`);
+  console.log(`  stale private fit     ${fits.count}`);
+
+  if (APPLY) {
+    const { error: sharesError } = await supabase.from('report_shares').delete().lt('expires_at', shareCutoff);
+    if (sharesError) throw sharesError;
+    const { error: referenceError } = await supabase.from('campaign_references').update({
+      title:'Expired reference — refresh before use',channel_title:'',published_at:null,duration_sec:null,
+      views:null,channel_median_views:null,multiple:null,engagement_rate:null,channel_median_engagement:null,sample_size:0,
+    }).lt('analysed_at', derivedCutoff);
+    if (referenceError) throw referenceError;
+    // Private fit prose also contains API-derived evidence. It is not exempt.
+    const { error: fitError } = await supabase.from('campaign_candidates').update({fit_summary:null,fit_model:null,fit_written_at:null})
+      .lt('fit_written_at', derivedCutoff);
+    if (fitError) throw fitError;
+  } else {
+    console.log('  Dry run. Re-run with --apply to clear the three above.');
   }
 
   await sweepVerbatim(supabase);
@@ -174,7 +232,8 @@ async function sweepVerbatim(supabase: Db) {
     const { error: updateError } = await supabase
       .from('channel_analyses')
       .update({ top_comment_clusters: next.topCommentClusters } as never)
-      .eq('channel_id', row.channel_id);
+      .eq('channel_id', row.channel_id)
+        .eq('data_fetched_at',row.data_fetched_at);
 
     if (updateError) {
       console.error(`  FAILED ${row.channel_id}: ${updateError.message}`);

@@ -199,6 +199,7 @@ async function runChannelClassify(supabase: SupabaseClient, job: JobRow): Promis
   const result = await classifyChannelAndStore(supabase, channelId, {
     maxVideos,
     maxComments,
+    jobId:job.id, worker:WORKER,
     stillMine: heartbeat(supabase, job.id, progress.read()),
     onProgress: (done, total) => {
       progress.set({ done, total, stage: 'classifying' });
@@ -231,6 +232,7 @@ async function runChannelIntent(supabase: SupabaseClient, job: JobRow): Promise<
   const result = await classifyChannelIntentAndStore(supabase, channelId, {
     maxVideos,
     maxComments,
+    jobId:job.id, worker:WORKER,
     stillMine: heartbeat(supabase, job.id, progress.read()),
     onProgress: (done, total) => {
       progress.set({ done, total, stage: 'classifying' });

@@ -25,17 +25,24 @@ export async function startChannel(_: ChannelState, form: FormData): Promise<Cha
  const viewer = await getViewer();
  if (!viewer.organization || !isSupabaseConfigured()) return { message: 'A saved workspace and database are required to run analysis.' };
  const service = createServiceClient();
- if (!service || !process.env.YOUTUBE_API_KEY) return { message: 'Channel analysis is not configured. The operator must configure YouTube API access and the background worker.' };
+
  const id = String(form.get('channelId') ?? '');
  if (!/^UC[\w-]{22}$/.test(id)) return { message: 'Confirm a channel first.' };
  const db = createSessionClient();
  const { error: save } = await db.from('workspace_channels').upsert({ organization_id: viewer.organization.id, channel_id: id }, { onConflict: 'organization_id,channel_id', ignoreDuplicates: true });
  if (save) return { message: 'Could not save this channel to your workspace.' };
+ if (form.get('operation') === 'view') {
+  const {data:existing}=await db.from('channel_analyses').select('data_fetched_at').eq('channel_id',id).maybeSingle();
+  if(existing && freshData(existing.data_fetched_at)) redirect(`/channels/${id}`);
+  return {message:'This report expired. Refresh analysis to collect current evidence.'};
+ }
+ if (!service || !process.env.YOUTUBE_API_KEY) return { message: 'Channel analysis is not configured. The operator must configure YouTube API access and the background worker.' };
  const days = Number(form.get('days') ?? 90);
  const { error } = await service.rpc('queue_channel_collection', { p_channel: id, p_days: [30,90,365].includes(days) ? days : 90, p_refresh: form.get('refresh') === 'true' });
  if (error) return { message: 'Could not queue analysis. Please try again.' };
  revalidatePath('/channels');
- redirect(`/channels/${id}`);
+ const format=String(form.get('format')??'all');
+ redirect(`/channels/${id}${['short','long'].includes(format)?`?format=${format}`:''}`);
 }
 export async function retryChannel(_: ChannelState, form: FormData): Promise<ChannelState> {
  const viewer = await getViewer();
@@ -94,4 +101,20 @@ export async function revokeShare(form: FormData): Promise<void> {
  if (!isSupabaseConfigured()) return;
  await createSessionClient().from('report_shares').delete().eq('token',String(form.get('token')));
  revalidatePath('/settings');
+}
+export async function recordCollaboration(_: ChannelState, form: FormData): Promise<ChannelState> {
+ const viewer=await getViewer();if(!viewer.organization||!isSupabaseConfigured())return {message:'Sign in first.'};
+ const channelId=String(form.get('channelId')??''); const brand=String(form.get('brand')??'').trim();const details=String(form.get('details')??'').trim();
+ if(!/^UC[\w-]{22}$/.test(channelId)||!brand||brand.length>120||!details||details.length>2000)return {message:'Enter the brand and a collaboration record of at most 2,000 characters.'};
+ const db=createSessionClient();
+ const {error:ref}=await db.from('workspace_channels').upsert({organization_id:viewer.organization.id,channel_id:channelId},{ignoreDuplicates:true});
+ if(ref)return {message:'Could not save record.'};
+ const {error}=await db.from('workspace_collaborations').insert({organization_id:viewer.organization.id,channel_id:channelId,brand,details});
+ if(error)return {message:'Could not save record.'};
+ revalidatePath(`/channels/${channelId}`);return {message:'Workspace collaboration record saved. It is not independently verified or included in public shares.'};
+}
+export async function deleteCollaboration(form:FormData):Promise<void> {
+ if(!isSupabaseConfigured())return;
+ await createSessionClient().from('workspace_collaborations').delete().eq('id',String(form.get('id')??''));
+ revalidatePath(`/channels/${String(form.get('channelId')??'')}`);
 }

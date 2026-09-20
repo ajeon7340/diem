@@ -3,7 +3,8 @@
 import { useFormState, useFormStatus } from 'react-dom';
 
 import { Button } from '@/components/ui/Button';
-import { createCampaign } from '@/app/actions/campaign';
+import type { Campaign } from '@/lib/data/campaigns';
+import { createCampaign, updateCampaign } from '@/app/actions/campaign';
 import { INITIAL_CAMPAIGN_STATE } from '@/app/actions/state';
 import { cn } from '@/lib/cn';
 
@@ -23,7 +24,7 @@ function Submit() {
   const { pending } = useFormStatus();
   return (
     <Button type="submit" size="lg" disabled={pending} className="w-full">
-      {pending ? 'Creating…' : 'Create campaign'}
+      {pending ? 'Creating…' : 'Save campaign'}
     </Button>
   );
 }
@@ -46,11 +47,13 @@ function Err({ message }: { message?: string }) {
  * form was rebuilt: a form that runs past the fold gets scrolled rather than
  * read.
  */
-export function CampaignForm() {
-  const [state, formAction] = useFormState(createCampaign, INITIAL_CAMPAIGN_STATE);
+export function CampaignForm({ channelId = '', campaign }: { channelId?:string; campaign?:Campaign }) {
+  const [state, formAction] = useFormState(campaign ? updateCampaign : createCampaign, INITIAL_CAMPAIGN_STATE);
 
   return (
     <form action={formAction} className="space-y-3">
+      <input type="hidden" name="channelId" value={channelId}/>
+      <input type="hidden" name="campaignId" value={campaign?.id??''}/>
       <div>
         <label htmlFor="name" className="rail block">
           Campaign name
@@ -58,6 +61,7 @@ export function CampaignForm() {
         <input
           id="name"
           name="name"
+              defaultValue={campaign?.name??''}
           required
           minLength={2}
           maxLength={120}
@@ -83,6 +87,7 @@ export function CampaignForm() {
             <input
               id="brand"
               name="brand"
+              defaultValue={campaign?.brand??''}
               maxLength={120}
               placeholder="Northbeam"
               className={cn(FIELD, 'mt-1.5')}
@@ -92,21 +97,16 @@ export function CampaignForm() {
             <label htmlFor="objective" className="rail block">
               Objective
             </label>
-            <input
-              id="objective"
-              name="objective"
-              maxLength={200}
-              placeholder="Launch awareness in the UK"
-              className={cn(FIELD, 'mt-1.5')}
-            />
+            <select id="objective" name="objective" defaultValue={campaign?.objective??''} className={cn(FIELD,'mt-1.5')}><option value="">Choose objective</option><option value="awareness">Awareness</option><option value="product understanding">Product understanding</option><option value="purchase consideration">Purchase consideration</option></select>
           </div>
           <div>
             <label htmlFor="product" className="rail block">
-              What you sell
+              Product and key benefits
             </label>
             <textarea
               id="product"
               name="product"
+              defaultValue={campaign?.product??''}
               rows={2}
               maxLength={2000}
               placeholder="A refillable cleanser and serum line, £28–£44"
@@ -115,17 +115,19 @@ export function CampaignForm() {
           </div>
           <div>
             <label htmlFor="audience" className="rail block">
-              Who you sell it to
+              Target customer needs
             </label>
             <textarea
               id="audience"
               name="audience"
+              defaultValue={campaign?.audience??''}
               rows={2}
               maxLength={2000}
               placeholder="Skincare-literate buyers in the UK"
               className={cn(AREA, 'mt-1.5')}
             />
           </div>
+          <div><label htmlFor="useCase" className="rail block">Product use case</label><textarea id="useCase" name="useCase" defaultValue={campaign?.useCase??''} maxLength={2000} rows={2} className={cn(AREA,'mt-1.5')}/></div>
           <div>
             {/* Free text and not a fixed list: what a given brand must not sit
                 beside is specific to that brand, and a checklist would quietly
@@ -136,6 +138,7 @@ export function CampaignForm() {
             <textarea
               id="avoidTopics"
               name="avoidTopics"
+              defaultValue={campaign?.avoidTopics??''}
               rows={2}
               maxLength={2000}
               placeholder="Gambling, crypto promotion, political commentary"
@@ -150,6 +153,7 @@ export function CampaignForm() {
             <input
               id="budgetTotal"
               name="budgetTotal"
+              defaultValue={campaign?.budgetTotal??''}
               inputMode="numeric"
               placeholder="40,000"
               className={cn(FIELD, 'mt-1.5')}

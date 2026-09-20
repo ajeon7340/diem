@@ -1,3 +1,76 @@
+# adfit — YouTube creator evaluation for brands and agencies
+
+## Channel-first workflow (current implementation)
+
+`/` → enter a channel → existing magic-link authentication → `/onboarding/business`
+(company/team name and brand/agency) → `/channels` (resolve and confirm) → `/channels/[id]`
+→ add an existing report to a new or existing campaign → compare up to five candidates.
+The channel input travels in encoded query parameters through the emailed link and onboarding.
+Creators never register, approve access or connect an account. `/channels/sample` is explicitly fictional.
+Navigation is Campaigns, Channel analysis, Settings; no Instagram entry is provided.
+
+The existing database queue now handles `collect_channel` as well as the comment passes. Its
+lease and unique active-job index preserve work across navigation; collection requests are
+serialized by channel in `queue_channel_collection`. Repeated requests reuse current data.
+The worker collects at most 50 uploads and 600 comments for the selected 30/90/365-day period.
+The same saved comment corpus feeds both restricted passes; they do not fetch it again.
+Stages are observed events, with no estimated percentage or completion time. A refresh keeps
+the previous timestamped report visible until the new snapshot commits. Failed-only retries
+reuse completed passes. Queued, running, completed, partial, failed and completed-with-insufficient-
+evidence states are distinct from work that has never run.
+
+Reports show evidence, collection time, period, sample size and limitations. Public YouTube
+metadata does not reliably identify Shorts: the format comparison explicitly labels videos
+at most three minutes long as a **proxy**, not verified Shorts. Views are also broken down by
+video age. Disabled/unavailable comments are never interpreted as negative response.
+Campaign briefs and generated fit stay workspace-private; changing the brief invalidates fit
+without recollecting the public report. Agencies use the campaign brand field for multiple clients.
+
+Sharing is opt-in via expiring, revocable bearer links (seven days, capped by source expiry).
+Notes, budgets and quoted fees are excluded by default and require explicit selection for a
+campaign containing the channel. Share reads recheck organization and candidate binding.
+Settings lists/revokes links. Browser **Export PDF** prints the summary first and evidence on
+following pages; campaign export starts with comparison and then creator reports. Private
+notes/prices are omitted from campaign PDFs. Downloads cannot be remotely revoked: each
+export prints its data deadline and an instruction to refresh or delete the local copy.
+
+### Operator configuration and handoff
+
+- Apply the additive migrations through `0038` using the normal deployment process. No live
+  migration or deployment was run for this task. `0035` and `0038` intentionally preserve legacy
+  tables. If another task already applied an older destructive version, a separately reviewed
+  restoration from the existing backup is required; changing migration files cannot restore data.
+- Configure Supabase auth, callback allowlist and email delivery, `YOUTUBE_API_KEY`, and the
+  server-only service role. Run `npm run worker` on the existing durable worker host.
+- **Derived analysis is disabled by default.** `ADFIT_YOUTUBE_DERIVED_APPROVAL=approved` is
+  permitted only after the operator establishes the applicable YouTube approval for the actual
+  uses. This task did not establish or claim approval. Without it, comment categorization,
+  sentiment, inferred collaboration markers and campaign suitability remain gated.
+- Approved model work also needs the existing configured AI provider credentials. No new paid
+  data provider was added, and no service was purchased.
+- Schedule the existing `npm run retention -- --apply` daily. Channel snapshots (including
+  names, descriptions, raw corpus, video evidence and derived values) conservatively expire at
+  30 days. Reads and shared reports enforce that deadline even if the sweep is delayed. The
+  sweep also clears expired private fit and share records; local PDF copies require deletion
+  or refresh by their printed deadline.
+- Production sign-in email, real API quota, approved model output and durable worker operations
+  still need an operator integration check. Verification here uses local fixtures, mocked API
+  responses and a disposable PostgreSQL database, without contacting creators or other parties.
+
+### Verification
+
+`npm run verify` includes the existing suites plus `verify:channel-flow` (input round-trip,
+state semantics, retention, approval-off projections, actual period and comment bounds) and
+SQL probes for duplicate jobs, report reuse, five-candidate enforcement, private sharing,
+revocation, source expiry and legacy data preservation. `npx tsc --noEmit`, the scripts type
+check, and `npm run lint` cover the application and worker. Browser/PDF checks cover fixture
+sign-in and onboarding, mobile overflow, and print layout.
+
+---
+
+The following is historical implementation context; the channel-first workflow and approval
+configuration above supersede older routes, hard-coded approval claims and retention behavior.
+
 # adfit — creator analysis for advertisers and agencies
 
 A customer describes one campaign, pastes the public YouTube channels they are weighing, and gets

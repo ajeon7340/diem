@@ -54,7 +54,7 @@ begin
   begin
     insert into public.analysis_jobs (kind) values ('classify_intent');
     perform pg_temp.check('a job cannot have no subject', false);
-  exception when not_null_violation then
+  exception when not_null_violation or check_violation then
     perform pg_temp.check('a job cannot have no subject', true);
   end;
 

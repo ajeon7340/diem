@@ -9,7 +9,8 @@ import { commentClustersSchema, commentRisksSchema, youtubeHandleSchema } from '
 import { readCandidate } from '@/lib/report/candidate-fit';
 import type { PlatformOutput, Promotion } from '@/types';
 import { resolveChannel } from '@/lib/youtube/resolve';
-import { analyzeChannelAndStore, enqueueChannelJob } from '@/lib/ingest/channel-store';
+import { freshData } from '@/lib/channel/state';
+import { AMENDMENT_ACCEPTED } from '@/lib/report/policy';
 import { createServiceClient, createSessionClient, isSupabaseConfigured } from '@/lib/supabase/server';
 
 export interface CampaignState {
@@ -58,6 +59,7 @@ export async function createCampaign(
     name: formData.get('name'),
     brand: formData.get('brand'),
     product: formData.get('product'),
+    useCase: formData.get('useCase'),
     audience: formData.get('audience'),
     objective: formData.get('objective'),
     avoidTopics: formData.get('avoidTopics'),
@@ -80,6 +82,7 @@ export async function createCampaign(
       name: parsed.data.name,
       brand: parsed.data.brand,
       product: parsed.data.product,
+      use_case: parsed.data.useCase,
       audience: parsed.data.audience,
       objective: parsed.data.objective,
       avoid_topics: parsed.data.avoidTopics,
@@ -93,6 +96,11 @@ export async function createCampaign(
     return { status: 'error', message: 'Could not create the campaign. Please try again.' };
   }
 
+  const channelId = String(formData.get('channelId') ?? '');
+  if (/^UC[\w-]{22}$/.test(channelId)) {
+    const { data: report } = await supabase.from('channel_analyses').select('channel_id').eq('channel_id',channelId).maybeSingle();
+    if (report) await supabase.from('campaign_candidates').insert({ campaign_id:data.id, channel_id:channelId });
+  }
   revalidatePath('/campaigns');
   // `redirect` throws by design — that is how a server action navigates — so
   // control never reaches the end of this function.
@@ -152,12 +160,13 @@ export async function addCandidate(
   const { error } = await supabase.from('campaign_candidates').insert({
     campaign_id: campaignId,
     channel_id: resolved.channel.channelId,
-    submitted_as: parsed.data.channel,
+    submitted_as: resolved.channel.handle || resolved.channel.title,
     proposed_fee: parsed.data.proposedFee,
     notes: parsed.data.notes,
   });
 
   if (error) {
+    if (error.code === '23514') return { status:'error', message:'Compare up to five candidates per campaign.' };
     if (error.code === '23505') {
       return { status: 'error', fieldErrors: { channel: 'That channel is already on this list.' } };
     }
@@ -165,28 +174,14 @@ export async function addCandidate(
     return { status: 'error', message: 'Could not add that candidate.' };
   }
 
-  // Public-data pass now, model passes queued. Neither failure removes the
-  // candidate: the customer asked for the channel to be on the list, and a
-  // YouTube outage is not a reason to drop it.
-  const analysed = await analyzeChannelAndStore(resolved.channel.channelId, {
-    maxVideos: 25,
-    maxComments: 600,
-  });
-  if (!analysed.ok) {
-    console.error('[candidates] analysis failed', {
-      channelId: resolved.channel.channelId,
-      reason: analysed.reason,
-    });
-  }
-
+  // Reuse current public-source data. A unique durable job owns any collection.
   const service = createServiceClient();
+  await supabase.from('workspace_channels').upsert({ organization_id:viewer.organization.id, channel_id:resolved.channel.channelId },{ignoreDuplicates:true});
   if (service) {
-    for (const kind of ['classify_comments', 'classify_intent'] as const) {
-      const queued = await enqueueChannelJob(service, resolved.channel.channelId, kind);
-      if (!queued.ok) {
-        console.error('[candidates] could not queue', { kind, reason: queued.reason });
-      }
-    }
+    const { error: queueError } = await service.rpc('queue_channel_collection', {
+      p_channel:resolved.channel.channelId, p_days:0, p_refresh:false,
+    });
+    if (queueError) return { status:'error', message:'Candidate saved, but analysis could not be queued. Open Channel analysis to retry.' };
   }
 
   revalidatePath(`/campaigns/${campaignId}`);
@@ -200,7 +195,7 @@ export async function setCandidateStatus(formData: FormData): Promise<void> {
 
   const id = String(formData.get('candidateId') ?? '');
   const status = String(formData.get('status') ?? '');
-  if (!['considering', 'shortlisted', 'rejected'].includes(status)) return;
+  if (!['considering', 'shortlisted', 'hold', 'rejected'].includes(status)) return;
 
   const supabase = createSessionClient();
   const { error } = await supabase.from('campaign_candidates').update({ status }).eq('id', id);
@@ -221,6 +216,7 @@ export async function setCandidateStatus(formData: FormData): Promise<void> {
  * candidates get discarded on the numbers alone.
  */
 export async function writeCandidateFit(formData: FormData): Promise<void> {
+  if (!AMENDMENT_ACCEPTED) return;
   const viewer = await getViewer();
   if (!viewer.organization) return;
 
@@ -235,6 +231,7 @@ export async function writeCandidateFit(formData: FormData): Promise<void> {
       .from('campaign_candidates')
       .select('id, channel_id, proposed_fee, fee_currency')
       .eq('id', candidateId)
+      .eq('campaign_id', campaignId)
       .maybeSingle<{
         id: string;
         channel_id: string;
@@ -243,9 +240,11 @@ export async function writeCandidateFit(formData: FormData): Promise<void> {
       }>(),
     supabase
       .from('campaigns')
-      .select('name, brand, product, audience, objective, avoid_topics')
+      .select('name, brand, product, use_case, audience, objective, avoid_topics, updated_at')
       .eq('id', campaignId)
       .maybeSingle<{
+        updated_at: string;
+        use_case: string | null;
         name: string;
         brand: string | null;
         product: string | null;
@@ -261,7 +260,7 @@ export async function writeCandidateFit(formData: FormData): Promise<void> {
     .select('*')
     .eq('channel_id', candidate.channel_id)
     .maybeSingle<Record<string, unknown>>();
-  if (!row) return;
+  if (!row || !freshData(row.data_fetched_at)) return;
 
   const outputs = (row.output_stats ?? []) as PlatformOutput[];
   const youtube = outputs.find((o) => o.platform === 'youtube') ?? outputs[0] ?? null;
@@ -271,7 +270,7 @@ export async function writeCandidateFit(formData: FormData): Promise<void> {
     brief: {
       name: campaign.name,
       brand: campaign.brand,
-      product: campaign.product,
+      product: [campaign.product,campaign.use_case ? `Use case: ${campaign.use_case}` : null].filter(Boolean).join('\n') || null,
       audience: campaign.audience,
       objective: campaign.objective,
       avoidTopics: campaign.avoid_topics,
@@ -312,15 +311,30 @@ export async function writeCandidateFit(formData: FormData): Promise<void> {
     return;
   }
 
-  const { error } = await supabase
-    .from('campaign_candidates')
-    .update({
-      fit_summary: read.fit,
-      fit_model: read.model,
-      fit_written_at: new Date().toISOString(),
-    })
-    .eq('id', candidateId);
+  const { error } = await supabase.rpc('save_campaign_fit', {
+    p_candidate:candidateId,p_campaign:campaignId,p_brief_at:campaign.updated_at,
+    p_data_at:row.data_fetched_at,p_fit:read.fit,p_model:read.model,
+  });
   if (error) console.error('[candidates] fit write failed', error.message);
 
   revalidatePath(`/campaigns/${campaignId}`);
+}
+
+export async function updateCampaign(_prev: CampaignState, form: FormData): Promise<CampaignState> {
+ const viewer=await getViewer(); if(!viewer.organization||!isSupabaseConfigured())return {status:'error',message:'Sign in first.'};
+ const parsed=campaignSchema.safeParse(Object.fromEntries(form));
+ if(!parsed.success)return {status:'error',message:'Check the campaign fields.',fieldErrors:collect(parsed.error.issues)};
+ const p=parsed.data;const id=String(form.get('campaignId')??'');
+ const {error}=await createSessionClient().from('campaigns').update({name:p.name,brand:p.brand,product:p.product,use_case:p.useCase,audience:p.audience,objective:p.objective,avoid_topics:p.avoidTopics,budget_total:p.budgetTotal}).eq('id',id).eq('organization_id',viewer.organization.id);
+ if(error)return {status:'error',message:'Could not update the brief.'};
+ revalidatePath(`/campaigns/${id}`);redirect(`/campaigns/${id}`);
+}
+export async function updateCandidateDetails(_: CandidateState, form: FormData): Promise<CandidateState> {
+ const viewer=await getViewer();if(!viewer.organization||!isSupabaseConfigured())return {status:'error',message:'Sign in first.'};
+ const parsed=candidateSchema.safeParse({channel:'@placeholder',proposedFee:form.get('proposedFee'),notes:form.get('notes')});
+ if(!parsed.success)return {status:'error',message:'Check the quoted fee and notes.'};
+ const campaignId=String(form.get('campaignId')??'');
+ const {error}=await createSessionClient().from('campaign_candidates').update({proposed_fee:parsed.data.proposedFee,notes:parsed.data.notes,fit_summary:null,fit_written_at:null}).eq('id',String(form.get('candidateId')??'')).eq('campaign_id',campaignId);
+ if(error)return {status:'error',message:'Could not save candidate details.'};
+ revalidatePath(`/campaigns/${campaignId}`);return {status:'ok',message:'Private notes and quoted fee saved.'};
 }

@@ -9,7 +9,7 @@ import { isSupabaseConfigured } from '@/lib/supabase/server';
 export const metadata: Metadata = { title: 'New campaign' };
 export const dynamic = 'force-dynamic';
 
-export default async function NewCampaignPage() {
+export default async function NewCampaignPage({searchParams}:{searchParams:{channelId?:string}}) {
   const viewer = await getViewer();
 
   // A campaign belongs to an organisation, so there has to be one. Said as a
@@ -51,7 +51,7 @@ export default async function NewCampaignPage() {
         This is the standard every candidate gets compared against. You add the channels next.
       </p>
       <div className="mt-6">
-        <CampaignForm />
+        <CampaignForm channelId={searchParams.channelId} />
       </div>
     </Shell>
   );

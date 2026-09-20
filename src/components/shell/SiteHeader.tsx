@@ -21,12 +21,12 @@ export async function SiteHeader() {
 
   return (
     <header className="print:hidden sticky top-0 z-30 border-b border-line bg-surface/90 backdrop-blur-md">
-      <div className="mx-auto flex max-w-shell items-center gap-4 px-5 py-3 sm:px-8">
+      <div className="mx-auto flex max-w-shell flex-wrap items-center gap-4 px-5 py-3 sm:px-8">
         <Link href="/" className="tnum text-[13px] font-semibold tracking-tight text-ink">
           adfit
         </Link>
 
-        <nav className="-mx-1 flex min-w-0 items-center gap-1 overflow-x-auto px-1 text-[12px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <nav className="order-last w-full sm:order-none sm:w-auto -mx-1 flex min-w-0 items-center gap-1 overflow-x-auto px-1 text-[12px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <NavLink href="/campaigns">Campaigns</NavLink>
           <NavLink href="/channels">Channel analysis</NavLink>
           <NavLink href="/settings">Settings</NavLink>
@@ -34,12 +34,12 @@ export async function SiteHeader() {
 
         <div className="ml-auto flex items-center gap-2.5">
           {viewer.organization ? (
-            <Badge tone={viewer.isProAgency ? 'indigo' : 'slate'}>
+            <span className="hidden sm:inline"><Badge tone={viewer.isProAgency ? 'indigo' : 'slate'}>
               {viewer.organization.name} · {viewer.isProAgency ? 'Pro Agency' : 'Free'}
-            </Badge>
+            </Badge></span>
           ) : null}
 
-          {demoMode ? <DemoRoleSwitcher /> : null}
+          {demoMode ? <span className="hidden sm:inline"><DemoRoleSwitcher /></span> : null}
 
           {signedIn ? (
             <form action="/auth/signout" method="post">

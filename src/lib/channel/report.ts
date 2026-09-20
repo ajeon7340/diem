@@ -1,3 +1,4 @@
+import type { ContentProfile } from './content-profile';
 import type { VideoEvidence } from '@/lib/ingest/analyze';
 import { AMENDMENT_ACCEPTED } from '@/lib/report/policy';
 import { freshData } from './state';
@@ -7,6 +8,7 @@ export interface ChannelReportView {
  channelId:string; title:string; handle:string|null; avatar:string|null; description:string|null;
  subscribers:number|null; fetchedAt:string; start:string|null; end:string|null; windowDays:number;
  videos:VideoEvidence[]; comments:number; unreadable:number; truncated:boolean; promotions:Promotion[];
+ contentProfile:ContentProfile|null;
  clusters:ReturnType<typeof commentClustersSchema.parse>; derivedAllowed:boolean; analysedAt:string|null;
 }
 /** Explicit allowlist: raw corpus, private campaign information and model names never travel to clients. */
@@ -17,7 +19,8 @@ export function publicReport(row:Record<string,unknown>, now=Date.now()):Channel
  avatar:row.avatar_url as string|null,description:row.description as string|null,subscribers:row.subscribers == null?null:Number(row.subscribers),
  fetchedAt:String(row.data_fetched_at),start:evidence?.start??null,end:evidence?.end??null,windowDays:evidence?.windowDays??90,
  videos:evidence?.videos??[],comments:Number(row.comments_analyzed??0),unreadable:evidence?.unreadable??0,truncated:evidence?.truncated??true,
- promotions:(row.promotions??[]) as Promotion[], clusters:AMENDMENT_ACCEPTED?commentClustersSchema.parse(row.top_comment_clusters??[]):[],
+ promotions:((row.promotions??[]) as Promotion[]).filter(p=>AMENDMENT_ACCEPTED||p.disclosure==='explicit'), clusters:AMENDMENT_ACCEPTED?commentClustersSchema.parse(row.top_comment_clusters??[]):[],
+ contentProfile:AMENDMENT_ACCEPTED?(row.content_profile as ContentProfile??null):null,
  derivedAllowed:AMENDMENT_ACCEPTED,analysedAt:AMENDMENT_ACCEPTED?(row.analysed_at as string|null):null };
 }
 export function performance(videos:VideoEvidence[],now:number) {

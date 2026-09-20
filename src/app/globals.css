@@ -234,3 +234,24 @@ body {
   .channel-report a { color: inherit; overflow-wrap: anywhere; }
   button, nav, form { display: none !important; }
 }
+@media print {
+  .comparison-scroll { overflow: visible !important; }
+  .comparison-table { min-width: 0 !important; width: 100% !important; font-size: 8pt; }
+  .comparison-table th, .comparison-table td { padding: 2mm; overflow-wrap: anywhere; }
+  .candidate-detail { display: none; }
+}
+@media print {
+  .campaign-print-details { display: block !important; }
+  .campaign-print-creator { break-before: page; }
+}
+@media print {
+  .channel-report .report-section { break-inside: avoid; }
+  .channel-report footer { break-inside: avoid; }
+  .channel-report .grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); }
+}
+@media print {
+  .channel-report .text-sm { font-size: 9pt; line-height: 1.4; }
+  .channel-report .text-xs { font-size: 7.5pt; line-height: 1.4; }
+  .channel-report .report-section { padding: 4mm; margin-top: 3mm; }
+  .channel-report .report-section > p:last-child { margin-top: 3mm; padding-top: 2mm; }
+}

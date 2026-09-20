@@ -28,8 +28,8 @@ const money = z
   .nullable()
   .transform((v) => {
     if (v === null || v === undefined || v === '') return null;
-    const parsed = typeof v === 'number' ? v : Number(String(v).replace(/[^0-9.]/g, ''));
-    return Number.isFinite(parsed) ? parsed : null;
+    const parsed = typeof v === 'number' ? v : Number(String(v).replace(/[$£€,\s]/g, ''));
+    return parsed;
   })
   .refine((v) => v === null || (v >= 0 && v <= 100_000_000), {
     message: 'Enter an amount between 0 and 100,000,000',
@@ -39,6 +39,7 @@ export const campaignSchema = z.object({
   name: z.string().trim().min(2, 'Name this campaign').max(120),
   brand: text(120),
   product: text(2_000),
+  useCase: text(2_000),
   audience: text(2_000),
   objective: text(200),
   /** What this brand will not place beside. Free text: a fixed list cannot

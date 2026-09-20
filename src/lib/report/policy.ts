@@ -12,11 +12,9 @@
  * create new or derived data or metrics." Purchase intent, sentiment, brand
  * safety, the comment clusters and the estimated CPM are all derived from API
  * Data, which is to say: the entire headline of this report is covered by that
- * sentence. No switch here changes that. The permission is an account action —
- * accept the amendment at
+ * sentence. No switch here changes that. The permission requires the applicable approval process at
  * developers.google.com/youtube/terms/derived-metrics-policy (Section 5 → Use
- * Cases → "Analytics & Reporting"). It is free and self-serve. Until it is
- * accepted the product is out of policy no matter what this module returns.
+ * Cases → "Analytics & Reporting"). Until the applicable approval is established, restricted analysis remains disabled.
  *
  * A NOTE ON CONSENT, because it is the intuition everyone has first.
  *
@@ -74,7 +72,7 @@ export const OFF_PLATFORM_PANEL = false;
  * and derived data to 36 calendar months.
  *
  * Both are recorded so the deadline does not quietly depend on which paperwork
- * is in force. Accepted 2026-09-14; the horizon moved with the flag.
+ * is in force. No approval is assumed; deployment configuration must reflect established approval.
  *
  * Two obligations came with it and are not optional:
  *   - derived metrics must be distinguished from API Data wherever they sit

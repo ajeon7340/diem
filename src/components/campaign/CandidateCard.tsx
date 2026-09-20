@@ -1,3 +1,6 @@
+import { CandidateDetails } from './CandidateDetails';
+import { STATUS_LABEL } from '@/lib/channel/state';
+import { AMENDMENT_ACCEPTED } from '@/lib/report/policy';
 import { LoaderCircle, TriangleAlert } from 'lucide-react';
 
 import { Badge } from '@/components/ui/Badge';
@@ -62,8 +65,7 @@ export function CandidateCard({
         <div className="min-w-0">
           <h3 className="truncate text-[14px] font-medium text-ink">{row.title}</h3>
           <p className="tnum truncate text-[11px] text-ink-faint">
-            {a?.handle ? `${a.handle} · ` : ''}
-            {candidate.channelId}
+            {a?.handle ?? 'YouTube channel'}
           </p>
         </div>
 
@@ -71,7 +73,7 @@ export function CandidateCard({
           {/* Three buttons and no dropdown: the shortlist decision is the
               point of the page and hiding it behind a menu costs a click on
               the one action a buyer came to take. */}
-          {(['shortlisted', 'considering', 'rejected'] as const).map((status) => (
+          {(['shortlisted', 'considering', 'hold', 'rejected'] as const).map((status) => (
             <form key={status} action={setCandidateStatus}>
               <input type="hidden" name="candidateId" value={candidate.id} />
               <input type="hidden" name="campaignId" value={campaignId} />
@@ -86,7 +88,7 @@ export function CandidateCard({
                     : 'border-line text-ink-muted hover:border-line-strong hover:text-ink',
                 )}
               >
-                {status === 'shortlisted' ? 'Shortlist' : status === 'rejected' ? 'Reject' : 'Consider'}
+                {STATUS_LABEL[status]}
               </button>
             </form>
           ))}
@@ -119,17 +121,14 @@ export function CandidateCard({
         <p className="border-b border-line bg-paper px-5 py-2.5 text-[12px] leading-relaxed text-ink-muted">
           {row.analysisRan ? (
             <>
-              The comment pass ran on the uploads we read and found nothing readable — comments are
-              disabled or removed on this channel. That is an <strong>empty</strong> corpus, not a
-              clean one: no climate, purchase-language or brand-safety conclusion can be drawn
+              The comment pass ran on the uploads we read and found nothing readable — the collected sample does not contain classified comments. That is an <strong>empty</strong> corpus, not a
+              clean one: no comment response, purchase-language or brand-safety conclusion can be drawn
               about this channel from comments, and none is shown.
             </>
           ) : (
             <>
-              Public figures are in. Comment classification has not run — the climate and
-              purchase-language columns are empty for that reason, not because they are low. It
-              needs the worker process (<code className="tnum">npm run worker</code>) and a model
-              key.
+              Public figures are in. Comment classification has not run — the comment response and
+              purchase-language columns are empty for that reason, not because they are low. Analysis will appear here when it is permitted and completed.
             </>
           )}
         </p>
@@ -155,7 +154,7 @@ export function CandidateCard({
             />
           ) : null}
           {a.sentiment !== null && row.classified ? (
-            <Stat label="Commenter climate" value={`${a.sentiment.toFixed(0)}/100`} />
+            <Stat label="Comment response" value={`${a.sentiment.toFixed(0)}/100`} />
           ) : null}
         </dl>
       ) : null}
@@ -176,7 +175,7 @@ export function CandidateCard({
                 </Badge>
                 {p.url ? (
                   <a
-                    href={p.url}
+                    href={`https://www.youtube.com/watch?v=${encodeURIComponent(p.postId)}`}
                     target="_blank"
                     rel="noreferrer"
                     className="min-w-0 flex-1 truncate text-ink underline-offset-4 hover:underline"
@@ -273,7 +272,7 @@ export function CandidateCard({
               </div>
             ) : null}
             <p className="text-[11px] text-ink-faint">
-              Written by {candidate.fitModel ?? 'a model'} from the public figures above
+              Generated from the public evidence above
               {candidate.fitWrittenAt
                 ? ` on ${new Date(candidate.fitWrittenAt).toLocaleDateString('en-GB')}`
                 : ''}
@@ -291,7 +290,7 @@ export function CandidateCard({
         <form action={writeCandidateFit} className="mt-3">
           <input type="hidden" name="candidateId" value={candidate.id} />
           <input type="hidden" name="campaignId" value={campaignId} />
-          <Button type="submit" variant="secondary" size="sm" disabled={row.missing}>
+          <Button type="submit" variant="secondary" size="sm" disabled={row.missing || !AMENDMENT_ACCEPTED}>
             {fit ? 'Re-read against the brief' : 'Read against the brief'}
           </Button>
         </form>
@@ -302,6 +301,7 @@ export function CandidateCard({
           <span className="rail">Your note</span> {candidate.notes}
         </p>
       ) : null}
+      <CandidateDetails candidateId={candidate.id} campaignId={campaignId} fee={candidate.proposedFee} notes={candidate.notes}/>
     </section>
   );
 }

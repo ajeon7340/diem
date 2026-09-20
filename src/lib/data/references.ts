@@ -1,3 +1,5 @@
+import { freshData } from '@/lib/channel/state';
+import { AMENDMENT_ACCEPTED } from '@/lib/report/policy';
 import 'server-only';
 
 import { createSessionClient, isSupabaseConfigured } from '@/lib/supabase/server';
@@ -95,5 +97,6 @@ export async function getReferences(campaignId: string): Promise<CampaignReferen
     console.error('[campaign_references] read failed', error.message);
     return [];
   }
-  return (data ?? []).map(toReference);
+  if (!AMENDMENT_ACCEPTED) return [];
+  return (data ?? []).map(r=>freshData(r.analysed_at)?toReference(r):toReference({...r,title:'Expired reference — refresh before use',channel_title:'',published_at:null,duration_sec:null,views:null,channel_median_views:null,multiple:null,engagement_rate:null,channel_median_engagement:null,sample_size:0}));
 }

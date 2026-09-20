@@ -1,5 +1,6 @@
 'use server';
 
+import { AMENDMENT_ACCEPTED } from '@/lib/report/policy';
 import { getViewer } from '@/lib/access/viewer';
 import { ytFetch } from '@/lib/youtube/client';
 import { summariseTrending, type TrendingSummary } from '@/lib/youtube/summarise';
@@ -46,6 +47,7 @@ export async function explainTrendingVideo(
   _prev: TrendingExplainState,
   formData: FormData,
 ): Promise<TrendingExplainState> {
+  if (!AMENDMENT_ACCEPTED) return { status:'error',videoId:null,message:'Derived analysis requires configured YouTube approval.',summary:null };
   const clean = String(formData.get('videoId') ?? '').trim();
   const niche = (formData.get('niche') as string | null)?.trim() || null;
   if (!/^[A-Za-z0-9_-]{11}$/.test(clean)) {

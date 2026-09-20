@@ -14,14 +14,14 @@ export async function GET(request: NextRequest) {
   const { searchParams, origin } = request.nextUrl;
   const code = searchParams.get('code');
   const raw = searchParams.get('next') ?? '/';
-  const next = raw.startsWith('/') && !raw.startsWith('//') ? raw : '/';
+  const next = raw.startsWith('/') && !raw.startsWith('//') && !raw.includes('\\') && !/[\r\n]/.test(raw) ? raw : '/';
 
   if (!isSupabaseConfigured()) {
     return NextResponse.redirect(`${origin}${next}`);
   }
 
   if (!code) {
-    return NextResponse.redirect(`${origin}/signin?error=missing_code`);
+    return NextResponse.redirect(`${origin}/signin?error=missing_code&channel=${encodeURIComponent(new URL(next, origin).searchParams.get('channel') ?? '')}`);
   }
 
   const supabase = createSessionClient();
@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
 
   if (error) {
     console.error('[auth] code exchange failed', error.message);
-    return NextResponse.redirect(`${origin}/signin?error=link_expired`);
+    return NextResponse.redirect(`${origin}/signin?error=link_expired&channel=${encodeURIComponent(new URL(next, origin).searchParams.get('channel') ?? '')}`);
   }
 
   return NextResponse.redirect(`${origin}${next}`);

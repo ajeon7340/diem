@@ -1,88 +1,17 @@
 'use client';
-
-import { useEffect, useRef } from 'react';
 import { useFormState, useFormStatus } from 'react-dom';
-
-import { Button } from '@/components/ui/Button';
 import { addCandidate } from '@/app/actions/campaign';
+import { previewChannel, type ChannelState } from '@/app/actions/channel';
 import { INITIAL_CANDIDATE_STATE } from '@/app/actions/state';
-import { cn } from '@/lib/cn';
-
-const FIELD = cn(
-  'h-10 w-full rounded-md border border-line bg-surface px-3 text-[13px] text-ink',
-  'placeholder:text-ink-faint outline-none transition-colors',
-  'focus:border-indigo focus:ring-2 focus:ring-indigo/20',
-);
-
-function Submit() {
-  const { pending } = useFormStatus();
-  return (
-    <Button type="submit" disabled={pending} className="shrink-0">
-      {/* The public pass runs inline and takes a few seconds, so the label says
-          what is happening rather than spinning silently. */}
-      {pending ? 'Reading the channel…' : 'Add candidate'}
-    </Button>
-  );
-}
-
-/**
- * Paste a channel, get a candidate.
- *
- * `useFormState` and not `useState`: invoking a server action from a client
- * component re-renders the server tree and discards client state, which is how
- * an earlier version of this pattern lost its error message the moment the
- * action returned.
- */
-export function CandidateForm({ campaignId }: { campaignId: string }) {
-  const [state, formAction] = useFormState(addCandidate, INITIAL_CANDIDATE_STATE);
-  const form = useRef<HTMLFormElement>(null);
-
-  useEffect(() => {
-    // Clear only on success. A rejected paste stays in the box: retyping a URL
-    // you just typed, because we could not resolve it, is our failure charged
-    // to the user.
-    if (state.status === 'ok') form.current?.reset();
-  }, [state]);
-
-  return (
-    <form ref={form} action={formAction} className="px-5 py-4">
-      <input type="hidden" name="campaignId" value={campaignId} />
-      <div className="flex flex-col gap-2 sm:flex-row">
-        <div className="min-w-0 flex-1">
-          <label htmlFor="channel" className="sr-only">
-            YouTube channel URL or handle
-          </label>
-          <input
-            id="channel"
-            name="channel"
-            required
-            placeholder="youtube.com/@channel, or @handle"
-            className={FIELD}
-          />
-        </div>
-        <div className="sm:w-40">
-          <label htmlFor="proposedFee" className="sr-only">
-            Fee they quoted
-          </label>
-          <input id="proposedFee" name="proposedFee" inputMode="numeric" placeholder="Fee, if quoted" className={FIELD} />
-        </div>
-        <Submit />
-      </div>
-
-      {state.fieldErrors?.channel ? (
-        <p className="mt-2 text-[12px] text-rose">{state.fieldErrors.channel}</p>
-      ) : null}
-      {state.status === 'error' && state.message ? (
-        <p className="mt-2 text-[12px] text-rose">{state.message}</p>
-      ) : null}
-      {state.status === 'ok' && state.message ? (
-        <p className="mt-2 text-[12px] text-emerald">{state.message}</p>
-      ) : null}
-
-      <p className="mt-2 text-[11px] leading-relaxed text-ink-faint">
-        Any public channel. A fee is only used to work out a cost per thousand views — we never
-        estimate one, because nothing public reveals what a creator charges.
-      </p>
-    </form>
-  );
+function Submit({children}:{children:React.ReactNode}) {const {pending}=useFormStatus();return <button disabled={pending} className="rounded bg-indigo px-4 py-2 text-sm text-white">{pending?'Please wait…':children}</button>;}
+export function CandidateForm({campaignId}:{campaignId:string}) {
+ const [preview,resolve]=useFormState<ChannelState,FormData>(previewChannel,{});
+ const [state,add]=useFormState(addCandidate,INITIAL_CANDIDATE_STATE);
+ return <div className="space-y-4 p-5 print:hidden"><form action={resolve} className="flex flex-wrap gap-3"><label className="flex-1"><span className="sr-only">YouTube channel URL or handle</span><input name="channel" required maxLength={200} placeholder="YouTube channel URL or @handle" className="w-full rounded border p-2 text-sm"/></label><Submit>Resolve channel</Submit></form>
+ {preview.message&&<p role="alert" className="text-sm">{preview.message}</p>}
+ {preview.channel&&<form action={add} className="space-y-3 rounded border p-4"><input type="hidden" name="campaignId" value={campaignId}/><input type="hidden" name="channel" value={preview.channel.channelId}/><div className="flex items-center gap-3">
+ {/* eslint-disable-next-line @next/next/no-img-element */}
+ {preview.channel.thumbnail&&<img alt="" src={preview.channel.thumbnail} className="h-12 w-12 rounded-full"/>}<div><p className="font-medium">{preview.channel.title}</p><p className="text-sm text-ink-muted">{preview.channel.handle}</p></div></div><p className="text-sm">{preview.exists?'Reuse the existing report. No collection is needed.':'Confirm this channel to queue its analysis and add it to the campaign.'}</p><label className="block text-sm">Candidate-specific quoted fee (USD, optional)<input name="proposedFee" inputMode="decimal" className="ml-2 rounded border p-2"/></label><Submit>{preview.exists?'Confirm and reuse report':'Confirm and add candidate'}</Submit></form>}
+ {(state.message||state.fieldErrors?.channel)&&<p role="status" className="text-sm">{state.message??state.fieldErrors?.channel}</p>}
+ </div>;
 }

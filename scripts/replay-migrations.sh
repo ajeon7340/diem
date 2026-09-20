@@ -69,3 +69,6 @@ echo
 echo "  campaign isolation:"
 psql -d "${DB}" -v ON_ERROR_STOP=1 -q -f "${HERE}/probe-campaigns.sql" 2>&1 |
   sed -E -e 's/^psql:[^ ]+ (NOTICE|ERROR):  ?//' -e 's/^(NOTICE|ERROR):  ?//'
+
+# Channel-first flow: reuse, dedupe, private shares, expiry and candidate bounds.
+psql -d "${DB}" -v ON_ERROR_STOP=1 -q -f "${HERE}/probe-channel-flow.sql"
