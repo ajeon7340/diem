@@ -5,6 +5,7 @@ import { notFound } from 'next/navigation';
 import { cancelSearch } from '@/app/actions/discovery';
 import { BrandList } from '@/components/discovery/BrandList';
 import { EmptyState } from '@/components/discovery/EmptyState';
+import { ContextBar } from '@/components/discovery/ContextBar';
 import { FilterPanel } from '@/components/discovery/FilterPanel';
 import { ModeTabs } from '@/components/discovery/ModeTabs';
 import { ResultList } from '@/components/discovery/ResultList';
@@ -12,10 +13,12 @@ import { ModeForm } from '@/components/discovery/SearchForms';
 import { SiteHeader } from '@/components/shell/SiteHeader';
 import { Badge } from '@/components/ui/Badge';
 import { getViewer } from '@/lib/access/viewer';
-import { getCampaigns } from '@/lib/data/campaigns';
+import { getCampaign, getCampaigns } from '@/lib/data/campaigns';
+import { getBrands as getWorkspaceBrands, pickBrand } from '@/lib/data/brands';
+import { buildContext } from '@/lib/discovery/context';
 import { getBrands, getCandidates, getSearch, getSearchJobs } from '@/lib/data/discovery';
 import { describeJob } from '@/lib/ingest/jobs';
-import { filterDefaults, filterSummary } from '@/lib/discovery/defaults';
+import { filterSummary } from '@/lib/discovery/defaults';
 import { coverageSentence, searchStage, searchState, SEARCH_STATE_LABEL } from '@/lib/discovery/state';
 import { DISCOVERY_MODES, SIMILARITY_DIMENSION_LABEL, SIMILARITY_LIMIT } from '@/lib/discovery/types';
 import {
@@ -46,12 +49,23 @@ export default async function DiscoveryResults({ params }: { params: { id: strin
   const search = await getSearch(params.id);
   if (!search) notFound();
 
-  const [candidates, brands, jobs, campaigns] = await Promise.all([
+  const [candidates, competitorBrands, jobs, campaigns, workspaceBrands, campaign] = await Promise.all([
     getCandidates(search.id),
     search.mode === 'competitor' ? getBrands(search.id) : Promise.resolve([]),
     getSearchJobs([search.id]),
     viewer.organization ? getCampaigns(viewer.organization.id) : Promise.resolve([]),
+    viewer.organization ? getWorkspaceBrands(viewer.organization.id) : Promise.resolve([]),
+    search.campaignId ? getCampaign(search.campaignId) : Promise.resolve(null),
   ]);
+
+  // The context this search RAN under, not the one selected now — the panel
+  // beside a stored result has to describe that result.
+  const brand = pickBrand(
+    workspaceBrands,
+    search.brandId ?? campaign?.brandId ?? null,
+    viewer.organization?.defaultBrandId ?? null,
+  );
+  const context = buildContext({ mode: search.mode, brand, campaign, searchParams: search.params });
 
   const searchJobs = jobs.get(search.id) ?? [];
   const job = searchJobs[0] ?? null;
@@ -103,16 +117,22 @@ export default async function DiscoveryResults({ params }: { params: { id: strin
 
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-6">
             <FilterPanel summary={filterSummary(search.mode, search.params)}>
-              <div className="shrink-0 border-b border-line p-3">
+              <div className="shrink-0 space-y-3 border-b border-line p-3">
+                <ContextBar
+                  context={context}
+                  brands={workspaceBrands.map((b) => ({ id: b.id, name: b.name }))}
+                  campaigns={campaigns.map((c) => ({ id: c.id, name: c.name, brandId: c.brandId }))}
+                />
                 <ModeTabs mode={search.mode} />
-                <p className="mt-2 text-[11px] leading-relaxed text-ink-muted">
+                <p className="text-[11px] leading-relaxed text-ink-muted">
                   Showing the filters this search ran with. Change them and search again.
                 </p>
               </div>
               <ModeForm
                 mode={search.mode}
                 campaignId={search.campaignId}
-                defaults={filterDefaults(search.mode, search.params)}
+                defaults={context.defaults}
+                context={context}
               />
             </FilterPanel>
 
@@ -146,7 +166,7 @@ export default async function DiscoveryResults({ params }: { params: { id: strin
               {search.mode === 'competitor' ? (
                 <BrandList
                   searchId={search.id}
-                  brands={brands}
+                  brands={competitorBrands}
                   suggestionsUnavailable={
                     !COMPETITOR_SUGGESTIONS
                       ? 'Automatic competitor suggestions are restricted until the derived-analysis approval is configured on this deployment. Entering competitors yourself works normally.'

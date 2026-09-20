@@ -37,6 +37,20 @@ const money = z
 
 export const campaignSchema = z.object({
   name: z.string().trim().min(2, 'Name this campaign').max(120),
+  /**
+   * The brand profile this campaign is for.
+   *
+   * Optional, and separate from `brand` below. `brand` is the free text people
+   * typed before profiles existed and is still what a legacy campaign shows;
+   * this is the link. They are not merged on a name match — see 0041.
+   */
+  brandId: z
+    .string()
+    .uuid()
+    .optional()
+    .nullable()
+    .or(z.literal(''))
+    .transform((v) => (v ? (v as string) : null)),
   brand: text(120),
   product: text(2_000),
   useCase: text(2_000),

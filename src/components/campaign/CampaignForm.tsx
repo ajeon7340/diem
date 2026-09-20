@@ -1,5 +1,6 @@
 'use client';
 
+import { useRef, useState } from 'react';
 import { useFormState, useFormStatus } from 'react-dom';
 
 import { Button } from '@/components/ui/Button';
@@ -57,12 +58,43 @@ function Err({ message }: { message?: string }) {
  * campaign. Asking at signup and then never using the answer made it a
  * required field that did nothing.
  */
+export interface BrandOption {
+  id: string;
+  name: string;
+  sells: string | null;
+  customerNeeds: string | null;
+}
+
 export function CampaignForm({
   channelId = '',
   campaign,
   customerType = null,
-}: { channelId?:string; campaign?:Campaign; customerType?:CustomerType|null }) {
+  brands = [],
+}: { channelId?:string; campaign?:Campaign; customerType?:CustomerType|null; brands?: BrandOption[] }) {
   const [state, formAction] = useFormState(campaign ? updateCampaign : createCampaign, INITIAL_CAMPAIGN_STATE);
+  const [brandId, setBrandId] = useState(campaign?.brandId ?? '');
+  const product = useRef<HTMLTextAreaElement>(null);
+  const useCase = useRef<HTMLTextAreaElement>(null);
+
+  const selected = brands.find((b) => b.id === brandId) ?? null;
+
+  /**
+   * Picking a brand OFFERS its description; it does not bind it.
+   *
+   * Only empty fields are filled, and only on the change — the brief keeps its
+   * own copy from then on. That is the difference between a starting point and
+   * an inheritance: editing the brand profile later must not rewrite a brief
+   * somebody already approved, and it cannot, because nothing reads back.
+   */
+  function pickBrand(id: string) {
+    setBrandId(id);
+    const brand = brands.find((b) => b.id === id);
+    if (!brand) return;
+    if (product.current && !product.current.value.trim() && brand.sells) product.current.value = brand.sells;
+    if (useCase.current && !useCase.current.value.trim() && brand.customerNeeds) {
+      useCase.current.value = brand.customerNeeds;
+    }
+  }
 
   return (
     <form action={formAction} className="space-y-3">
@@ -98,15 +130,39 @@ export function CampaignForm({
             <label htmlFor="brand" className="rail block">
               {customerType === 'agency' ? 'Client brand' : 'Brand'}
             </label>
-            <input
-              id="brand"
-              name="brand"
-              defaultValue={campaign?.brand??''}
-              maxLength={120}
-              placeholder="Northbeam"
-              aria-describedby={customerType === 'agency' ? 'brand-hint' : undefined}
-              className={cn(FIELD, 'mt-1.5')}
-            />
+            {brands.length > 0 ? (
+              <>
+                <select
+                  id="brand"
+                  value={brandId}
+                  onChange={(event) => pickBrand(event.target.value)}
+                  aria-describedby={customerType === 'agency' ? 'brand-hint' : undefined}
+                  className={cn(FIELD, 'mt-1.5')}
+                >
+                  <option value="">Not linked to a saved brand</option>
+                  {brands.map((brand) => (
+                    <option key={brand.id} value={brand.id}>
+                      {brand.name}
+                    </option>
+                  ))}
+                </select>
+                <input type="hidden" name="brandId" value={brandId} />
+                {/* The NAME is copied onto the brief, so a later rename of the
+                    brand profile does not silently rewrite what this campaign
+                    says it was for. */}
+                <input type="hidden" name="brand" value={selected?.name ?? campaign?.brand ?? ''} />
+              </>
+            ) : (
+              <input
+                id="brand"
+                name="brand"
+                defaultValue={campaign?.brand??''}
+                maxLength={120}
+                placeholder="Northbeam"
+                aria-describedby={customerType === 'agency' ? 'brand-hint' : undefined}
+                className={cn(FIELD, 'mt-1.5')}
+              />
+            )}
             {customerType === 'agency' ? (
               <p id="brand-hint" className="mt-1 text-[11px] text-ink-faint">
                 Which client this campaign is for. Each campaign can name a different one.
@@ -126,6 +182,7 @@ export function CampaignForm({
             <textarea
               id="product"
               name="product"
+              ref={product}
               defaultValue={campaign?.product??''}
               rows={2}
               maxLength={2000}
@@ -147,7 +204,7 @@ export function CampaignForm({
               className={cn(AREA, 'mt-1.5')}
             />
           </div>
-          <div><label htmlFor="useCase" className="rail block">Product use case</label><textarea id="useCase" name="useCase" defaultValue={campaign?.useCase??''} maxLength={2000} rows={2} className={cn(AREA,'mt-1.5')}/></div>
+          <div><label htmlFor="useCase" className="rail block">Product use case</label><textarea id="useCase" name="useCase" ref={useCase} defaultValue={campaign?.useCase??''} maxLength={2000} rows={2} className={cn(AREA,'mt-1.5')}/></div>
           <div>
             {/* Free text and not a fixed list: what a given brand must not sit
                 beside is specific to that brand, and a checklist would quietly

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { CampaignForm } from '@/components/campaign/CampaignForm';
 import { SiteHeader } from '@/components/shell/SiteHeader';
 import { getViewer } from '@/lib/access/viewer';
+import { getBrands } from '@/lib/data/brands';
 import { isSupabaseConfigured } from '@/lib/supabase/server';
 
 export const metadata: Metadata = { title: 'New campaign' };
@@ -41,6 +42,13 @@ export default async function NewCampaignPage({searchParams}:{searchParams:{chan
     );
   }
 
+  const brands = (await getBrands(viewer.organization.id)).map((brand) => ({
+    id: brand.id,
+    name: brand.name,
+    sells: brand.sells,
+    customerNeeds: brand.customerNeeds,
+  }));
+
   return (
     <Shell>
       <p className="rail">New campaign</p>
@@ -51,7 +59,7 @@ export default async function NewCampaignPage({searchParams}:{searchParams:{chan
         This is the standard every candidate gets compared against. You add the channels next.
       </p>
       <div className="mt-6">
-        <CampaignForm channelId={searchParams.channelId} customerType={viewer.organization.customerType} />
+        <CampaignForm brands={brands} channelId={searchParams.channelId} customerType={viewer.organization.customerType} />
       </div>
     </Shell>
   );

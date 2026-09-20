@@ -10,6 +10,8 @@ export const dynamic='force-dynamic';
 export default async function Channels({searchParams}:{searchParams:{channel?:string}}) {
  const viewer=await getViewer();
  if(!viewer.organization) redirect(nextStep({signedIn:Boolean(viewer.userId),hasWorkspace:false},searchParams.channel));
+ // A workspace mid-setup is sent back to finish, carrying the channel with it.
+ if(viewer.organization.brandSetupState==='pending') redirect(nextStep({signedIn:true,hasWorkspace:true,brandSetup:'pending'},searchParams.channel));
  let reports:{channel_id:string;title:string;handle:string|null}[]=[];
  let pending:string[]=[];
  if(isSupabaseConfigured()) {

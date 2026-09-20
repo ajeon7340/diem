@@ -2,7 +2,14 @@ import 'server-only';
 
 import { cache } from 'react';
 
-import type { CampaignCategory, CampaignObjective, ClimatePreference, CustomerType, Viewer } from '@/types';
+import type {
+  BrandSetupState,
+  CampaignCategory,
+  CampaignObjective,
+  ClimatePreference,
+  CustomerType,
+  Viewer,
+} from '@/types';
 import { CAMPAIGN_CATEGORIES, CAMPAIGN_OBJECTIVES } from '@/types';
 import type { OrganizationMemberRow } from '@/types/database';
 import { createSessionClient, isSupabaseConfigured } from '@/lib/supabase/server';
@@ -60,6 +67,15 @@ export const getViewer = cache(async (): Promise<Viewer> => {
           )
             ? (org.customer_type as CustomerType)
             : null,
+          defaultBrandId: org.default_brand_id ?? null,
+          // Narrowed against the vocabulary rather than trusted, same as the
+          // fields below. A value that stopped being valid must not route
+          // somebody back through onboarding they already finished.
+          brandSetupState: (['pending', 'skipped', 'done'] as const).includes(
+            org.brand_setup_state as BrandSetupState,
+          )
+            ? (org.brand_setup_state as BrandSetupState)
+            : 'skipped',
           industry: org.industry ?? null,
           sells: org.sells ?? null,
           audience: org.audience ?? null,

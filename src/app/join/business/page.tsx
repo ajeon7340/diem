@@ -11,9 +11,9 @@ export const dynamic = 'force-dynamic';
 export default function JoinBusinessPage({ searchParams }: { searchParams: { channel?: string } }) {
   return (
     <AuthShell
-      eyebrow="Brand or agency · Step 1 of 2"
+      eyebrow="Brand or agency"
       title="Create a business workspace"
-      intro="Enter your work email and we'll send a one-time sign-in link. You'll name your workspace on the next screen."
+      intro="Enter your work email and we'll send a one-time sign-in link. Setting up takes two short steps after that."
       footer={
         <>
           Already have a workspace?{' '}

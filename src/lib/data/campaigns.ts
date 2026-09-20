@@ -17,7 +17,17 @@ import type {
 export interface Campaign {
   id: string;
   name: string;
+  /**
+   * The free-text brand name a customer typed before `brands` existed, and the
+   * fallback for every campaign that has not been linked yet.
+   *
+   * KEPT, not migrated. Two campaigns reading "Northbeam" may be two clients at
+   * one agency or one client typed twice, and a backfill that linked them on a
+   * string match would merge client relationships silently — see 0041.
+   */
   brand: string | null;
+  /** The linked brand profile, or null on a campaign nobody has linked. */
+  brandId: string | null;
   product: string | null;
   useCase?: string | null;
   audience: string | null;
@@ -116,6 +126,7 @@ function toCampaign(row: Record<string, unknown>): Campaign {
     id: row.id as string,
     name: row.name as string,
     brand: (row.brand as string) ?? null,
+    brandId: (row.brand_id as string) ?? null,
     product: (row.product as string) ?? null,
     useCase: (row.use_case as string) ?? null,
     audience: (row.audience as string) ?? null,

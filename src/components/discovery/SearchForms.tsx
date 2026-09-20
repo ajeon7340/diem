@@ -1,9 +1,13 @@
 'use client';
 
+import { useRef } from 'react';
 import { useFormState, useFormStatus } from 'react-dom';
 import { Search } from 'lucide-react';
 
+import { saveSearchAsBrandDefaults } from '@/app/actions/brand';
 import { startDiscovery, type DiscoveryState } from '@/app/actions/discovery';
+import { COUNTRIES, LANGUAGES } from '@/lib/locale/vocabulary';
+import { PROVENANCE_LABEL, type SearchContext } from '@/lib/discovery/context';
 import { INITIAL_DISCOVERY } from '@/app/actions/state';
 import { LOCALE_PARAMETER_DISCLOSURE } from '@/lib/youtube/search-contract';
 import { SIMILARITY_DIMENSIONS } from '@/lib/discovery/schemas';
@@ -34,6 +38,7 @@ import { SIMILARITY_DIMENSION_LABEL, SIMILARITY_LIMIT, type DiscoveryMode } from
 
 export interface FilterDefaults {
   keywords?: string;
+  customerNeed?: string;
   product?: string;
   language?: string;
   market?: string;
@@ -45,7 +50,6 @@ export interface FilterDefaults {
   channel?: string;
   dimensions?: string[];
   category?: string;
-  customerNeed?: string;
   pricePositioning?: string;
   knownCompetitors?: string;
 }
@@ -55,6 +59,135 @@ const field =
 const label = 'block text-[12px] font-medium text-ink';
 const help = 'mt-1 text-[11px] leading-relaxed text-ink-muted';
 const scroll = 'min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4';
+
+/**
+ * Where a prefilled value came from.
+ *
+ * A field that filled itself in with no explanation reads as something the
+ * customer typed and forgot, and the reflex is to edit it rather than trust it.
+ * Three words fixes that.
+ */
+function From({ context, field: key }: { context?: SearchContext; field: keyof FilterDefaults }) {
+  const source = context?.provenance?.[key];
+  if (!source || source === 'search') return null;
+  return <span className="ml-1.5 font-normal text-ink-faint">· {PROVENANCE_LABEL[source]}</span>;
+}
+
+/**
+ * A market or language picker, named rather than coded.
+ *
+ * The brand's own saved values come first, because they are the likely answer;
+ * the full vocabulary follows. ONE AT A TIME because that is what the API
+ * takes — `regionCode` and `relevanceLanguage` are single-valued — so a brand
+ * that sells in four markets picks which one this search is about.
+ */
+function LocalePicker({
+  id,
+  name,
+  label: text,
+  options,
+  preferred,
+  defaultValue,
+  context,
+  field: key,
+  anyLabel,
+}: {
+  id: string;
+  name: string;
+  label: string;
+  options: { code: string; name: string }[];
+  preferred: string[];
+  defaultValue?: string;
+  context?: SearchContext;
+  field: keyof FilterDefaults;
+  anyLabel: string;
+}) {
+  const saved = options.filter((option) => preferred.includes(option.code));
+  const rest = options.filter((option) => !preferred.includes(option.code));
+  return (
+    <div>
+      <label className={label} htmlFor={id}>
+        {text}
+        <From context={context} field={key} />
+      </label>
+      <select id={id} name={name} defaultValue={defaultValue ?? ''} className={`${field} mt-1.5`}>
+        <option value="">{anyLabel}</option>
+        {saved.length ? (
+          <optgroup label="Saved on this brand">
+            {saved.map((option) => (
+              <option key={option.code} value={option.code}>
+                {option.name}
+              </option>
+            ))}
+          </optgroup>
+        ) : null}
+        <optgroup label="All">
+          {rest.map((option) => (
+            <option key={option.code} value={option.code}>
+              {option.name}
+            </option>
+          ))}
+        </optgroup>
+      </select>
+    </div>
+  );
+}
+
+/**
+ * Topic chips built from what the customer already wrote on the brand and the
+ * campaign. Clicking one APPENDS it to the topics field, which stays editable —
+ * topics describe what this search is exploring, not a permanent attribute of
+ * the company.
+ */
+function TopicSuggestions({
+  suggestions,
+  onPick,
+}: {
+  suggestions: string[];
+  onPick: (term: string) => void;
+}) {
+  if (suggestions.length === 0) return null;
+  return (
+    <div>
+      <p className="text-[11px] text-ink-muted">From your brand and campaign — click to add:</p>
+      <ul className="mt-1.5 flex flex-wrap gap-1.5">
+        {suggestions.map((term) => (
+          <li key={term}>
+            <button
+              type="button"
+              onClick={() => onPick(term)}
+              className="rounded-md border border-line bg-paper px-2 py-1 text-[11px] text-ink-muted hover:border-line-strong hover:text-ink"
+            >
+              + {term}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/**
+ * Write the current market, language and product line back to the brand.
+ *
+ * A NAMED BUTTON, never a side effect of searching. `formAction` sends this one
+ * submit to a different server action, so the same fields the customer is
+ * looking at are what gets saved — and nothing is saved unless they press it.
+ */
+function SaveAsBrandDefaults() {
+  const { pending } = useFormStatus();
+  return (
+    <button
+      type="submit"
+      formAction={saveSearchAsBrandDefaults}
+      disabled={pending}
+      className="text-[11px] text-ink-muted underline-offset-4 hover:text-ink hover:underline disabled:opacity-50"
+      title="Saves what you sell, the market and the language onto this brand. Topics stay with the search."
+    >
+      Save as brand defaults
+    </button>
+  );
+}
 
 /** The optional half, folded away. Open once something inside it is set. */
 function MoreFilters({ children, open }: { children: React.ReactNode; open: boolean }) {
@@ -97,20 +230,34 @@ function Footer({ state }: { state: DiscoveryState }) {
 export function CriteriaForm({
   campaignId,
   defaults = {},
+  context,
 }: {
   campaignId: string | null;
   defaults?: FilterDefaults;
+  context?: SearchContext;
 }) {
   const [state, action] = useFormState(startDiscovery, INITIAL_DISCOVERY);
+  const topics = useRef<HTMLInputElement>(null);
   const hasOptional = Boolean(
     defaults.language || defaults.market || defaults.formats?.length || defaults.minSubscribers ||
       defaults.maxSubscribers || defaults.publishedWithinDays || defaults.excludeTopics,
   );
 
+  /** Append, never replace: a suggestion adds to what is already typed. */
+  function addTopic(term: string) {
+    const input = topics.current;
+    if (!input) return;
+    const current = input.value.trim();
+    if (current.toLowerCase().split(/\s*,\s*/).includes(term.toLowerCase())) return;
+    input.value = current ? `${current}, ${term}` : term;
+    input.focus();
+  }
+
   return (
     <form action={action} className="flex min-h-0 flex-1 flex-col">
       <input type="hidden" name="mode" value="criteria" />
       {campaignId ? <input type="hidden" name="campaignId" value={campaignId} /> : null}
+      {context?.brand ? <input type="hidden" name="brandId" value={context.brand.id} /> : null}
 
       <div className={scroll}>
         <div>
@@ -120,18 +267,22 @@ export function CriteriaForm({
           <input
             id="keywords"
             name="keywords"
+            ref={topics}
             defaultValue={defaults.keywords ?? ''}
             className={`${field} mt-1.5`}
             placeholder="home espresso, coffee gear"
             maxLength={400}
             title="One search per term, sent to YouTube exactly as you type it. Separate terms with commas."
           />
-          <p className={help}>One search per term. Separate with commas.</p>
+          <p className={help}>What this search is exploring — not saved to the brand.</p>
         </div>
+
+        <TopicSuggestions suggestions={context?.topicSuggestions ?? []} onPick={addTopic} />
 
         <div>
           <label className={label} htmlFor="product">
             What you sell
+            <From context={context} field="product" />
           </label>
           <textarea
             id="product"
@@ -141,43 +292,36 @@ export function CriteriaForm({
             maxLength={2000}
             className="mt-1.5 w-full rounded-lg border border-line bg-surface p-2.5 text-[13px] text-ink placeholder:text-ink-faint"
             placeholder="A £180 hand grinder for home espresso."
-            title="Optional. Its distinctive words are used to pick out matches in the titles and descriptions we retrieve."
           />
-          <p className={help}>Optional — helps pick out matches.</p>
+          <p className={help}>Helps pick out matches in what we retrieve.</p>
         </div>
 
         <MoreFilters open={hasOptional}>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={label} htmlFor="language">
-                Language
-              </label>
-              <input
-                id="language"
-                name="language"
-                defaultValue={defaults.language ?? ''}
-                className={`${field} mt-1.5`}
-                placeholder="en"
-                maxLength={2}
-                title={LOCALE_PARAMETER_DISCLOSURE}
-              />
-            </div>
-            <div>
-              <label className={label} htmlFor="market">
-                Market
-              </label>
-              <input
-                id="market"
-                name="market"
-                defaultValue={defaults.market ?? ''}
-                className={`${field} mt-1.5`}
-                placeholder="GB"
-                maxLength={2}
-                title={LOCALE_PARAMETER_DISCLOSURE}
-              />
-            </div>
-          </div>
-          <p className={help}>Search preferences, not a measure of who watches.</p>
+          <LocalePicker
+            id="language"
+            name="language"
+            label="Creator content language"
+            options={LANGUAGES}
+            preferred={context?.brand?.contentLanguages ?? []}
+            defaultValue={defaults.language}
+            context={context}
+            field="language"
+            anyLabel="Any language"
+          />
+          <LocalePicker
+            id="market"
+            name="market"
+            label="Market"
+            options={COUNTRIES}
+            preferred={context?.brand?.markets ?? []}
+            defaultValue={defaults.market}
+            context={context}
+            field="market"
+            anyLabel="Any market"
+          />
+          <p className={help}>
+            Search preferences sent to YouTube. They are not a measure of who watches.
+          </p>
 
           <fieldset>
             <legend className={label}>Video length</legend>
@@ -259,6 +403,7 @@ export function CriteriaForm({
           <div>
             <label className={label} htmlFor="excludeTopics">
               Exclude topics
+              <From context={context} field="excludeTopics" />
             </label>
             <input
               id="excludeTopics"
@@ -270,6 +415,8 @@ export function CriteriaForm({
               title="A candidate is dropped if the term appears in its channel name, description or a retrieved video title."
             />
           </div>
+
+          {context?.brand ? <SaveAsBrandDefaults /> : null}
         </MoreFilters>
       </div>
 
@@ -281,9 +428,11 @@ export function CriteriaForm({
 export function SimilarForm({
   campaignId,
   defaults = {},
+  context,
 }: {
   campaignId: string | null;
   defaults?: FilterDefaults;
+  context?: SearchContext;
 }) {
   const [state, action] = useFormState(startDiscovery, INITIAL_DISCOVERY);
   const picked = defaults.dimensions;
@@ -292,6 +441,7 @@ export function SimilarForm({
     <form action={action} className="flex min-h-0 flex-1 flex-col">
       <input type="hidden" name="mode" value="similar" />
       {campaignId ? <input type="hidden" name="campaignId" value={campaignId} /> : null}
+      {context?.brand ? <input type="hidden" name="brandId" value={context.brand.id} /> : null}
 
       <div className={scroll}>
         <div>
@@ -347,9 +497,11 @@ export function SimilarForm({
 export function CompetitorForm({
   campaignId,
   defaults = {},
+  context,
 }: {
   campaignId: string | null;
   defaults?: FilterDefaults;
+  context?: SearchContext;
 }) {
   const [state, action] = useFormState(startDiscovery, INITIAL_DISCOVERY);
   const hasOptional = Boolean(
@@ -360,6 +512,7 @@ export function CompetitorForm({
     <form action={action} className="flex min-h-0 flex-1 flex-col">
       <input type="hidden" name="mode" value="competitor" />
       {campaignId ? <input type="hidden" name="campaignId" value={campaignId} /> : null}
+      {context?.brand ? <input type="hidden" name="brandId" value={context.brand.id} /> : null}
 
       <div className={scroll}>
         <div>
@@ -381,6 +534,7 @@ export function CompetitorForm({
         <div>
           <label className={label} htmlFor="competitor-product">
             Your product
+            <From context={context} field="product" />
           </label>
           <textarea
             id="competitor-product"
@@ -464,12 +618,14 @@ export function ModeForm({
   mode,
   campaignId,
   defaults,
+  context,
 }: {
   mode: DiscoveryMode;
   campaignId: string | null;
   defaults?: FilterDefaults;
+  context?: SearchContext;
 }) {
-  if (mode === 'similar') return <SimilarForm campaignId={campaignId} defaults={defaults} />;
-  if (mode === 'competitor') return <CompetitorForm campaignId={campaignId} defaults={defaults} />;
-  return <CriteriaForm campaignId={campaignId} defaults={defaults} />;
+  if (mode === 'similar') return <SimilarForm campaignId={campaignId} defaults={defaults} context={context} />;
+  if (mode === 'competitor') return <CompetitorForm campaignId={campaignId} defaults={defaults} context={context} />;
+  return <CriteriaForm campaignId={campaignId} defaults={defaults} context={context} />;
 }

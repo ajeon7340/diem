@@ -15,14 +15,22 @@ export default async function BusinessOnboardingPage({ searchParams }: { searchP
     const viewer = await getViewer();
     if (!viewer.userId) redirect(nextStep({ signedIn: false, hasWorkspace: false }, searchParams.channel));
     // One org per user in the MVP; `create_organization` would reject a second.
-    if (viewer.organization) redirect(nextStep({ signedIn: true, hasWorkspace: true }, searchParams.channel));
+    if (viewer.organization) {
+      redirect(
+        nextStep(
+          { signedIn: true, hasWorkspace: true, brandSetup: viewer.organization.brandSetupState },
+          searchParams.channel,
+        ),
+      );
+    }
   }
 
   return (
     <AuthShell
-      eyebrow="Brand or agency · Step 2 of 2"
-      width="checklist"
-      title="Name your workspace"
+      eyebrow="Step 1 of 2"
+      width="form"
+      title="Your workspace"
+      intro="Two short steps. You can change either answer later in Settings."
       footer={null}
     >
       <BusinessOnboardingForm channel={searchParams.channel} />

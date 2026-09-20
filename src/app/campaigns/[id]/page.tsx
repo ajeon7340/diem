@@ -18,6 +18,7 @@ import { SiteHeader } from '@/components/shell/SiteHeader';
 import { Panel } from '@/components/ui/Panel';
 import { getViewer } from '@/lib/access/viewer';
 import { getCampaign, getCandidates, getChannelJobs } from '@/lib/data/campaigns';
+import { getBrands } from '@/lib/data/brands';
 import { getReferences } from '@/lib/data/references';
 import { CATEGORIES, REGIONS, fetchTrending } from '@/lib/youtube/trending';
 import { standard, toRow } from '@/lib/report/candidate-compare';
@@ -41,6 +42,14 @@ export default async function CampaignPage({
   if (!campaign) notFound();
 
   const candidates = await getCandidates(campaign.id);
+  const brands = viewer.organization
+    ? (await getBrands(viewer.organization.id)).map((brand) => ({
+        id: brand.id,
+        name: brand.name,
+        sells: brand.sells,
+        customerNeeds: brand.customerNeeds,
+      }))
+    : [];
   const rows = candidates.map(toRow);
   const {data: publicRows} = candidates.length ? await createSessionClient().from('channel_analyses').select('*').in('channel_id',candidates.map(c=>c.channelId)) : {data:[]};
   const printReports = (publicRows??[]).map(r=>publicReport(r)).filter((r):r is NonNullable<typeof r>=>!!r);
@@ -100,7 +109,7 @@ export default async function CampaignPage({
 
           <div className="mt-6 print:hidden"><PrintReport/></div>
           <LiveReport active={[...jobs.values()].flat().some(j=>j.status==='queued'||j.status==='running')}/>
-          <details className="mt-6 rounded border bg-surface p-5 print:hidden"><summary className="cursor-pointer text-sm">Edit campaign brief</summary><div className="mt-4"><CampaignForm campaign={campaign} customerType={viewer?.organization?.customerType??null}/></div></details>
+          <details className="mt-6 rounded border bg-surface p-5 print:hidden"><summary className="cursor-pointer text-sm">Edit campaign brief</summary><div className="mt-4"><CampaignForm campaign={campaign} brands={brands} customerType={viewer?.organization?.customerType??null}/></div></details>
           {!AMENDMENT_ACCEPTED&&<p className="mt-5 text-sm text-ink-muted">Suitability and comment analysis are gated until YouTube approval is configured. Public evidence is below.</p>}
           <div className="mt-8 space-y-4">
             <Panel title="Add a candidate" meta="no creator signup required">

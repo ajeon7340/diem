@@ -1404,10 +1404,27 @@ export const OBJECTIVE_LABEL: Record<CampaignObjective, string> = {
 /** Whether this workspace buys for itself or on behalf of clients. */
 export type CustomerType = 'brand' | 'agency';
 
+export type BrandSetupState = 'pending' | 'skipped' | 'done';
+
 export interface Organization {
   id: string;
   name: string;
   billingPlan: BillingPlan;
+  /**
+   * Which brand this workspace starts on. Null until one is saved.
+   *
+   * A POINTER, not a profile. What the brand sells lives on `brands` — see
+   * migration 0041 — because an agency's own description is not product context
+   * for its clients, and `organizations.sells` had been doing both jobs.
+   */
+  defaultBrandId: string | null;
+  /**
+   * How far brand setup got. 'pending' means the step has not been answered and
+   * a returning customer should be taken back to it; 'skipped' means they
+   * answered by choosing to do it later, and asking again would be the product
+   * arguing with a decision they made.
+   */
+  brandSetupState: BrandSetupState;
   /**
    * Collected at signup and, until now, never read back anywhere — written
    * once and consumed by nothing, which makes a required field dishonest.

@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.redirect(
     `${origin}${nextStep(
-      { signedIn: true, hasWorkspace: Boolean(viewer.organization) },
+      { signedIn: true, hasWorkspace: Boolean(viewer.organization), brandSetup: viewer.organization?.brandSetupState },
       request.nextUrl.searchParams.get('channel'),
     )}`,
   );

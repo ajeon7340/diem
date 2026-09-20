@@ -57,6 +57,7 @@ export async function createCampaign(
 
   const parsed = campaignSchema.safeParse({
     name: formData.get('name'),
+    brandId: formData.get('brandId'),
     brand: formData.get('brand'),
     product: formData.get('product'),
     useCase: formData.get('useCase'),
@@ -80,6 +81,9 @@ export async function createCampaign(
       organization_id: viewer.organization.id,
       created_by: viewer.userId,
       name: parsed.data.name,
+      // The trigger in 0041 refuses a brand from another workspace, so a forged
+      // id fails the insert rather than attaching somebody else's client.
+      brand_id: parsed.data.brandId,
       brand: parsed.data.brand,
       product: parsed.data.product,
       use_case: parsed.data.useCase,
@@ -325,7 +329,7 @@ export async function updateCampaign(_prev: CampaignState, form: FormData): Prom
  const parsed=campaignSchema.safeParse(Object.fromEntries(form));
  if(!parsed.success)return {status:'error',message:'Check the campaign fields.',fieldErrors:collect(parsed.error.issues)};
  const p=parsed.data;const id=String(form.get('campaignId')??'');
- const {error}=await createSessionClient().from('campaigns').update({name:p.name,brand:p.brand,product:p.product,use_case:p.useCase,audience:p.audience,objective:p.objective,avoid_topics:p.avoidTopics,budget_total:p.budgetTotal}).eq('id',id).eq('organization_id',viewer.organization.id);
+ const {error}=await createSessionClient().from('campaigns').update({name:p.name,brand_id:p.brandId,brand:p.brand,product:p.product,use_case:p.useCase,audience:p.audience,objective:p.objective,avoid_topics:p.avoidTopics,budget_total:p.budgetTotal}).eq('id',id).eq('organization_id',viewer.organization.id);
  if(error)return {status:'error',message:'Could not update the brief.'};
  revalidatePath(`/campaigns/${id}`);redirect(`/campaigns/${id}`);
 }

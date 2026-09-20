@@ -55,6 +55,11 @@ export async function startDiscovery(_: DiscoveryState, form: FormData): Promise
   if (!parsed.ok) return parsed.state;
 
   const supabase = createSessionClient();
+  // The brand is recorded so the search can be read back with the context it
+  // ran under. The trigger in 0041 refuses an id from another workspace, so a
+  // forged field fails the insert rather than leaking a name back through a
+  // selector.
+  const brandId = String(form.get('brandId') ?? '') || null;
   const { data: search, error } = await supabase
     .from('discovery_searches')
     .insert({
@@ -62,6 +67,7 @@ export async function startDiscovery(_: DiscoveryState, form: FormData): Promise
       created_by: viewer.userId,
       mode,
       campaign_id: parsed.campaignId,
+      brand_id: brandId,
       params: parsed.params,
       reference_channel_id: mode === 'similar' ? String(form.get('channel') ?? '').slice(0, 200) : null,
     })

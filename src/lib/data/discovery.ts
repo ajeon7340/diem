@@ -27,6 +27,8 @@ export interface DiscoverySearchRow {
   id: string;
   mode: DiscoveryMode;
   campaignId: string | null;
+  /** The brand this search ran for, so the panel can describe the stored run. */
+  brandId: string | null;
   params: Record<string, unknown>;
   referenceChannelId: string | null;
   reference: ReferenceProfile | null;
@@ -84,6 +86,7 @@ function toSearch(row: Record<string, unknown>): DiscoverySearchRow {
     id: row.id as string,
     mode: row.mode as DiscoveryMode,
     campaignId: (row.campaign_id as string) ?? null,
+    brandId: (row.brand_id as string) ?? null,
     params: (row.params as Record<string, unknown>) ?? {},
     referenceChannelId: (row.reference_channel_id as string) ?? null,
     reference: (row.reference_profile as ReferenceProfile) ?? null,

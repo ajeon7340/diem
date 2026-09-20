@@ -79,3 +79,10 @@ echo
 echo "  discovery isolation:"
 psql -d "${DB}" -v ON_ERROR_STOP=1 -q -f "${HERE}/probe-discovery.sql" 2>&1 |
   sed -E -e 's/^psql:[^ ]+ (NOTICE|ERROR):  ?//' -e 's/^(NOTICE|ERROR):  ?//'
+
+# Brands: one agency with many clients, no pointer across workspaces, an
+# idempotent save, and a brand edit that does not rewrite a brief.
+echo
+echo "  brand model:"
+psql -d "${DB}" -v ON_ERROR_STOP=1 -q -f "${HERE}/probe-brands.sql" 2>&1 |
+  sed -E -e 's/^psql:[^ ]+ (NOTICE|ERROR):  ?//' -e 's/^(NOTICE|ERROR):  ?//'

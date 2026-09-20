@@ -3,13 +3,16 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import { removeSavedCandidate } from '@/app/actions/discovery';
+import { ContextBar } from '@/components/discovery/ContextBar';
 import { FilterPanel } from '@/components/discovery/FilterPanel';
 import { ModeTabs } from '@/components/discovery/ModeTabs';
 import { ModeForm } from '@/components/discovery/SearchForms';
 import { StartGuide } from '@/components/discovery/StartGuide';
 import { SiteHeader } from '@/components/shell/SiteHeader';
 import { getViewer } from '@/lib/access/viewer';
-import { getCampaign } from '@/lib/data/campaigns';
+import { getCampaign, getCampaigns } from '@/lib/data/campaigns';
+import { getBrands, pickBrand } from '@/lib/data/brands';
+import { buildContext } from '@/lib/discovery/context';
 import { getSavedCandidates, getSearches, getSearchJobs } from '@/lib/data/discovery';
 import { nextStep } from '@/lib/channel/state';
 import { searchState, SEARCH_STATE_LABEL } from '@/lib/discovery/state';
@@ -32,7 +35,7 @@ const MODES: DiscoveryMode[] = ['criteria', 'similar', 'competitor'];
 export default async function DiscoverPage({
   searchParams,
 }: {
-  searchParams: { mode?: string; campaign?: string };
+  searchParams: { mode?: string; campaign?: string; brand?: string };
 }) {
   const viewer = await getViewer();
   if (!viewer.organization) {
@@ -43,11 +46,24 @@ export default async function DiscoverPage({
     ? (searchParams.mode as DiscoveryMode)
     : 'criteria';
 
-  const campaign = searchParams.campaign ? await getCampaign(searchParams.campaign) : null;
-  const [searches, saved] = await Promise.all([
+  const [campaign, brands, campaigns, searches, saved] = await Promise.all([
+    searchParams.campaign ? getCampaign(searchParams.campaign) : Promise.resolve(null),
+    getBrands(viewer.organization.id),
+    getCampaigns(viewer.organization.id),
     getSearches(viewer.organization.id, 8),
     getSavedCandidates(viewer.organization.id),
   ]);
+
+  // The brand a campaign belongs to wins over the one in the URL: a campaign
+  // selected for client A cannot be read against client B's profile, and
+  // silently pairing them would be the wrong-product failure this whole model
+  // exists to stop.
+  const brand = pickBrand(
+    brands,
+    campaign?.brandId ?? searchParams.brand ?? null,
+    viewer.organization.defaultBrandId,
+  );
+  const context = buildContext({ mode, brand, campaign });
   const jobs = await getSearchJobs(searches.map((s) => s.id));
 
   return (
@@ -74,11 +90,21 @@ export default async function DiscoverPage({
 
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-6">
             <FilterPanel>
-              <div className="shrink-0 border-b border-line p-3">
+              <div className="shrink-0 space-y-3 border-b border-line p-3">
+                <ContextBar
+                  context={context}
+                  brands={brands.map((b) => ({ id: b.id, name: b.name }))}
+                  campaigns={campaigns.map((c) => ({ id: c.id, name: c.name, brandId: c.brandId }))}
+                />
                 <ModeTabs mode={mode} />
-                <p className="mt-2 text-[11px] leading-relaxed text-ink-muted">{DISCOVERY_MODES[mode].blurb}</p>
+                <p className="text-[11px] leading-relaxed text-ink-muted">{DISCOVERY_MODES[mode].blurb}</p>
               </div>
-              <ModeForm mode={mode} campaignId={campaign?.id ?? null} />
+              <ModeForm
+                mode={mode}
+                campaignId={campaign?.id ?? null}
+                defaults={context.defaults}
+                context={context}
+              />
             </FilterPanel>
 
             <div className="min-w-0 flex-1 space-y-6">

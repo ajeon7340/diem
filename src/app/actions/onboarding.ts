@@ -1,6 +1,6 @@
 'use server';
 
-import { channelDestination } from '@/lib/channel/state';
+import { BRAND_PATH, channelDestination } from '@/lib/channel/state';
 import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
 
@@ -43,7 +43,11 @@ export async function createOrganization(
   _prev: OnboardingState,
   formData: FormData,
 ): Promise<OnboardingState> {
-  const destination = channelDestination(formData.get('channel'));
+  // Step 1 of two. The workspace is named here and the BRAND is described on
+  // the next screen, because they are different things: an agency's own
+  // description is not product context for its clients, and one form asking for
+  // both is how they got collapsed in the first place.
+  const destination = channelDestination(formData.get('channel'), BRAND_PATH);
   const customerType = formData.get('customerType');
   if (customerType !== 'brand' && customerType !== 'agency') return { status: 'error', message: 'Choose brand or agency.' };
   const parsed = businessOnboardingSchema.safeParse({
@@ -73,8 +77,17 @@ export async function createOrganization(
   if (!viewer.userId) {
     return { status: 'error', message: 'Your sign-in link expired. Request a new one.' };
   }
+  // Idempotent: a retried action or a double-submitted form finds the workspace
+  // it already made and moves on rather than failing on a unique violation.
   if (viewer.organization) {
-    return { status: 'success', message: 'Workspace ready.', redirectTo: destination };
+    return {
+      status: 'success',
+      message: 'Workspace ready.',
+      redirectTo:
+        viewer.organization.brandSetupState === 'pending'
+          ? destination
+          : channelDestination(formData.get('channel')),
+    };
   }
 
   const supabase = createSessionClient();
@@ -108,6 +121,10 @@ export async function createOrganization(
       .from('organizations')
       .update({
         customer_type: customerType,
+        // The brand step has not been answered yet. 'pending' is what brings a
+        // returning customer back to it; 'skipped' would be a decision they
+        // have not made.
+        brand_setup_state: 'pending',
         industry,
         sells,
         audience,

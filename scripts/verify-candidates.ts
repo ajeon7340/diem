@@ -196,7 +196,7 @@ const candidate = (over: Partial<Candidate> = {}): Candidate => ({
 // ---------------------------------------------------------------------------
 {
   const campaign: Campaign = {
-    id: 'camp', name: 'Spring', brand: 'Northbeam', product: null, audience: null,
+    id: 'camp', name: 'Spring', brand: 'Northbeam', brandId: null, product: null, audience: null,
     objective: null, avoidTopics: null, budgetTotal: null, budgetCurrency: 'USD',
     createdAt: '2026-09-19T00:00:00.000Z',
   };

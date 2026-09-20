@@ -3,6 +3,7 @@ import type { OnboardingState, WorkspaceState } from './onboarding';
 import type { TrendingExplainState } from './trending';
 import type { ReferenceState } from './reference';
 import type { DiscoveryState } from './discovery';
+import type { BrandState } from './brand';
 import type { MagicLinkState } from '@/lib/auth/actions';
 
 /**
@@ -43,6 +44,8 @@ export const INITIAL_TRENDING_EXPLAIN: TrendingExplainState = {
 export const INITIAL_MAGIC_LINK_STATE: MagicLinkState = { status: 'idle' };
 
 export const INITIAL_DISCOVERY: DiscoveryState = {};
+
+export const INITIAL_BRAND: BrandState = { status: 'idle' };
 
 export const INITIAL_REFERENCE: ReferenceState = {
   status: 'idle',

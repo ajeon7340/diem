@@ -25,13 +25,41 @@ export function channelDestination(value: unknown, path = CHANNEL_PATH): string 
 export interface Journey {
   signedIn: boolean;
   hasWorkspace: boolean;
+  /**
+   * How far brand setup got. Defaults to 'done' so every existing call site
+   * keeps its behaviour: a guard asking "does this visitor have a workspace"
+   * must not start routing people into a step they already answered.
+   *
+   * 'pending' is the only value that diverts. 'skipped' is an ANSWER — somebody
+   * chose to do it later — and sending them back through it on every sign-in
+   * would be the product arguing with a decision they made.
+   */
+  brandSetup?: 'pending' | 'skipped' | 'done';
 }
-export function nextStep({ signedIn, hasWorkspace }: Journey, channel: unknown): string {
+export function nextStep({ signedIn, hasWorkspace, brandSetup = 'done' }: Journey, channel: unknown): string {
   if (!signedIn) return channelDestination(channel, '/join/business');
-  // Signed in but no workspace: name it, then confirm the channel. Returning
-  // users with a workspace skip this step entirely.
+  // Signed in but no workspace: name it, then the brand, then confirm the
+  // channel. Returning users with a workspace skip both steps entirely.
   if (!hasWorkspace) return channelDestination(channel, '/onboarding/business');
+  if (brandSetup === 'pending') return channelDestination(channel, BRAND_PATH);
   return channelDestination(channel, CHANNEL_PATH);
+}
+
+export const BRAND_PATH = '/onboarding/brand';
+
+/**
+ * Where onboarding lets go of somebody.
+ *
+ * TWO DESTINATIONS, decided by what they arrived with. A visitor who typed a
+ * channel before they had an account is one click from the report they came
+ * for, and dropping them on a search page instead makes them find it again.
+ * Somebody who arrived without one has nothing to confirm, so they land in
+ * discovery with the brand they just described already selected.
+ */
+export function onboardingDestination(channel: unknown, brandId: string | null): string {
+  const entered = channelInput(channel);
+  if (entered) return channelDestination(entered, CHANNEL_PATH);
+  return brandId ? `/discover?brand=${encodeURIComponent(brandId)}` : '/discover';
 }
 
 export function freshData(at: unknown, now = Date.now()): boolean {
