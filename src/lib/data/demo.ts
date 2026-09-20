@@ -40,6 +40,7 @@ export function demoViewer(): Viewer {
       id: '0e000000-0000-4000-8000-00000000000f',
       name: 'Northbeam Media',
       billingPlan: role === 'pro_agency' ? 'pro_agency' : 'free',
+      customerType: 'agency',
       // A filled profile, because the demo's job is to show what a fit read
       // does when it knows who is asking. The empty-profile path is worth
       // seeing too — clear these to check it.

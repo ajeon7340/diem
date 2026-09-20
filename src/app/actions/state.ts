@@ -1,5 +1,5 @@
 import type { CampaignState, CandidateState } from './campaign';
-import type { OnboardingState } from './onboarding';
+import type { OnboardingState, WorkspaceState } from './onboarding';
 import type { TrendingExplainState } from './trending';
 import type { ReferenceState } from './reference';
 import type { MagicLinkState } from '@/lib/auth/actions';
@@ -30,6 +30,7 @@ import type { MagicLinkState } from '@/lib/auth/actions';
 export const INITIAL_CAMPAIGN_STATE: CampaignState = { status: 'idle' };
 export const INITIAL_CANDIDATE_STATE: CandidateState = { status: 'idle' };
 export const INITIAL_ONBOARDING_STATE: OnboardingState = { status: 'idle' };
+export const INITIAL_WORKSPACE_STATE: WorkspaceState = { status: 'idle' };
 export const INITIAL_TRENDING_EXPLAIN: TrendingExplainState = {
   status: 'idle',
   videoId: null,

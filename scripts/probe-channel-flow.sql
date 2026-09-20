@@ -84,6 +84,51 @@ begin
   'a workspace works with no budget or campaign detail');
 
  -- ---------------------------------------------------------------------
+ -- Workspace settings are editable, and only the two fields
+ --
+ -- Grant and policy have to agree: 0001 grants `update (name)`, 0037 grants
+ -- `update (customer_type)`, and `organizations_admin_update` admits owners
+ -- and admins. Either half alone is useless — a grant with no policy updates
+ -- nothing, a policy with no grant raises insufficient_privilege — so the pair
+ -- is asserted through an actual authenticated update rather than from the
+ -- catalogue.
+ -- ---------------------------------------------------------------------
+ set local role authenticated;
+ perform set_config('request.jwt.claim.sub',ua::text,true);
+
+ update organizations set name='Renamed In Settings' where id=oa;
+ perform pg_temp.assert_ok(
+  (select name from organizations where id=oa)='Renamed In Settings',
+  'an owner can rename the workspace from settings');
+
+ update organizations set customer_type='agency' where id=oa;
+ perform pg_temp.assert_ok(
+  (select customer_type from organizations where id=oa)='agency',
+  'and set the customer type');
+
+ -- The column-level REVOKE is what stops an admin selling themselves a plan.
+ failed:=false;
+ begin update organizations set billing_plan='pro_agency' where id=oa;
+ exception when insufficient_privilege then failed:=true; end;
+ perform pg_temp.assert_ok(failed,'but cannot change their own billing plan');
+
+ -- Another workspace is not theirs to rename, and the policy makes it a
+ -- no-op rather than an error — nothing tells them the row exists.
+ -- The attempt is a silent no-op: `organizations_member_read` means A cannot
+ -- even SELECT B, so checking the name from A's session returns NULL whether
+ -- the write landed or not. The first version of this assertion compared
+ -- against 'Flow B' and would have passed just as happily if the update HAD
+ -- gone through. It has to be read back by someone who can see the row.
+ update organizations set name='Hijacked' where id=ob;
+ perform pg_temp.assert_ok(
+  (select count(*) from organizations where id=ob)=0,
+  'another workspace is not even visible');
+ reset role;
+ perform pg_temp.assert_ok(
+  (select name from organizations where id=ob)='Flow B',
+  'and cannot be renamed by an outsider');
+
+ -- ---------------------------------------------------------------------
  -- Viewing an existing report saves it without collecting again
  --
  -- The confirmation screen offers View report when current data exists. That

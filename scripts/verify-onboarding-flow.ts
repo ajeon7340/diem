@@ -8,6 +8,8 @@
  *
  *   npm run verify:onboarding-flow
  */
+import { readFileSync } from 'node:fs';
+
 import { channelDestination, channelInput, freshData, nextStep, reportState } from '@/lib/channel/state';
 import type { AnalysisJob } from '@/types';
 
@@ -105,6 +107,66 @@ check(
   reportState([], false, 0) === reportState([], true, 0),
   false,
 );
+
+// ---------------------------------------------------------------------------
+// Workspace settings: the two answers signup asks for, and only those
+//
+// Asserted against the source because the constraint is a GRANT, not a type.
+// 0001 grants `update (name)` and 0037 grants `update (customer_type)`; every
+// other column on `organizations` is unreachable from a client, `billing_plan`
+// most of all. A field added to this form that is not one of those two fails
+// at the database rather than being silently ignored, so the form and the
+// grants have to be kept in step deliberately.
+// ---------------------------------------------------------------------------
+{
+  const action = readFileSync('src/app/actions/onboarding.ts', 'utf8');
+  const updateBody = action.slice(action.indexOf('export async function updateWorkspace'));
+  const updated = [...updateBody.matchAll(/\.update\(\{([^}]*)\}\)/g)].map((m) => m[1]).join(' ');
+
+  check('the workspace update writes the name', /name,?/.test(updated), true);
+  check('and the customer type', /customer_type/.test(updated), true);
+  for (const column of ['billing_plan', 'stripe_customer_id', 'id']) {
+    check(`and never ${column}`, updated.includes(column), false);
+  }
+  check(
+    'it refuses a customer type outside the vocabulary',
+    /customerType !== 'brand' && customerType !== 'agency'/.test(updateBody),
+    true,
+  );
+  check('and bounds the name', /length < 2 \|\| name\.length > 120/.test(updateBody), true);
+  check(
+    'a member who may not edit is not told what they are missing',
+    /Only a workspace owner or admin can/.test(updateBody),
+    true,
+  );
+
+  // The form offers exactly the editable pair, prefilled.
+  const form = readFileSync('src/components/settings/WorkspaceForm.tsx', 'utf8');
+  const named = [...form.matchAll(/name="([a-zA-Z_]+)"/g)].map((m) => m[1]);
+  check('the settings form posts only those two fields', [...new Set(named)].sort(), [
+    'customerType',
+    'organizationName',
+  ]);
+  check('the name is prefilled, not blank', /defaultValue=\{name\}/.test(form), true);
+  check('and the stored type is preselected', /defaultChecked=\{customerType === type\}/.test(form), true);
+}
+
+// ---------------------------------------------------------------------------
+// The customer type has to be used, or requiring it is asking for nothing
+// ---------------------------------------------------------------------------
+{
+  const campaignForm = readFileSync('src/components/campaign/CampaignForm.tsx', 'utf8');
+  check(
+    'an agency names the client on the brand field',
+    /customerType === 'agency' \? 'Client brand' : 'Brand'/.test(campaignForm),
+    true,
+  );
+  check(
+    'and is told each campaign can name a different one',
+    /Each campaign can name a different one/.test(campaignForm),
+    true,
+  );
+}
 
 console.log(`\n  ${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);

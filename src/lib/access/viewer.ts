@@ -2,7 +2,7 @@ import 'server-only';
 
 import { cache } from 'react';
 
-import type { CampaignCategory, CampaignObjective, ClimatePreference, Viewer } from '@/types';
+import type { CampaignCategory, CampaignObjective, ClimatePreference, CustomerType, Viewer } from '@/types';
 import { CAMPAIGN_CATEGORIES, CAMPAIGN_OBJECTIVES } from '@/types';
 import type { OrganizationMemberRow } from '@/types/database';
 import { createSessionClient, isSupabaseConfigured } from '@/lib/supabase/server';
@@ -52,6 +52,14 @@ export const getViewer = cache(async (): Promise<Viewer> => {
           id: org.id,
           name: org.name,
           billingPlan: org.billing_plan,
+          // Narrowed against the vocabulary rather than trusted, same as the
+          // fields below: the column is free text with a CHECK, and a value
+          // that stopped being valid must not reach the UI as though it were.
+          customerType: (['brand', 'agency'] as const).includes(
+            org.customer_type as CustomerType,
+          )
+            ? (org.customer_type as CustomerType)
+            : null,
           industry: org.industry ?? null,
           sells: org.sells ?? null,
           audience: org.audience ?? null,

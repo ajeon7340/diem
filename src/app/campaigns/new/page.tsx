@@ -51,7 +51,7 @@ export default async function NewCampaignPage({searchParams}:{searchParams:{chan
         This is the standard every candidate gets compared against. You add the channels next.
       </p>
       <div className="mt-6">
-        <CampaignForm channelId={searchParams.channelId} />
+        <CampaignForm channelId={searchParams.channelId} customerType={viewer.organization.customerType} />
       </div>
     </Shell>
   );

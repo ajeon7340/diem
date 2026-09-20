@@ -16,6 +16,7 @@ import { CandidateForm } from '@/components/campaign/CandidateForm';
 import { ComparisonTable } from '@/components/campaign/ComparisonTable';
 import { SiteHeader } from '@/components/shell/SiteHeader';
 import { Panel } from '@/components/ui/Panel';
+import { getViewer } from '@/lib/access/viewer';
 import { getCampaign, getCandidates, getChannelJobs } from '@/lib/data/campaigns';
 import { getReferences } from '@/lib/data/references';
 import { CATEGORIES, REGIONS, fetchTrending } from '@/lib/youtube/trending';
@@ -34,6 +35,8 @@ export default async function CampaignPage({
   // RLS decides this, not a check here: a campaign belonging to another
   // organisation simply does not come back, and 404 is the honest answer —
   // "not allowed" would confirm the id exists.
+  // Needed only for the brand field's label: an agency names a client there.
+  const viewer = await getViewer();
   const campaign = await getCampaign(params.id);
   if (!campaign) notFound();
 
@@ -97,7 +100,7 @@ export default async function CampaignPage({
 
           <div className="mt-6 print:hidden"><PrintReport/></div>
           <LiveReport active={[...jobs.values()].flat().some(j=>j.status==='queued'||j.status==='running')}/>
-          <details className="mt-6 rounded border bg-surface p-5 print:hidden"><summary className="cursor-pointer text-sm">Edit campaign brief</summary><div className="mt-4"><CampaignForm campaign={campaign}/></div></details>
+          <details className="mt-6 rounded border bg-surface p-5 print:hidden"><summary className="cursor-pointer text-sm">Edit campaign brief</summary><div className="mt-4"><CampaignForm campaign={campaign} customerType={viewer?.organization?.customerType??null}/></div></details>
           {!AMENDMENT_ACCEPTED&&<p className="mt-5 text-sm text-ink-muted">Campaign suitability and comment analysis remain gated until applicable YouTube approval is configured. Review public source evidence directly.</p>}
           <div className="mt-8 space-y-4">
             <Panel title="Add a candidate" meta="no creator signup required">

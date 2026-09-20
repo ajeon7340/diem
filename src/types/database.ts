@@ -139,6 +139,7 @@ export interface AccessRequestRow {
 }
 
 export interface OrganizationRow {
+  customer_type: string | null;
   industry: string | null;
   sells: string | null;
   audience: string | null;

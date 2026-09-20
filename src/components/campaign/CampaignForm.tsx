@@ -3,6 +3,7 @@
 import { useFormState, useFormStatus } from 'react-dom';
 
 import { Button } from '@/components/ui/Button';
+import type { CustomerType } from '@/types';
 import type { Campaign } from '@/lib/data/campaigns';
 import { createCampaign, updateCampaign } from '@/app/actions/campaign';
 import { INITIAL_CAMPAIGN_STATE } from '@/app/actions/state';
@@ -47,7 +48,20 @@ function Err({ message }: { message?: string }) {
  * form was rebuilt: a form that runs past the fold gets scrolled rather than
  * read.
  */
-export function CampaignForm({ channelId = '', campaign }: { channelId?:string; campaign?:Campaign }) {
+/**
+ * `customerType` changes one label and one hint, and nothing else.
+ *
+ * It is the whole reason signup asks the question: for an agency the brand
+ * field names WHICH CLIENT this campaign is for, and that is how several
+ * clients coexist in one workspace; for a brand it is their own name on every
+ * campaign. Asking at signup and then never using the answer made it a
+ * required field that did nothing.
+ */
+export function CampaignForm({
+  channelId = '',
+  campaign,
+  customerType = null,
+}: { channelId?:string; campaign?:Campaign; customerType?:CustomerType|null }) {
   const [state, formAction] = useFormState(campaign ? updateCampaign : createCampaign, INITIAL_CAMPAIGN_STATE);
 
   return (
@@ -82,7 +96,7 @@ export function CampaignForm({ channelId = '', campaign }: { channelId?:string; 
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
           <div>
             <label htmlFor="brand" className="rail block">
-              Brand
+              {customerType === 'agency' ? 'Client brand' : 'Brand'}
             </label>
             <input
               id="brand"
@@ -90,8 +104,14 @@ export function CampaignForm({ channelId = '', campaign }: { channelId?:string; 
               defaultValue={campaign?.brand??''}
               maxLength={120}
               placeholder="Northbeam"
+              aria-describedby={customerType === 'agency' ? 'brand-hint' : undefined}
               className={cn(FIELD, 'mt-1.5')}
             />
+            {customerType === 'agency' ? (
+              <p id="brand-hint" className="mt-1 text-[11px] text-ink-faint">
+                Which client this campaign is for. Each campaign can name a different one.
+              </p>
+            ) : null}
           </div>
           <div>
             <label htmlFor="objective" className="rail block">

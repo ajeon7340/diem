@@ -1401,10 +1401,21 @@ export const OBJECTIVE_LABEL: Record<CampaignObjective, string> = {
   always_on: 'Always-on',
 };
 
+/** Whether this workspace buys for itself or on behalf of clients. */
+export type CustomerType = 'brand' | 'agency';
+
 export interface Organization {
   id: string;
   name: string;
   billingPlan: BillingPlan;
+  /**
+   * Collected at signup and, until now, never read back anywhere — written
+   * once and consumed by nothing, which makes a required field dishonest.
+   * An agency's campaigns each stand for a different client, so the campaign's
+   * brand is the thing that identifies the work; for a brand it is a constant.
+   * Null only for workspaces created before it was asked for.
+   */
+  customerType: CustomerType | null;
   /**
    * Who this buyer is, in enough detail for a fit read to be about them.
    *
