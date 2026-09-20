@@ -73,7 +73,7 @@ const serverModules = files.filter((f) => isUseServer(readFileSync(f, 'utf8')));
 
 check(
   'the scan found the server-action modules',
-  serverModules.length >= 8,
+  serverModules.length >= 4,
   `found ${serverModules.length}`,
 );
 
@@ -99,17 +99,16 @@ check(
   'INITIAL_MAGIC_LINK_STATE is not exported beside sendMagicLink',
   !authSource.includes('export const INITIAL_MAGIC_LINK_STATE'),
 );
-const studioSource = readFileSync('src/app/actions/studio.ts', 'utf8');
-check(
-  'INITIAL_EXPLAIN is not exported beside explainPastedVideo',
-  !studioSource.includes('export const INITIAL_EXPLAIN'),
-);
+// `INITIAL_EXPLAIN` went with the Studio action when the creator half was
+// removed. The rule it proved is still pinned by the scan above and by
+// INITIAL_MAGIC_LINK_STATE below; naming a file that no longer exists would
+// only make this suite fail for the wrong reason.
 
 // And they still exist somewhere, or the forms have no initial state.
 const stateSource = readFileSync('src/app/actions/state.ts', 'utf8');
 check(
-  'both still have a home',
-  stateSource.includes('INITIAL_MAGIC_LINK_STATE') && stateSource.includes('INITIAL_EXPLAIN'),
+  'it still has a home',
+  stateSource.includes('INITIAL_MAGIC_LINK_STATE'),
 );
 check(
   'and that home is not itself a "use server" module',

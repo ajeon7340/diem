@@ -83,9 +83,13 @@ export async function analyzeChannelAndStore(
 /**
  * Queue the model passes for a channel.
  *
- * Same table, same worker, same lease and retry rules as the creator path —
- * `analysis_jobs.channel_id` is set instead of `creator_id` (0031). A second
- * queue would have duplicated all of that to point at a different column.
+ * It passed `creator_id: null` alongside the channel until 0035 dropped that
+ * column, and the consequence was invisible in exactly the way this codebase
+ * keeps producing: the insert failed with "column creator_id does not exist",
+ * the failure was logged rather than raised — correctly, since a queue outage
+ * must not lose a candidate the customer asked for — and the candidate simply
+ * sat on the table with empty comment columns forever. `npm run worker --
+ * --enqueue-missing` is the repair for any row that landed in that window.
  */
 export async function enqueueChannelJob(
   supabase: SupabaseClient,
@@ -94,7 +98,7 @@ export async function enqueueChannelJob(
 ): Promise<{ ok: true } | { ok: false; reason: string }> {
   const { error } = await supabase
     .from('analysis_jobs')
-    .insert({ creator_id: null, channel_id: channelId, kind, params: {} });
+    .insert({ channel_id: channelId, kind, params: {} });
 
   if (error) {
     // 23505 is the partial unique index: a job for this channel and kind is

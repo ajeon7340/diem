@@ -1,20 +1,15 @@
 import 'server-only';
 
-import type { SupabaseClient } from '@supabase/supabase-js';
-
-import { buildClusters } from './clusters';
 import { mapConcurrent } from './concurrent';
 
-import { aiModel, aiProvider, generateStructured } from '@/lib/ai/provider';
-import { ClaimLostError, fetchAllComments, type RawComment, type Spend } from './classify';
+import { generateStructured } from '@/lib/ai/provider';
+import { ClaimLostError, type RawComment, type Spend } from './classify';
 import {
-  INTENT_RUBRIC_VERSION,
   aggregateFromCells,
   cellKey,
   sentimentFromCells,
   type IntentCells,
 } from '@/lib/report/intent';
-import type { CommentCluster } from '@/types';
 import type {
   CommentAxes,
   CommentIntent,
@@ -318,93 +313,8 @@ export function rollUpAxes(labels: AxisLabel[]): AxesRollup {
 }
 
 /** Write the axes and everything derived from them. */
-export async function storeAxes(
-  supabase: SupabaseClient,
-  creatorId: string,
-  rollup: AxesRollup,
-  clusters: CommentCluster[] = [],
-): Promise<{ ok: true } | { ok: false; reason: string }> {
-  const { measurement } = rollup;
-
-  const { error } = await supabase
-    .from('report_metrics')
-    .update({
-      comment_axes: rollup.axes,
-      // Written in the same statement as the axes they are derived from. Two
-      // updates would leave a window where the grid and the clusters under it
-      // disagree about the same corpus.
-      top_comment_clusters: clusters,
-      sentiment_score: rollup.sentiment,
-      purchase_intent_rate: measurement.rate,
-      purchase_intent_ci_low: measurement.ciLow,
-      purchase_intent_ci_high: measurement.ciHigh,
-      purchase_intent_basis: measurement.basis,
-      commercial_density: measurement.commercialDensity,
-      intent_comments_scored: measurement.commentsScored,
-      intent_posts_scored: measurement.postsScored,
-      product_posts_analyzed: measurement.productPostsAnalyzed,
-      intent_dispersion: measurement.dispersion,
-      intent_rubric_version: INTENT_RUBRIC_VERSION,
-      // THE DENOMINATOR THE AXES ARE OVER.
-      //
-      // `comment_axes.total` and `comments_analyzed` describe the same corpus
-      // and are read interchangeably — `censusRisk` falls back to the latter,
-      // `assessReport` compares against it. The signup analysis wrote its own
-      // bounded figure here (600 comments); this pass read a different and
-      // usually larger set, so leaving it would publish two corpus sizes for
-      // one classification and let a share be divided by the wrong one.
-      comments_analyzed: rollup.axes.total,
-      model_version: `${aiProvider()}:${aiModel()}`,
-    })
-    .eq('creator_id', creatorId);
-
-  if (error) return { ok: false, reason: error.message };
-  return { ok: true };
-}
-
-export interface IntentAndStoreResult {
-  commentsClassified: number;
-  videos: number;
-  unreadable: number;
-  productComments: number;
-  rate: number | null;
-  sentiment: number | null;
-  spend: Spend;
-  provider: string;
-  model: string;
-}
-
-/** The whole pass, for the worker. Never swallows. */
-export async function classifyIntentAndStore(
-  supabase: SupabaseClient,
-  creatorId: string,
-  channel: { handle?: string | null; channelId?: string | null },
-  options: IntentRunOptions & { maxVideos?: number; maxComments?: number } = {},
-): Promise<IntentAndStoreResult> {
-  const apiKey = process.env.YOUTUBE_API_KEY;
-  if (!apiKey) throw new Error('YOUTUBE_API_KEY is required — commentThreads.list needs it.');
-
-  const keyVar = aiProvider() === 'gemini' ? 'GEMINI_API_KEY' : 'ANTHROPIC_API_KEY';
-  if (!process.env[keyVar]) throw new Error(`${keyVar} is required for ${aiProvider()}.`);
-
-  const corpus = await fetchAllComments(apiKey, channel, options.maxVideos ?? Infinity, options.maxComments ?? Infinity);
-  const spend: Spend = { inputTokens: 0, outputTokens: 0, calls: 0 };
-  const labels = await classifyAxes(corpus.comments, spend, options);
-  const rollup = rollUpAxes(labels);
-
-  const clusters = buildClusters(corpus.comments, labels);
-  const stored = await storeAxes(supabase, creatorId, rollup, clusters);
-  if (!stored.ok) throw new Error(stored.reason);
-
-  return {
-    commentsClassified: rollup.axes.total,
-    videos: corpus.videos,
-    unreadable: rollup.unreadable,
-    productComments: rollup.measurement.commentsScored,
-    rate: rollup.measurement.rate,
-    sentiment: rollup.sentiment,
-    spend,
-    provider: aiProvider(),
-    model: aiModel(),
-  };
-}
+/**
+ * `storeAxes` and `classifyIntentAndStore` lived here and wrote to
+ * `report_metrics` keyed by `creators.id`. They went with the creator half.
+ * The pass above is untouched — see the note at the foot of `classify.ts`.
+ */

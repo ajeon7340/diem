@@ -16,7 +16,7 @@ const ERRORS: Record<string, string> = {
 export default function SignInPage({
   searchParams,
 }: {
-  searchParams: { error?: string };
+  searchParams: { error?: string; channel?: string };
 }) {
   const error = searchParams.error ? ERRORS[searchParams.error] : undefined;
 
@@ -28,7 +28,7 @@ export default function SignInPage({
       footer={
         <>
           New here?{' '}
-          <Link href="/join" className="text-indigo underline-offset-4 hover:underline">
+          <Link href={`/join/business?channel=${encodeURIComponent(searchParams.channel ?? '')}`} className="text-indigo underline-offset-4 hover:underline">
             Create an account
           </Link>
         </>
@@ -39,7 +39,7 @@ export default function SignInPage({
           {error}
         </p>
       ) : null}
-      <MagicLinkForm accountType={null} demoMode={!isSupabaseConfigured()} />
+      <MagicLinkForm channel={searchParams.channel} accountType={null} demoMode={!isSupabaseConfigured()} />
     </AuthShell>
   );
 }

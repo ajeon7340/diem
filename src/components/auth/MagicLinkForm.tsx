@@ -31,10 +31,12 @@ function SubmitButton({ label }: { label: string }) {
  */
 export function MagicLinkForm({
   accountType,
+  channel = '',
   label = 'Email me a sign-in link',
   demoMode = false,
 }: {
   accountType: AccountType | null;
+  channel?: string;
   label?: string;
   demoMode?: boolean;
 }) {
@@ -81,6 +83,7 @@ export function MagicLinkForm({
 
   return (
     <form action={formAction} className="space-y-3">
+      <input type="hidden" name="channel" value={channel} />
       {accountType ? <input type="hidden" name="accountType" value={accountType} /> : null}
 
       <label htmlFor="email" className="rail block">

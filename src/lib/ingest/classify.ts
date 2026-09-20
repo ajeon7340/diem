@@ -1,9 +1,7 @@
-import { mapConcurrent } from './concurrent';
 import 'server-only';
 
-import type { SupabaseClient } from '@supabase/supabase-js';
-
-import { aiModel, aiProvider, generateStructured } from '@/lib/ai/provider';
+import { mapConcurrent } from './concurrent';
+import { generateStructured } from '@/lib/ai/provider';
 import { audienceClimate, measureRegister } from '@/lib/report/climate';
 import { isCandidate, loadExternalTerms } from '@/lib/report/keywords';
 import { censusRisk } from '@/lib/report/safety';
@@ -429,150 +427,17 @@ export function describeRun(rollup: Rollup, commentsScanned: number) {
 }
 
 /**
- * What the creator has already actioned, so a re-scan does not undo it.
+ * WHAT USED TO BE HERE: `readModerationHistory`, `storeClassification` and
+ * `classifyAndStore` — the creator-scoped writers that put this pass's output
+ * into `report_metrics` and `comment_moderation_queue`.
  *
- * Read from the queue rather than from `report_metrics`, because the queue is
- * where a hide is recorded — `actions/moderate.ts` updates the row and has
- * never written the rollup, which is why the rollup could only ever say zero.
+ * They went with the creator half of the product. Everything above them is the
+ * pass itself and is unchanged, because it never knew what a creator was: it
+ * takes a channel identifier, reads public endpoints, and hands back a rollup.
+ * `ingest/channel-classify.ts` is the one caller now, and it writes to
+ * `channel_analyses` keyed by channel id.
  */
-export async function readModerationHistory(
-  supabase: SupabaseClient,
-  creatorId: string,
-): Promise<{ hiddenTotal: number; lastModeratedAt: string | null }> {
-  const { data, error } = await supabase
-    .from('comment_moderation_queue')
-    .select('acted_at')
-    .eq('creator_id', creatorId)
-    .eq('status', 'hidden')
-    .order('acted_at', { ascending: false, nullsFirst: false });
 
-  if (error || !data) return { hiddenTotal: 0, lastModeratedAt: null };
-  return {
-    hiddenTotal: data.length,
-    lastModeratedAt: (data[0]?.acted_at as string | null) ?? null,
-  };
-}
-
-/**
- * Write the rollup and the queue.
- *
- * Queue rows are written under the service role, never by the client, so a
- * creator cannot manufacture or delete entries to shape the rollup.
- */
-export async function storeClassification(
-  supabase: SupabaseClient,
-  creatorId: string,
-  rollup: Rollup,
-  flagged: Flagged[],
-  channelId: string | null,
-): Promise<{ ok: true; queueRows: number } | { ok: false; reason: string }> {
-  const { error: metricsError } = await supabase
-    .from('report_metrics')
-    .update({
-      comment_risks: rollup.risks,
-      moderation: rollup.moderation,
-      comment_register: rollup.register,
-    })
-    .eq('creator_id', creatorId);
-
-  if (metricsError) return { ok: false, reason: metricsError.message };
-
-  const rows = flagged.map((f) => ({
-    creator_id: creatorId,
-    comment_id: f.comment.id,
-    video_id: f.comment.videoId,
-    video_title: f.comment.videoTitle,
-    excerpt: f.comment.text.slice(0, 800),
-    category: f.category,
-    by_creator: f.comment.authorChannelId === channelId,
-    likes: f.comment.likes,
-    published_at: f.comment.publishedAt || null,
-  }));
-
-  for (let i = 0; i < rows.length; i += 500) {
-    // `onConflict` and not an insert: a re-scan finds the same comments again,
-    // and the creator's `status` on a row they already actioned must survive
-    // it. Upsert leaves the columns it is not given alone.
-    const { error } = await supabase
-      .from('comment_moderation_queue')
-      .upsert(rows.slice(i, i + 500), { onConflict: 'creator_id,comment_id' });
-    if (error) return { ok: false, reason: `queue write failed: ${error.message}` };
-  }
-
-  return { ok: true, queueRows: rows.length };
-}
-
-export interface ClassifyAndStoreResult {
-  commentsScanned: number;
-  videos: number;
-  unreadable: number;
-  flagged: number;
-  queueRows: number;
-  spend: Spend;
-  provider: string;
-  model: string;
-}
-
-/**
- * The whole pass, for a caller that has a creator id and wants it done.
- *
- * NEVER swallows: the worker needs the failure to mark the job, and a job that
- * reports success over a channel it could not read is worse than one that
- * retries.
- */
-export async function classifyAndStore(
-  supabase: SupabaseClient,
-  creatorId: string,
-  channel: { handle?: string | null; channelId?: string | null },
-  options: ClassifyRunOptions & { maxVideos?: number; maxComments?: number } = {},
-): Promise<ClassifyAndStoreResult> {
-  const apiKey = process.env.YOUTUBE_API_KEY;
-  if (!apiKey) throw new Error('YOUTUBE_API_KEY is required — commentThreads.list needs it.');
-
-  const keyVar = aiProvider() === 'gemini' ? 'GEMINI_API_KEY' : 'ANTHROPIC_API_KEY';
-  if (!process.env[keyVar]) throw new Error(`${keyVar} is required for ${aiProvider()}.`);
-
-  const corpus = await fetchAllComments(apiKey, channel, options.maxVideos ?? Infinity, options.maxComments ?? Infinity);
-  const spend: Spend = { inputTokens: 0, outputTokens: 0, calls: 0 };
-  const flagged = await classifyComments(corpus.comments, spend, options);
-
-  const history = await readModerationHistory(supabase, creatorId);
-  const rollup = rollUp(corpus.comments, flagged, corpus.channelId, history);
-
-  const stored = await storeClassification(
-    supabase,
-    creatorId,
-    rollup,
-    flagged,
-    corpus.channelId,
-  );
-  if (!stored.ok) throw new Error(stored.reason);
-
-  return {
-    commentsScanned: corpus.comments.length,
-    videos: corpus.videos,
-    unreadable: corpus.unreadable,
-    flagged: flagged.length,
-    queueRows: stored.queueRows,
-    spend,
-    provider: aiProvider(),
-    model: aiModel(),
-  };
-}
-
-
-/**
- * One video's comments, and only that video's.
- *
- * `fetchAllComments` walks a channel; this walks a single upload. The
- * distinction matters more than the code does: a per-video read whose corpus
- * quietly included the rest of the channel would put the channel's clusters
- * under one video's title, and every share printed there would be a share of
- * the wrong denominator — the mistake this repo has now found in six places.
- *
- * Chronological, not by relevance: YouTube's ranker surfaces the loud and the
- * contentious, and a sample drawn through it is not a sample of the section.
- */
 export async function fetchVideoComments(
   apiKey: string,
   videoId: string,

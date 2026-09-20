@@ -160,23 +160,12 @@ check(
   /about what someone DID[\s\S]{0,200}BODY, THEIR FAMILY, OR THEIR WORTH/.test(prompt),
   true,
 );
-// Authorship, not target, is what reaches the creator's rating. The moderation
-// page said "written at you rather than by you" — the wrong axis, and true only
-// of the channels measured first.
-const modPage = readFileSync(
-  new URL('../src/app/dashboard/moderation/page.tsx', import.meta.url),
-  'utf8',
-);
-check(
-  'the creator-facing page does not claim the abuse is aimed at them',
-  /written at you rather than by you/.test(modPage),
-  false,
-);
-check(
-  'it distinguishes on authorship instead',
-  /only what you wrote yourself counts against your report/.test(modPage),
-  true,
-);
+// The two assertions that read `dashboard/moderation/page.tsx` went with that
+// page. They pinned wording on a creator-facing surface — that the abuse in
+// their comment section is not assumed to be aimed at them, and that only what
+// they wrote themselves counts against their report. There is no creator
+// report and no such page; the authorship rule they protected still lives in
+// `rollUp`'s `byCreator`, which `verify-safety` covers.
 
 console.log(`\n  ${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);

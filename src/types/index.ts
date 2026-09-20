@@ -1786,8 +1786,6 @@ export interface Viewer {
   userId: string | null;
   organization: Organization | null;
   isProAgency: boolean;
-  /** Set when the signed-in user owns a creator profile. */
-  creatorId: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -1802,7 +1800,7 @@ export interface Viewer {
  * They read the same comments and measure different things, so they are two
  * jobs rather than one: either can fail, be retried, or be run alone.
  */
-export type AnalysisJobKind = 'classify_comments' | 'classify_intent';
+export type AnalysisJobKind = 'collect_channel' | 'classify_comments' | 'classify_intent';
 
 export type AnalysisJobStatus = 'queued' | 'running' | 'succeeded' | 'failed';
 
@@ -1835,7 +1833,7 @@ export interface AnalysisJob {
   progressDone: number | null;
   progressTotal: number | null;
   /** Cleared on any terminal status, so a finished job shows no stage. */
-  progressStage: 'fetching' | 'classifying' | 'storing' | null;
+  progressStage: 'fetching' | 'classifying' | 'storing' | 'resolution' | 'videos' | 'comments' | 'analysis' | 'report' | null;
   /**
    * The worker's last error, for a log. NEVER rendered to a creator: a Postgres
    * message or an HTTP body is not a status line, and the states above already

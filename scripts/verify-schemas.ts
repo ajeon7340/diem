@@ -1,16 +1,13 @@
 /**
- * Assertions for the parsing layer, where form-shape bugs actually live:
- * handle normalisation, reserved-route collisions, the checkbox -> boolean
- * transform, and budget coercion. The database enforces all of this too — this
+ * Assertions for the parsing layer, where form-shape bugs actually live: the
+ * FormData-null trap, cluster payload bounds, and one-bad-row isolation. The database enforces all of this too — this
  * just catches it before a user sees a Postgres error.
  *
  *   npm run verify:schemas
  */
 import {
   commentClustersSchema,
-  creatorOnboardingSchema,
   businessOnboardingSchema,
-  handleSchema,
   emailSchema,
 } from '@/lib/schemas';
 
@@ -21,40 +18,9 @@ function check(label: string, actual: unknown, expected: unknown) {
   else { fail++; console.log(`  FAIL ${label}\n       got ${a}\n       want ${e}`); }
 }
 
-// --- handle normalisation & rules
-check('@MarahWoods -> marahwoods', handleSchema.safeParse('@MarahWoods').data, 'marahwoods');
-check('reserved "dashboard" rejected', handleSchema.safeParse('dashboard').success, false);
-check('reserved "@Directory" rejected', handleSchema.safeParse('@Directory').success, false);
-check('too short rejected', handleSchema.safeParse('ab').success, false);
-check('trailing dot rejected', handleSchema.safeParse('name.').success, false);
-check('dots allowed mid-handle', handleSchema.safeParse('marah.builds').data, 'marah.builds');
-check('spaces rejected', handleSchema.safeParse('my name').success, false);
-
 // --- email
 check('email lowercased', emailSchema.safeParse('  Jordan@Northbeam.COM ').data, 'jordan@northbeam.com');
 check('bad email rejected', emailSchema.safeParse('nope@').success, false);
-
-// --- creator onboarding: exactly the FormData shape the action builds
-const unchecked = creatorOnboardingSchema.safeParse({
-  handle: '@NewCreator', displayName: 'New Creator', niche: 'Fitness',
-  bio: '', budgetMin: '', isDirectoryVisible: null,      // checkbox absent
-});
-check('unchecked box -> false', unchecked.data?.isDirectoryVisible, false);
-check('empty bio -> null', unchecked.data?.bio, null);
-check('empty budget -> null', unchecked.data?.budgetMin, null);
-check('handle normalised', unchecked.data?.handle, 'newcreator');
-
-const checked = creatorOnboardingSchema.safeParse({
-  handle: 'newcreator', displayName: 'New Creator', niche: '',
-  bio: 'hi', budgetMin: '15,000', isDirectoryVisible: 'on',  // checkbox present
-});
-check('checked box -> true', checked.data?.isDirectoryVisible, true);
-check('"15,000" -> 15000', checked.data?.budgetMin, 15000);
-check('empty niche -> null', checked.data?.niche, null);
-
-check('reserved handle blocked at onboarding',
-  creatorOnboardingSchema.safeParse({ handle: 'pricing', displayName: 'X', niche: '', bio: '',
-    budgetMin: '', isDirectoryVisible: null }).success, false);
 
 // --- business onboarding
 check('org name trimmed', businessOnboardingSchema.safeParse({ organizationName: '  Northbeam  ' }).data?.organizationName, 'Northbeam');
@@ -115,32 +81,6 @@ check('1-char org rejected', businessOnboardingSchema.safeParse({ organizationNa
 }
 
 // ---------------------------------------------------------------------------
-// A price range that runs downwards
-//
-// `budgetRange` prints "$25,000-$15,000" for it and a creator reads a number
-// they did not mean to say. The settings form has always refused this; signup
-// did not, because the field only became a range later.
-// ---------------------------------------------------------------------------
-{
-  const base = {
-    handle: 'someone', displayName: 'Someone', niche: 'Music',
-    youtubeHandle: '', bio: null, budgetNegotiable: null, isDirectoryVisible: 'on',
-  };
-  const parse = (over: Record<string, unknown>) => creatorOnboardingSchema.safeParse({ ...base, ...over });
-  check('a rising range is fine', parse({ budgetMin: '15000', budgetMax: '25000' }).success, true);
-  check('equal ends are a single price', parse({ budgetMin: '15000', budgetMax: '15000' }).success, true);
-  check('a falling range is refused', parse({ budgetMin: '25000', budgetMax: '15000' }).success, false);
-  check(
-    'and the error points at the field',
-    parse({ budgetMin: '25000', budgetMax: '15000' }).error?.issues[0]?.path.join('.'),
-    'budgetMin',
-  );
-  // One figure and no figure both stay legal: the range is optional.
-  check('one figure alone is fine', parse({ budgetMin: '15000', budgetMax: '' }).success, true);
-  check('no figure at all is fine', parse({ budgetMin: '', budgetMax: '' }).success, true);
-}
-
-// ---------------------------------------------------------------------------
 // `optional` has to mean optional over FORMDATA
 //
 // `formData.get()` never returns undefined. It returns NULL for a field the
@@ -172,13 +112,6 @@ check('1-char org rejected', businessOnboardingSchema.safeParse({ organizationNa
     business.success ? [business.data.industry, business.data.sells, business.data.audience, business.data.climatePreference] : null,
     [null, null, null, null],
   );
-
-  const creator = creatorOnboardingSchema.safeParse(
-    asFormData({ handle: 'someone', displayName: 'Someone' }, [
-      'niche', 'bio', 'youtubeHandle', 'budgetMin', 'budgetMax', 'budgetNegotiable', 'isDirectoryVisible',
-    ]),
-  );
-  check('creator parses with every optional absent', creator.success, true);
 
   // An unticked checkbox group arrives as [] from getAll, not as null.
   check(

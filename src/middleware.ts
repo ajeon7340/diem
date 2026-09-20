@@ -1,50 +1,19 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 
-import { RESERVED_HANDLES } from '@/lib/reserved-handles';
-
 /**
- * Three jobs:
+ * One job now: refresh the Supabase session cookie. Magic-link sessions
+ * expire, and a Server Component cannot write cookies mid-render — so the
+ * refresh has to happen here or a signed-in user silently becomes anonymous.
  *
- *  1. Refresh the Supabase session cookie. Magic-link sessions expire, and a
- *     Server Component cannot write cookies mid-render — so the refresh has to
- *     happen here or a signed-in user silently becomes anonymous.
- *  2. Canonicalise `/handle` to `/@handle` so the public URL has one form.
- *  3. Mark any request carrying `?token=` as private and uncacheable.
- *
- * Access *verification* deliberately does not happen here. Middleware runs at
- * the edge and would have to re-validate on every asset request; the check
- * belongs next to the data fetch, in `resolveProfileAccess`, where the verdict
- * and the render cannot diverge.
+ * TWO JOBS WENT WITH THE CREATOR HALF. It used to canonicalise `/handle` to
+ * `/@handle`, which is what turned `/campaigns` into a 404 the first time that
+ * route existed; and it marked `?token=` requests uncacheable, for the
+ * time-limited report links a brand was sent. Neither route exists.
  */
-const RESERVED_SEGMENTS = new Set<string>(RESERVED_HANDLES);
 
 export async function middleware(request: NextRequest) {
-  const { pathname, searchParams } = request.nextUrl;
-  const segments = pathname.split('/').filter(Boolean);
-
-  if (segments.length === 1) {
-    const segment = segments[0];
-    const isProfileLike =
-      !RESERVED_SEGMENTS.has(segment.toLowerCase()) && !segment.includes('.');
-
-    if (isProfileLike && !segment.startsWith('@')) {
-      const url = request.nextUrl.clone();
-      url.pathname = `/@${segment.toLowerCase()}`;
-      return NextResponse.redirect(url, 308);
-    }
-  }
-
-  const response = await refreshSession(request);
-
-  if (searchParams.has('token')) {
-    // Belt and braces alongside `export const dynamic = 'force-dynamic'`:
-    // no shared cache should ever hold an unlocked render.
-    response.headers.set('Cache-Control', 'private, no-store, max-age=0');
-    response.headers.set('Referrer-Policy', 'no-referrer');
-  }
-
-  return response;
+  return refreshSession(request);
 }
 
 /**

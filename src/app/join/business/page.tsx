@@ -8,7 +8,7 @@ import { isSupabaseConfigured } from '@/lib/supabase/server';
 export const metadata: Metadata = { title: 'Business sign-up' };
 export const dynamic = 'force-dynamic';
 
-export default function JoinBusinessPage() {
+export default function JoinBusinessPage({ searchParams }: { searchParams: { channel?: string } }) {
   return (
     <AuthShell
       eyebrow="Brand or agency · Step 1 of 2"
@@ -16,14 +16,15 @@ export default function JoinBusinessPage() {
       intro="Enter your work email and we'll send a one-time sign-in link. You'll name your workspace on the next screen."
       footer={
         <>
-          Registering as a creator instead?{' '}
-          <Link href="/join/creator" className="text-indigo underline-offset-4 hover:underline">
-            Publish a media kit
+          Already have a workspace?{' '}
+          <Link href={`/signin?channel=${encodeURIComponent(searchParams.channel ?? '')}`} className="text-indigo underline-offset-4 hover:underline">
+            Sign in
           </Link>
         </>
       }
     >
       <MagicLinkForm
+        channel={searchParams.channel}
         accountType="business"
         label="Continue with email"
         demoMode={!isSupabaseConfigured()}

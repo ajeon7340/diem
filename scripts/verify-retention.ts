@@ -8,6 +8,23 @@
  *
  *   npm run verify:retention
  */
+
+// RUN WITH `ADFIT_YOUTUBE_DERIVED_APPROVAL=approved` (see package.json).
+//
+// `AMENDMENT_ACCEPTED` became env-gated: the 36-month horizon is only ours to
+// use once Google has actually granted the derived-metrics amendment, and a
+// constant hardcoded to `true` claimed a permission nobody had checked. The
+// consequence for this suite is that the amended horizon has to be switched on
+// deliberately — which is the right shape, because the two clocks diverging is
+// exactly what it exists to pin, and with the flag off they collapse into one
+// and four assertions quietly measure nothing.
+if (process.env.ADFIT_YOUTUBE_DERIVED_APPROVAL !== 'approved') {
+  console.error(
+    '  This suite asserts the AMENDED retention horizon and must run with\n' +
+      '  ADFIT_YOUTUBE_DERIVED_APPROVAL=approved. Run it through npm.',
+  );
+  process.exit(1);
+}
 import {
   RETENTION_DAYS,
   VERBATIM_RETENTION_DAYS,

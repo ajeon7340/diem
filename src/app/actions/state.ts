@@ -1,12 +1,7 @@
-import type { BriefFormState } from './campaign-brief';
 import type { CampaignState, CandidateState } from './campaign';
-import type { OfferFormState, OfferDecisionState } from './offer';
 import type { OnboardingState } from './onboarding';
-import type { ProposalFormState } from './request-access';
-import type { ReviewState } from './review-request';
-import type { SettingsState, RevokeState } from './settings';
 import type { TrendingExplainState } from './trending';
-import type { ExplainState } from './studio';
+import type { ReferenceState } from './reference';
 import type { MagicLinkState } from '@/lib/auth/actions';
 
 /**
@@ -32,30 +27,23 @@ import type { MagicLinkState } from '@/lib/auth/actions';
  * it does not belong in a file that begins with 'use server'.
  */
 
-export const INITIAL_BRIEF_STATE: BriefFormState = { status: 'idle' };
 export const INITIAL_CAMPAIGN_STATE: CampaignState = { status: 'idle' };
 export const INITIAL_CANDIDATE_STATE: CandidateState = { status: 'idle' };
-export const INITIAL_OFFER_STATE: OfferFormState = { status: 'idle' };
-export const INITIAL_OFFER_DECISION: OfferDecisionState = { status: 'idle' };
 export const INITIAL_ONBOARDING_STATE: OnboardingState = { status: 'idle' };
-export const INITIAL_PROPOSAL_STATE: ProposalFormState = { status: 'idle' };
-export const INITIAL_REVIEW_STATE: ReviewState = { status: 'idle' };
-export const INITIAL_SETTINGS_STATE: SettingsState = { status: 'idle' };
-export const INITIAL_REVOKE_STATE: RevokeState = { status: 'idle' };
 export const INITIAL_TRENDING_EXPLAIN: TrendingExplainState = {
   status: 'idle',
   videoId: null,
   message: '',
   summary: null,
 };
-export const INITIAL_EXPLAIN: ExplainState = {
-  status: 'idle',
-  message: '',
-  result: null,
-  comments: null,
-  summary: null,
-  summaryModel: null,
-};
 // Not under app/actions/, which is how it was missed: the rule is about the
 // 'use server' directive, not about the directory.
 export const INITIAL_MAGIC_LINK_STATE: MagicLinkState = { status: 'idle' };
+
+export const INITIAL_REFERENCE: ReferenceState = {
+  status: 'idle',
+  message: '',
+  result: null,
+  channelId: null,
+  saved: false,
+};

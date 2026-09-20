@@ -6,13 +6,12 @@ import type { CampaignCategory, CampaignObjective, ClimatePreference, Viewer } f
 import { CAMPAIGN_CATEGORIES, CAMPAIGN_OBJECTIVES } from '@/types';
 import type { OrganizationMemberRow } from '@/types/database';
 import { createSessionClient, isSupabaseConfigured } from '@/lib/supabase/server';
-import { demoViewer } from '@/lib/data/fixtures';
+import { demoViewer } from '@/lib/data/demo';
 
 const ANONYMOUS: Viewer = {
   userId: null,
   organization: null,
   isProAgency: false,
-  creatorId: null,
 };
 
 /**
@@ -34,16 +33,15 @@ export const getViewer = cache(async (): Promise<Viewer> => {
 
   if (!user) return ANONYMOUS;
 
-  const [membership, creator] = await Promise.all([
-    supabase
-      .from('organization_members')
-      .select('id, organization_id, user_id, role, created_at, organizations(*)')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: true })
-      .limit(1)
-      .maybeSingle<OrganizationMemberRow>(),
-    supabase.from('creators').select('id').eq('user_id', user.id).maybeSingle<{ id: string }>(),
-  ]);
+  // One read now. It used to be two in parallel, the second asking whether
+  // this user was also a creator — there is no such thing any more.
+  const membership = await supabase
+    .from('organization_members')
+    .select('id, organization_id, user_id, role, created_at, organizations(*)')
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle<OrganizationMemberRow>();
 
   const org = membership.data?.organizations ?? null;
 
@@ -79,6 +77,5 @@ export const getViewer = cache(async (): Promise<Viewer> => {
         }
       : null,
     isProAgency: org?.billing_plan === 'pro_agency',
-    creatorId: creator.data?.id ?? null,
   };
 });

@@ -1,8 +1,6 @@
 import Link from 'next/link';
 
 import { getViewer } from '@/lib/access/viewer';
-import { getCreatorHandle } from '@/lib/data/requests';
-import { CREATOR_NAV } from '@/lib/nav';
 import { isSupabaseConfigured } from '@/lib/supabase/server';
 import { Badge } from '@/components/ui/Badge';
 import { DemoRoleSwitcher } from './DemoRoleSwitcher';
@@ -10,55 +8,28 @@ import { DemoRoleSwitcher } from './DemoRoleSwitcher';
 /**
  * Thin top rule. Always shows which of the access modes the page is rendering
  * under, so an entitlement bug is visible rather than silent.
+ *
+ * One nav now, because there is one kind of visitor. It used to fork on
+ * `viewer.creatorId` and serve a creator their own six pages; that half of the
+ * product is gone, and with it the only reason this component needed to know
+ * who was asking beyond which organisation they belong to.
  */
 export async function SiteHeader() {
   const viewer = await getViewer();
   const demoMode = !isSupabaseConfigured();
   const signedIn = viewer.userId !== null;
-  // The creator's own media kit is where everything about them actually is,
-  // and nothing in the header linked it — so the only way to reach your own
-  // profile was to remember your handle and type it.
-  const ownHandle = viewer.creatorId ? await getCreatorHandle(viewer.creatorId) : null;
 
   return (
-    <header className="sticky top-0 z-30 border-b border-line bg-surface/90 backdrop-blur-md">
+    <header className="print:hidden sticky top-0 z-30 border-b border-line bg-surface/90 backdrop-blur-md">
       <div className="mx-auto flex max-w-shell items-center gap-4 px-5 py-3 sm:px-8">
         <Link href="/" className="tnum text-[13px] font-semibold tracking-tight text-ink">
           adfit
         </Link>
 
         <nav className="-mx-1 flex min-w-0 items-center gap-1 overflow-x-auto px-1 text-[12px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {/* A creator gets every one of their own pages here and no
-              directory: the directory is where a brand shops for creators, and
-              they are not shopping. Everyone else gets the public nav.
-
-              TEMPORARY SHAPE. Everything is in one bar on purpose — it is the
-              honest version while there are few enough sections to fit. When
-              this stops fitting, the split to make is workspace-vs-public, not
-              a second copy of the same links (see CREATOR_NAV). */}
-          {viewer.creatorId ? (
-            <>
-              {ownHandle ? <NavLink href={`/@${ownHandle}`}>My media kit</NavLink> : null}
-              {CREATOR_NAV.map((item) => (
-                <NavLink key={item.href} href={item.href}>
-                  {item.label}
-                </NavLink>
-              ))}
-            </>
-          ) : (
-            <>
-              {/* Campaigns first, and for everyone: it is the required path
-                  now, and a signed-out visitor who clicks it is asked for a
-                  workspace rather than told they may not look. */}
-              <NavLink href="/campaigns">Campaigns</NavLink>
-              {/* The directory is the OPTIONAL half — it only ever contained
-                  creators who opted in, so it answers "who else is there",
-                  never "is this candidate right". Kept, demoted. */}
-              <NavLink href="/directory">Directory</NavLink>
-              {viewer.organization ? <NavLink href="/dashboard/agency">Workspace</NavLink> : null}
-              <NavLink href="/pricing">Pricing</NavLink>
-            </>
-          )}
+          <NavLink href="/campaigns">Campaigns</NavLink>
+          <NavLink href="/channels">Channel analysis</NavLink>
+          <NavLink href="/settings">Settings</NavLink>
         </nav>
 
         <div className="ml-auto flex items-center gap-2.5">
@@ -82,14 +53,11 @@ export async function SiteHeader() {
           ) : (
             <>
               <NavLink href="/signin">Sign in</NavLink>
-              {/* One CTA across the site, and it names the thing rather than
-                  the paperwork: "Create account" asked for a commitment before
-                  showing anything, and the account is a step inside this. */}
               <Link
-                href="/campaigns/new"
+                href="/channels"
                 className="rounded-md bg-indigo px-3 py-1.5 text-[12px] font-medium text-white transition-colors hover:bg-indigo-hover"
               >
-                Create a campaign
+                New channel analysis
               </Link>
             </>
           )}

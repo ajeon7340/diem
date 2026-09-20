@@ -1,5 +1,5 @@
 -- =============================================================================
--- Behavioural probe for the job claim rules (migration 0028).
+-- Behavioural probe for the job claim rules (0028, narrowed by 0035).
 --
 -- Run by `npm run verify:migrations` against the freshly replayed throwaway
 -- database. The replay proves the SQL parses; this proves it DECIDES correctly,
@@ -30,40 +30,33 @@ $$;
 
 do $$
 declare
-  v_user     uuid;
-  v_user2    uuid;
-  v_creator  uuid;
-  v_creator2 uuid;
   v_job      public.analysis_jobs;
   v_job2     public.analysis_jobs;
   v_id       uuid;
   v_n        integer;
   v_ok       boolean;
 begin
-  -- One creator per user: `creators.user_id` is unique, so a second creator
-  -- needs a second account rather than a second row.
-  insert into auth.users default values returning id into v_user;
-  insert into auth.users default values returning id into v_user2;
-  insert into public.creators (user_id, handle, display_name)
-    values (v_user, 'probe1', 'Probe One') returning id into v_creator;
-  insert into public.creators (user_id, handle, display_name)
-    values (v_user2, 'probe2', 'Probe Two') returning id into v_creator2;
-
-  -- ---------------------------------------------------------------------
-  -- One active job per creator per kind
-  -- ---------------------------------------------------------------------
-  insert into public.analysis_jobs (creator_id, kind) values (v_creator, 'classify_comments');
+  -- A job's only subject is a public channel (0035). There is no creator
+  -- table to hang one off any more, and `channel_id` is NOT NULL.
+  insert into public.analysis_jobs (channel_id, kind) values ('UCprobe1', 'classify_comments');
 
   begin
-    insert into public.analysis_jobs (creator_id, kind) values (v_creator, 'classify_comments');
+    insert into public.analysis_jobs (channel_id, kind) values ('UCprobe1', 'classify_comments');
     perform pg_temp.check('a second active job is rejected', false);
   exception when unique_violation then
     perform pg_temp.check('a second active job is rejected', true);
   end;
 
-  -- A different creator is unaffected — the index is per creator, not global.
-  insert into public.analysis_jobs (creator_id, kind) values (v_creator2, 'classify_comments');
-  perform pg_temp.check('another creator can queue at the same time', true);
+  -- A different channel is unaffected — the index is per channel, not global.
+  insert into public.analysis_jobs (channel_id, kind) values ('UCprobe2', 'classify_comments');
+  perform pg_temp.check('another channel can queue at the same time', true);
+
+  begin
+    insert into public.analysis_jobs (kind) values ('classify_intent');
+    perform pg_temp.check('a job cannot have no subject', false);
+  exception when not_null_violation then
+    perform pg_temp.check('a job cannot have no subject', true);
+  end;
 
   -- ---------------------------------------------------------------------
   -- Claiming
@@ -76,7 +69,7 @@ begin
   perform pg_temp.check('claiming takes a lease',      v_job.leased_until > now());
   perform pg_temp.check('claiming stamps started_at',  v_job.started_at is not null);
 
-  -- The second worker must get the OTHER creator's job, never this one.
+  -- The second worker must get the OTHER channel's job, never this one.
   v_job2 := public.claim_analysis_job('worker-b', 900);
   perform pg_temp.check('a second worker gets a different job', v_job2.id <> v_job.id);
 
@@ -132,10 +125,10 @@ begin
     set status = 'failed', finished_at = now(), last_error = 'probe'
     where id = v_job.id;
 
-  insert into public.analysis_jobs (creator_id, kind) values (v_creator, 'classify_comments');
+  insert into public.analysis_jobs (channel_id, kind) values ('UCprobe1', 'classify_comments');
   perform pg_temp.check('a finished job frees the slot', true);
 
-  select count(*) into v_n from public.analysis_jobs where creator_id = v_creator;
+  select count(*) into v_n from public.analysis_jobs where channel_id = 'UCprobe1';
   perform pg_temp.check('the failed attempt is kept as history', v_n = 2);
 
   -- ---------------------------------------------------------------------
@@ -149,53 +142,20 @@ begin
   end;
 
   begin
-    insert into public.analysis_jobs (creator_id, kind, status, leased_until)
-      values (v_creator2, 'classify_comments', 'running', null);
+    insert into public.analysis_jobs (channel_id, kind, status, leased_until)
+      values ('UCprobe3', 'classify_comments', 'running', null);
     perform pg_temp.check('a running job must carry a lease', false);
   exception when check_violation then
     perform pg_temp.check('a running job must carry a lease', true);
   end;
 
   -- ---------------------------------------------------------------------
-  -- A job is about exactly one subject (0031)
-  --
-  -- The advertiser flow queues jobs for channels nobody has signed up. Both
-  -- columns nullable with no constraint would let a job point at a creator AND
-  -- a channel, and the worker branches on `channel_id` first — so such a row
-  -- would silently analyse the channel and write the creator's report never.
+  -- One live job per channel per kind, per PASS
   -- ---------------------------------------------------------------------
-  begin
-    insert into public.analysis_jobs (creator_id, channel_id, kind)
-      values (v_creator2, 'UCprobe', 'classify_intent');
-    perform pg_temp.check('a job cannot have two subjects', false);
-  exception when check_violation then
-    perform pg_temp.check('a job cannot have two subjects', true);
-  end;
-
-  begin
-    insert into public.analysis_jobs (kind) values ('classify_intent');
-    perform pg_temp.check('a job cannot have no subject', false);
-  exception when check_violation then
-    perform pg_temp.check('a job cannot have no subject', true);
-  end;
-
-  insert into public.analysis_jobs (channel_id, kind) values ('UCprobe', 'classify_comments');
-  perform pg_temp.check('a channel job needs no creator', true);
-
-  begin
-    insert into public.analysis_jobs (channel_id, kind) values ('UCprobe', 'classify_comments');
-    perform pg_temp.check('a second live job per channel is rejected', false);
-  exception when unique_violation then
-    perform pg_temp.check('a second live job per channel is rejected', true);
-  end;
-
-  -- A different channel, and the same channel under a different pass, are
-  -- both unaffected: the index is per channel per kind.
-  insert into public.analysis_jobs (channel_id, kind) values ('UCprobe', 'classify_intent');
-  insert into public.analysis_jobs (channel_id, kind) values ('UCother', 'classify_comments');
+  insert into public.analysis_jobs (channel_id, kind) values ('UCprobe1', 'classify_intent');
+  insert into public.analysis_jobs (channel_id, kind) values ('UCprobe9', 'classify_comments');
   perform pg_temp.check('other channels and other kinds still queue', true);
 
-  -- And the worker takes them through the same claim path as a creator job.
   v_job := public.claim_analysis_job('worker-ch', 900);
   perform pg_temp.check('a channel job is claimable', v_job.id is not null);
   update public.analysis_jobs
@@ -252,9 +212,23 @@ begin
    where schemaname = 'public' and tablename = 'analysis_jobs' and cmd <> 'SELECT';
   perform pg_temp.check('no policy grants more than SELECT', v_n = 0);
 
+  -- NOT a count. The creator's read of their own job went with the creator
+  -- table, and a second workspace-scoped read arrived alongside it; pinning
+  -- the number just makes this fail whenever a legitimate policy is added.
+  -- What must hold is that every policy is SELECT — asserted above — and that
+  -- at least one path can actually see a job, or the page that reports "still
+  -- running" silently reports nothing at all.
   select count(*) into v_n from pg_policies
-   where schemaname = 'public' and tablename = 'analysis_jobs';
-  perform pg_temp.check('both read policies are present', v_n = 2);
+   where schemaname = 'public' and tablename = 'analysis_jobs' and cmd = 'SELECT';
+  perform pg_temp.check('at least one read policy remains', v_n >= 1);
+
+  -- And every one of them is scoped to the caller. `using (true)` here would
+  -- tell one agency that somebody is evaluating a creator, which is exactly
+  -- the competitive signal the private shortlist exists to hide.
+  select count(*) into v_n from pg_policies
+   where schemaname = 'public' and tablename = 'analysis_jobs'
+     and coalesce(qual, 'true') = 'true';
+  perform pg_temp.check('no read policy is unscoped', v_n = 0);
 
   select relrowsecurity into v_ok from pg_class where oid = 'public.analysis_jobs'::regclass;
   perform pg_temp.check('row level security is on', v_ok);

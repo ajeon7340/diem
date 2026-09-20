@@ -216,15 +216,32 @@ check(
 
 const reads = (path: string) => readFileSync(path, 'utf8');
 
+// Both moved to the comparison table when the creator media kit was removed:
+// that is now the only surface rendering a derived metric or a CPM.
 check(
   'the derived disclosure is rendered beside the metrics it describes',
-  reads('src/components/profile/MetricsStrip.tsx').includes('{DERIVED_DISCLOSURE}'),
+  reads('src/components/campaign/ComparisonTable.tsx').includes('{DERIVED_DISCLOSURE}'),
   true,
 );
 check(
   'the financial disclaimer is rendered beside the CPM',
-  reads('src/components/profile/CommercialPanel.tsx').includes('{FINANCIAL_DISCLOSURE}'),
+  reads('src/components/campaign/ComparisonTable.tsx').includes('{FINANCIAL_DISCLOSURE}'),
   true,
+);
+// And it must not describe a figure we no longer have. The old wording said
+// the CPM came from "the creator's published minimum" — a creator-declared
+// budget field that went with the creator table. A disclosure that misstates
+// its own basis is worse than none: it is a specific false claim about where
+// a number came from.
+check(
+  'the financial disclaimer names the real basis',
+  FINANCIAL_DISCLOSURE.includes('a fee you entered'),
+  true,
+);
+check(
+  'and no longer cites a creator-published minimum',
+  FINANCIAL_DISCLOSURE.includes('published minimum'),
+  false,
 );
 
 // The amendment forbids using derived metrics to profile users on protected

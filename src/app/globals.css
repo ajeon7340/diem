@@ -217,3 +217,20 @@ body {
      rather than through one. */
   .sheet-box { break-inside: avoid; page-break-inside: avoid; }
 }
+
+/* Multi-page channel reports: readable evidence without application chrome. */
+@media print {
+  .report-page { max-width: none !important; padding: 0 !important; }
+  .channel-report { font-size: 10pt; }
+  .channel-report .report-section { margin-top: 5mm; border-radius: 0; padding: 5mm; }
+  .channel-report .report-section:first-of-type { break-after: page; }
+  .channel-report h2, .channel-report h3, .channel-report summary { break-after: avoid; }
+  .channel-report tr, .channel-report blockquote, .channel-report li { break-inside: avoid; }
+  .channel-report details > * { display: block !important; }
+  .channel-report table { width: 100%; table-layout: fixed; }
+  .channel-report th, .channel-report td { overflow-wrap: anywhere; }
+  .channel-report .grid { display: block; }
+  .channel-report .grid > div { margin-bottom: 4mm; }
+  .channel-report a { color: inherit; overflow-wrap: anywhere; }
+  button, nav, form { display: none !important; }
+}

@@ -4,12 +4,12 @@
  *   npm run worker                      poll forever
  *   npm run worker -- --once            take at most one job, then exit
  *   npm run worker -- --drain           run until nothing is left, then exit
- *   npm run worker -- --enqueue-missing queue a scan for every creator owed one
+ *   npm run worker -- --enqueue-missing queue the passes any analysed channel still owes
  *   npm run worker -- --status          what is queued, running and failed
  *
- * WHY THIS EXISTS. Signup runs the bounded public-data analysis inline — 25
- * uploads, 600 comments, 2-3s, no model call — and lands the creator on a real
- * report. The classification is a different size: 6,369 comments on @가재맨 took
+ * WHY THIS EXISTS. Adding a candidate runs the bounded public-data analysis
+ * inline — 25 uploads, 600 comments, 2-3s, no model call — and lands a real
+ * row on the comparison table. The classification is a different size: 6,369 comments on @가재맨 took
  * 43 model calls and 5m30s. That cannot run in a server action and it cannot run
  * in a serverless function, so signup records that it is OWED and this process
  * pays it.
@@ -24,17 +24,18 @@
  * NODE 22 IS REQUIRED, not preferred: supabase-js aborts on Node 20 with
  * "native WebSocket not found".
  */
+import { AMENDMENT_ACCEPTED } from '@/lib/report/policy';
+import { analyzeChannel } from '@/lib/ingest/analyze';
 import { hostname } from 'node:os';
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 import { aiModel, aiProvider } from '@/lib/ai/provider';
-import { ClaimLostError, classifyAndStore } from '@/lib/ingest/classify';
+import { ClaimLostError } from '@/lib/ingest/classify';
 import {
   classifyChannelAndStore,
   classifyChannelIntentAndStore,
 } from '@/lib/ingest/channel-classify';
-import { classifyIntentAndStore } from '@/lib/ingest/intent';
 import { jobMaxComments, jobMaxVideos, positiveEnv } from '@/lib/ingest/worker-config';
 import type { AnalysisJobKind } from '@/types';
 
@@ -53,9 +54,9 @@ const IDLE_MS = positiveEnv('ADFIT_WORKER_IDLE_MS', 15_000);
  * Bound on a single signup-triggered census.
  *
  * A channel with 1,379 uploads is a multi-hour read and tens of thousands of
- * comments through a metered model. The first scan a creator gets is the one
- * that has to LAND, so it is bounded and says so; the unbounded census is
- * `scan:comments` with no --max-videos, run deliberately.
+ * comments through a metered model. The first scan a channel gets is the one
+ * that has to LAND while somebody is still looking at the shortlist, so it is
+ * bounded and the report says over how many comments.
  */
 const DEFAULT_MAX_VIDEOS = positiveEnv('ADFIT_WORKER_MAX_VIDEOS', 30);
 /**
@@ -73,14 +74,8 @@ let stopping = false;
 
 interface JobRow {
   id: string;
-  /**
-   * Exactly one of these is set — 0031 enforces it with a check constraint.
-   * A creator job writes the signed-up creator's report; a channel job writes
-   * the shared `channel_analyses` row an advertiser is waiting on. Same queue,
-   * same lease, same retries.
-   */
-  creator_id: string | null;
-  channel_id: string | null;
+  /** The public channel this job analyses. Never null — 0035 made it the only subject. */
+  channel_id: string;
   kind: AnalysisJobKind;
   status: string;
   attempts: number;
@@ -143,7 +138,7 @@ async function finish(
 interface Progress {
   done?: number;
   total?: number;
-  stage?: 'fetching' | 'classifying' | 'storing';
+  stage?: import('@/types').AnalysisJob['progressStage'];
 }
 
 /**
@@ -184,147 +179,13 @@ function heartbeat(supabase: SupabaseClient, jobId: string, progress: Progress) 
   };
 }
 
-interface CreatorChannel {
-  handle: string;
-  youtube_handle: string | null;
-  youtube_channel_id: string | null;
-}
-
 /**
- * The creator's declared channel, or a failure that says which kind it is.
+ * The two model passes.
  *
- * Shared by both passes: they read the same comments through the same fetcher,
- * so they must agree on which channel that is.
- */
-async function requireChannel(
-  supabase: SupabaseClient,
-  creatorId: string,
-): Promise<CreatorChannel> {
-  const { data: creator, error } = await supabase
-    .from('creators')
-    .select('handle, youtube_handle, youtube_channel_id')
-    .eq('id', creatorId)
-    .maybeSingle<CreatorChannel>();
-
-  if (error) throw new Error(`creator lookup failed: ${error.message}`);
-  if (!creator) throw new Error('creator no longer exists');
-  if (!creator.youtube_handle && !creator.youtube_channel_id) {
-    // Terminal, not retryable: no number of attempts adds a channel to a
-    // creator who declared none. Marked failed at its attempt ceiling so the
-    // worker stops reaching for it.
-    throw Object.assign(new Error('creator has declared no YouTube channel'), {
-      terminal: true,
-    });
-  }
-  return creator;
-}
-
-async function runClassifyComments(supabase: SupabaseClient, job: JobRow): Promise<void> {
-  if (job.channel_id) return runChannelClassify(supabase, job);
-  const creator = await requireChannel(supabase, job.creator_id!);
-
-  const maxVideos = jobMaxVideos(job.params, DEFAULT_MAX_VIDEOS);
-  const maxComments = jobMaxComments(job.params, DEFAULT_MAX_COMMENTS);
-  log(
-    `@${creator.handle} · ${aiProvider()} ${aiModel()} · ` +
-      `${Number.isFinite(maxVideos) ? `${maxVideos} videos` : 'full census'}`,
-  );
-
-  const started = Date.now();
-  // 'fetching' before anything is classified: on a large channel the first
-  // minute is YouTube pagination with no model call in it, and silence there
-  // reads as a hang.
-  const progress = progressBox();
-  progress.set({ stage: 'fetching' });
-  const result = await classifyAndStore(
-    supabase,
-    job.creator_id!,
-    { handle: creator.youtube_handle, channelId: creator.youtube_channel_id },
-    {
-      maxVideos,
-      maxComments,
-      stillMine: heartbeat(supabase, job.id, progress.read()),
-      onProgress: (done, total) => {
-        progress.set({ done, total, stage: 'classifying' });
-        if (VERBOSE) process.stdout.write(`\r  classified ${done}/${total}`);
-      },
-    },
-  );
-  if (VERBOSE) process.stdout.write('\r');
-
-  const seconds = Math.round((Date.now() - started) / 1000);
-  log(
-    `@${creator.handle} done · ${result.commentsScanned.toLocaleString('en-US')} comments · ` +
-      `${result.flagged} flagged · ${result.spend.calls} calls · ` +
-      `${result.spend.inputTokens.toLocaleString('en-US')} in · ` +
-      `${result.spend.outputTokens.toLocaleString('en-US')} out · ${seconds}s`,
-  );
-
-  await finish(supabase, job.id, {
-    status: 'succeeded',
-    comments_scanned: result.commentsScanned,
-    findings: result.flagged,
-  });
-}
-
-async function runClassifyIntent(supabase: SupabaseClient, job: JobRow): Promise<void> {
-  if (job.channel_id) return runChannelIntent(supabase, job);
-  const creator = await requireChannel(supabase, job.creator_id!);
-  const maxVideos = jobMaxVideos(job.params, DEFAULT_MAX_VIDEOS);
-  const maxComments = jobMaxComments(job.params, DEFAULT_MAX_COMMENTS);
-
-  log(
-    `@${creator.handle} intent · ${aiProvider()} ${aiModel()} · ` +
-      `${Number.isFinite(maxVideos) ? `${maxVideos} videos` : 'full census'}`,
-  );
-
-  const started = Date.now();
-  const progress = progressBox();
-  progress.set({ stage: 'fetching' });
-  const result = await classifyIntentAndStore(
-    supabase,
-    job.creator_id!,
-    { handle: creator.youtube_handle, channelId: creator.youtube_channel_id },
-    {
-      maxVideos,
-      maxComments,
-      stillMine: heartbeat(supabase, job.id, progress.read()),
-      onProgress: (done, total) => {
-        progress.set({ done, total, stage: 'classifying' });
-        if (VERBOSE) process.stdout.write(`\r  classified ${done}/${total}`);
-      },
-    },
-  );
-  if (VERBOSE) process.stdout.write('\r');
-
-  const seconds = Math.round((Date.now() - started) / 1000);
-  log(
-    `@${creator.handle} intent done · ${result.commentsClassified.toLocaleString('en-US')} classified · ` +
-      `${result.productComments} about a product · ` +
-      // Null is the answer when nothing purchasable was found, and it is printed
-      // as such: a creator who never holds a product is not one whose audience
-      // refuses to buy.
-      `intent ${result.rate === null ? 'unmeasurable' : `${(result.rate * 100).toFixed(1)}%`} · ` +
-      `sentiment ${result.sentiment === null ? 'unmeasurable' : result.sentiment.toFixed(1)} · ` +
-      `${result.spend.calls} calls · ${seconds}s`,
-  );
-
-  await finish(supabase, job.id, {
-    status: 'succeeded',
-    comments_scanned: result.commentsClassified,
-    // "Findings" for this pass is what a brand can act on: comments attached to
-    // something purchasable. Zero is a real and useful result here.
-    findings: result.productComments,
-  });
-}
-
-/**
- * The same two passes for a channel nobody has signed up.
- *
- * Split by destination rather than by pipeline: everything up to the write is
- * the identical code path (see `channel-classify.ts`), so a fix to batching or
- * concurrency reaches both. What differs is the row that is updated and the
- * fact that there is no moderation queue to carry forward.
+ * There used to be four handlers here: these two and their creator-scoped
+ * twins, which wrote to `report_metrics` and the moderation queue. The creator
+ * half of the product is gone and so are they. The pipeline these call is the
+ * same one those called — it never knew what a creator was.
  */
 async function runChannelClassify(supabase: SupabaseClient, job: JobRow): Promise<void> {
   const channelId = job.channel_id!;
@@ -391,9 +252,48 @@ async function runChannelIntent(supabase: SupabaseClient, job: JobRow): Promise<
   });
 }
 
-const HANDLERS: Record<AnalysisJobKind, (s: SupabaseClient, j: JobRow) => Promise<void>> = {
-  classify_comments: runClassifyComments,
-  classify_intent: runClassifyIntent,
+/**
+ * PARTIAL on purpose. `AnalysisJobKind` may name a pass this worker does not
+ * implement yet — a kind added to the type ahead of its handler, or a newer
+ * deployment queuing something an older worker has never heard of. `takeOne`
+ * already has the correct behaviour for that case: fail loudly and leave the
+ * job QUEUED, so an out-of-date worker cannot bury work a newer one would do.
+ * A total Record would instead force a placeholder handler, and a placeholder
+ * marks the job succeeded having done nothing.
+ */
+async function runCollection(supabase: SupabaseClient, job: JobRow): Promise<void> {
+  const progress = progressBox();
+  const beat = heartbeat(supabase, job.id, progress.read());
+  const report = await analyzeChannel(job.channel_id, {
+    maxVideos: 50, maxComments: 600,
+    windowDays: [30,90,365].includes(Number(job.params?.windowDays)) ? Number(job.params?.windowDays) : 90,
+    onStage: async stage => { progress.set({ stage }); if (!(await beat())) throw new ClaimLostError(); },
+  });
+  progress.set({ stage: 'report' });
+  if (!(await beat())) throw new ClaimLostError();
+  const { data, error } = await supabase.rpc('commit_channel_collection', {
+    p_job: job.id, p_worker: WORKER, p_report: {
+      channel_id: report.channelId, title: report.channelTitle, handle: report.handle,
+      avatar_url: report.avatarUrl, description: report.description, subscribers: report.subscribers,
+      output_stats: report.outputStats, promotions: report.promotions,
+      comment_coverage: report.coverage, comments_analyzed: report.commentsAnalyzed,
+      data_fetched_at: new Date().toISOString(), evidence: report.evidence, comment_corpus: report.corpus,
+    },
+  });
+  if (error) throw new Error(error.message);
+  if (!data) throw new ClaimLostError();
+  if (AMENDMENT_ACCEPTED) {
+    for (const kind of ['classify_comments','classify_intent']) {
+      const { error: queued } = await supabase.from('analysis_jobs').insert({ channel_id: job.channel_id, kind });
+      if (queued && queued.code !== '23505') throw new Error(queued.message);
+    }
+  }
+  await finish(supabase, job.id, { status: 'succeeded', comments_scanned: report.commentsAnalyzed });
+}
+
+const HANDLERS: Partial<Record<AnalysisJobKind, (s: SupabaseClient, j: JobRow) => Promise<void>>> = {
+  classify_comments: runChannelClassify,
+  classify_intent: runChannelIntent,
 };
 
 /** Claim and run one job. Returns false when there was nothing to take. */
@@ -450,74 +350,88 @@ async function takeOne(supabase: SupabaseClient): Promise<boolean> {
 }
 
 /**
- * Queue a scan for every creator who has a channel and no classification.
+ * Queue whatever the candidates on somebody's shortlist are still owed.
  *
- * The repair path for anyone who signed up before this existed, and for the
- * signups where `enqueueAnalysisJob` failed quietly rather than bouncing
- * somebody off a form they could no longer submit.
+ * This walked `creators` before the creator half was removed. It walks
+ * `channel_analyses` now — the same question asked of the thing that still
+ * exists: a channel whose public read landed but whose model passes did not,
+ * because the worker was down when the candidate was added or the process died
+ * mid-pass. Without this those rows show dashes in the comment columns forever.
+ *
+ * WHAT COUNTS AS ALREADY DONE is read from `analysis_jobs`, not inferred from
+ * the data, and that distinction is the whole correctness of this command.
+ * Inferring got it wrong in both directions:
+ *
+ *   `moderation.commentsScanned` is written by the CHEAP inline pass as well
+ *   as by the model one — it is a keyword census before the model supersedes
+ *   it — so a channel that had never been through the model safety pass looked
+ *   complete and was never queued. Observed: two channels repaired for intent
+ *   and silently skipped for safety.
+ *
+ *   `comment_axes` being null is genuinely ambiguous the other way: a channel
+ *   with comments disabled comes back with zero axes from a pass that ran
+ *   perfectly, and requeuing it every time would pay for the same empty answer
+ *   forever.
+ *
+ * A job row says what actually happened, which is the only thing that answers
+ * both. A pass is owed when no job of that kind for that channel has succeeded
+ * and none is queued or running.
  */
 async function enqueueMissing(supabase: SupabaseClient): Promise<void> {
-  const { data: creators, error } = await supabase
-    .from('creators')
-    .select('id, handle, youtube_handle, youtube_channel_id')
-    .not('youtube_channel_id', 'is', null);
+  if (!AMENDMENT_ACCEPTED) { log('Derived analysis gated: approval is not configured.'); return; }
+  const [{ data: rows, error }, { data: jobs, error: jobError }] = await Promise.all([
+    supabase
+      .from('channel_analyses')
+      .select('channel_id, title')
+      .returns<{ channel_id: string; title: string }[]>(),
+    supabase
+      .from('analysis_jobs')
+      .select('channel_id, kind, status')
+      .in('status', ['queued', 'running', 'succeeded'])
+      .returns<{ channel_id: string; kind: AnalysisJobKind; status: string }[]>(),
+  ]);
 
-  if (error) {
-    console.error(`  could not list creators: ${error.message}`);
+  if (error || jobError) {
+    console.error(`  could not read state: ${(error ?? jobError)!.message}`);
     process.exit(1);
   }
+
+  const covered = new Set((jobs ?? []).map((j) => `${j.channel_id}:${j.kind}`));
+  // Only the passes this worker can actually run. Queuing a kind with no
+  // handler would fill the table with jobs that can never be claimed to
+  // completion.
+  const KINDS = Object.keys(HANDLERS) as AnalysisJobKind[];
 
   let queued = 0;
   let skipped = 0;
 
-  for (const creator of (creators ?? []) as { id: string; handle: string }[]) {
-    const { data: metrics } = await supabase
-      .from('report_metrics')
-      .select('moderation, comment_axes')
-      .eq('creator_id', creator.id)
-      .maybeSingle<{
-        moderation: { commentsScanned?: number } | null;
-        comment_axes: unknown;
-      }>();
-
-    // WHAT COUNTS AS ALREADY DONE, per pass, and neither is the obvious field.
-    //
-    //   census: `moderation.commentsScanned`, not `comment_risks` — a clean
-    //           channel has no risks and would read as never-scanned forever.
-    //   intent: `comment_axes` present, not `purchase_intent_rate` — that is
-    //           null whenever nothing purchasable was found, which is a
-    //           completed measurement and not a missing one.
-    const done: Record<AnalysisJobKind, boolean> = {
-      classify_comments: Boolean(metrics?.moderation?.commentsScanned),
-      classify_intent: metrics?.comment_axes != null,
-    };
-
-    for (const kind of Object.keys(done) as AnalysisJobKind[]) {
-      if (done[kind]) {
+  for (const row of rows ?? []) {
+    for (const kind of KINDS) {
+      if (covered.has(`${row.channel_id}:${kind}`)) {
         skipped += 1;
         continue;
       }
       const { error: insertError } = await supabase
         .from('analysis_jobs')
-        .insert({ creator_id: creator.id, kind, params: {} });
+        .insert({ channel_id: row.channel_id, kind, params: {} });
 
       if (insertError) {
         // 23505 is the partial unique index: one is already queued or running.
         if (insertError.code === '23505') skipped += 1;
-        else console.error(`  @${creator.handle} ${kind}: ${insertError.message}`);
+        else console.error(`  ${row.title}: ${kind}: ${insertError.message}`);
       } else {
         queued += 1;
-        console.log(`  queued ${kind} for @${creator.handle}`);
       }
     }
   }
-  console.log(`\n  ${queued} queued, ${skipped} already done or already queued.`);
+
+  log(`queued ${queued}, already done or in flight ${skipped}`);
 }
 
 async function showStatus(supabase: SupabaseClient): Promise<void> {
   const { data, error } = await supabase
     .from('analysis_jobs')
-    .select('kind, status, attempts, max_attempts, queued_at, comments_scanned, findings, last_error, creator_id, channel_id, creators(handle)')
+    .select('kind, status, attempts, max_attempts, queued_at, comments_scanned, findings, last_error, channel_id')
     .order('queued_at', { ascending: false })
     .limit(40);
 
@@ -535,14 +449,8 @@ async function showStatus(supabase: SupabaseClient): Promise<void> {
     comments_scanned: number | null;
     findings: number | null;
     last_error: string | null;
-    creators: { handle: string } | null;
   })[]) {
-    // A channel job has no creator to name, and printing an empty column
-    // for it would read as a broken row rather than a different subject.
-    const who =
-      (row.creators?.handle ? `@${row.creators.handle}` : row.creator_id) ??
-      row.channel_id ??
-      '(no subject)';
+    const who = row.channel_id;
     const detail =
       row.status === 'succeeded'
         ? `${(row.comments_scanned ?? 0).toLocaleString('en-US')} comments · ${row.findings ?? 0} flagged`

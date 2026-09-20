@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { Panel } from '@/components/ui/Panel';
 import type { CandidateRow } from '@/lib/report/candidate-compare';
 import { MIN_SCORED, comparability } from '@/lib/report/candidate-compare';
+import { DERIVED_DISCLOSURE, FINANCIAL_DISCLOSURE } from '@/lib/report/policy';
 import { cn } from '@/lib/cn';
 
 /** A figure, or a dash that means NOT MEASURED and never zero. */
@@ -174,12 +175,21 @@ export function ComparisonTable({ rows }: { rows: CandidateRow[] }) {
         </div>
       )}
 
-      <p className="border-t border-line px-5 py-2.5 text-[11px] leading-relaxed text-ink-faint">
-        All figures are from public YouTube data. Est. CPM is arithmetic on a fee you entered —
-        hover it for the formula — and is not a market rate. Comment figures describe the people
-        who commented, who are a small self-selected slice of who watched. Nothing here measures
-        conversion, sales, or who the viewers are.
-      </p>
+      {/* Both constants are RENDERED, not paraphrased. Accepting YouTube's
+          derived-metrics amendment is what permits the sentiment and
+          purchase-language columns to exist at all, and it carries two
+          obligations: say the derived figures are ours and not YouTube's, and
+          say a financial projection is not approved by Google. A constant that
+          exists and is never rendered satisfies neither — which is why
+          `verify:policy` asserts these exact expressions appear here. */}
+      <div className="space-y-1.5 border-t border-line px-5 py-2.5 text-[11px] leading-relaxed text-ink-faint">
+        <p>{DERIVED_DISCLOSURE}</p>
+        <p>{FINANCIAL_DISCLOSURE}</p>
+        <p>
+          Comment figures describe the people who commented, who are a small self-selected slice
+          of who watched. Nothing here measures conversion, sales, or who the viewers are.
+        </p>
+      </div>
     </Panel>
   );
 }

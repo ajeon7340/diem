@@ -1,10 +1,11 @@
 'use server';
 
+import { channelDestination } from '@/lib/channel/state';
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 
 import { isMockEmail } from '@/lib/auth/mock';
-import { emailSchema, ACCOUNT_TYPES, type AccountType } from '@/lib/schemas';
+import { emailSchema } from '@/lib/schemas';
 import { createServiceClient, createSessionClient, isSupabaseConfigured } from '@/lib/supabase/server';
 
 export interface MagicLinkState {
@@ -30,11 +31,6 @@ export interface MagicLinkState {
  * and people who signed up but never onboarded alike — so it routes through
  * /auth/continue, which resolves the session and dispatches accordingly.
  */
-function destinationFor(accountType: AccountType | null): string {
-  if (accountType === 'creator') return '/onboarding/creator';
-  if (accountType === 'business') return '/onboarding/business';
-  return '/auth/continue';
-}
 
 function siteOrigin(): string {
   const configured = process.env.NEXT_PUBLIC_SITE_URL;
@@ -89,17 +85,13 @@ export async function sendMagicLink(
     return { status: 'error', message: parsed.error.issues[0]?.message ?? 'Invalid email' };
   }
 
-  const rawType = String(formData.get('accountType') ?? '');
-  const accountType = (ACCOUNT_TYPES as readonly string[]).includes(rawType)
-    ? (rawType as AccountType)
-    : null;
-  const next = destinationFor(accountType);
+  const next = channelDestination(formData.get('channel'), '/auth/continue');
 
   // Fixture mode: no auth provider to send through, so drop straight into
   // onboarding. The demo role is set when onboarding *completes* — setting it
   // here would make the onboarding guard think the account already exists.
   if (!isSupabaseConfigured()) {
-    redirect(next);
+    redirect(channelDestination(formData.get('channel'), '/onboarding/business'));
   }
 
   // Mocked delivery: mint the same one-time token Supabase would have emailed

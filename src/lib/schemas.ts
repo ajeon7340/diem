@@ -1,6 +1,5 @@
 import { z } from 'zod';
 
-import { isReservedHandle } from './reserved-handles';
 import { CAMPAIGN_CATEGORIES, CAMPAIGN_OBJECTIVES } from '@/types';
 
 /**
@@ -697,27 +696,6 @@ export const emailSchema = z
   .max(254);
 
 /**
- * Handle rules mirror the CHECK constraints on `creators.handle`: 3–30 chars,
- * lowercase alphanumerics plus `_` and `.`, not starting or ending with a dot,
- * and not one of the reserved route segments.
- */
-export const handleSchema = z
-  .string()
-  .trim()
-  .transform((value) => value.replace(/^@+/, '').toLowerCase())
-  .pipe(
-    z
-      .string()
-      .min(3, 'Handles are at least 3 characters')
-      .max(30, 'Handles are at most 30 characters')
-      .regex(
-        /^[a-z0-9_][a-z0-9_.]*[a-z0-9_]$/,
-        'Use letters, numbers, underscores and dots only',
-      ),
-  )
-  .refine((value) => !isReservedHandle(value), 'That handle is reserved');
-
-/**
  * A YouTube handle, as a creator would type it.
  *
  * Accepts `@name`, a channel URL, or a bare name, and normalises to `@name`.
@@ -786,43 +764,6 @@ export const youtubeHandleSchema = z
     message: 'Paste your channel URL or your @handle, like youtube.com/@jooshica6178',
   });
 
-export const creatorOnboardingSchema = z.object({
-  handle: handleSchema,
-  youtubeHandle: youtubeHandleSchema,
-  displayName: z.string().trim().min(2, 'Add a display name').max(80),
-  niche: z
-    .string()
-    .trim()
-    .max(60)
-    .optional()
-    .nullable()
-    .transform((value) => value || null),
-  bio: z
-    .string()
-    .trim()
-    .max(500, 'Keep the bio under 500 characters')
-    .optional()
-    .nullable()
-    .transform((value) => value || null),
-  budgetMin: optionalBudget,
-  budgetMax: optionalBudget,
-  budgetNegotiable: z.coerce.boolean().default(false),
-  /** Track B opt-in. Off by default — the creator has to choose discovery. */
-  isDirectoryVisible: z
-    .union([z.literal('on'), z.literal('true'), z.literal(''), z.undefined(), z.null()])
-    .transform((value) => value === 'on' || value === 'true'),
-})
-  // A published range that runs downwards. `budgetRange` prints
-  // "$25,000-$15,000" for it, and a creator reading their own media kit sees a
-  // number they did not mean to say. The settings form has always refused
-  // this; signup did not, because the field only became a range later.
-  .refine(
-    (value) =>
-      value.budgetMin === null || value.budgetMax === null || value.budgetMin <= value.budgetMax,
-    { message: 'The low end cannot be above the high end', path: ['budgetMin'] },
-  );
-
-export type CreatorOnboardingParsed = z.output<typeof creatorOnboardingSchema>;
 
 /**
  * Multi-select arriving from a form as repeated fields.

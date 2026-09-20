@@ -62,39 +62,23 @@ const PLANS = [
     ],
     note: 'Payment is not integrated yet, so there is nothing to buy on this page. We would rather say that than print a number we have not committed to.',
   },
-  {
-    name: 'Creator',
-    price: 'Free',
-    cadence: 'always',
-    tagline: 'Optional, for creators who want to add to their public read.',
-    cta: { label: 'Claim my channel', href: '/join/creator', variant: 'secondary' as const },
-    features: [
-      'A profile at /@yourhandle that you control',
-      'Your own view and engagement history',
-      'A moderation queue over your comment section',
-      'Approve or decline each brand individually',
-      'Agency directory listing — opt-in, off by default',
-    ],
-    note: 'Free permanently. Nothing a buyer does requires a creator account; this adds what public data cannot reach.',
-  },
 ];
 
-const COMPARISON: { label: string; analyse: boolean | string; team: boolean | string; creator: boolean | string }[] = [
-  { label: 'Analyse a channel nobody has signed up', analyse: true, team: true, creator: false },
-  { label: 'Compare candidates on one brief', analyse: true, team: true, creator: false },
-  { label: 'Written fit read per candidate', analyse: true, team: true, creator: false },
-  { label: 'Analysis volume', analyse: 'Early access', team: 'Higher', creator: 'Own channel' },
-  { label: 'Several campaigns at once', analyse: true, team: true, creator: false },
-  { label: 'Shared workspace for a team', analyse: 'Owner only', team: true, creator: false },
-  { label: 'Exportable candidate report', analyse: false, team: true, creator: false },
-  { label: 'Moderation queue over your comments', analyse: false, team: false, creator: true },
-  { label: 'Control who sees your locked metrics', analyse: false, team: false, creator: true },
+const COMPARISON: { label: string; analyse: boolean | string; team: boolean | string }[] = [
+  { label: 'Analyse a channel nobody has signed up', analyse: true, team: true },
+  { label: 'Compare candidates on one brief', analyse: true, team: true },
+  { label: 'Written fit read per candidate', analyse: true, team: true },
+  { label: 'Analysis volume', analyse: 'Early access', team: 'Higher' },
+  { label: 'Comments read per channel', analyse: 'Bounded', team: 'Deeper' },
+  { label: 'Several campaigns at once', analyse: true, team: true },
+  { label: 'Shared workspace for a team', analyse: 'Owner only', team: true },
+  { label: 'Exportable candidate report', analyse: false, team: true },
 ];
 
 const FAQ = [
   {
     q: 'Do the creators have to agree to this?',
-    a: 'No, and nothing here asks them to. Everything analysed is public: uploads, view counts, the comment section, and YouTube’s own paid-placement disclosures. What we deliberately do NOT have without a creator account is their analytics — so we never state who watches, and never report a conversion.',
+    a: 'No, and nothing here asks them to. Everything analysed is public: uploads, view counts, the comment section, and YouTube’s own paid-placement disclosures. What that leaves out is their own analytics, which nothing here can reach — so we never state who watches, and never report a conversion.',
   },
   {
     q: 'What am I paying for, once there is something to pay for?',
@@ -140,11 +124,11 @@ export default function PricingPage() {
           <p className="mt-3 max-w-[64ch] text-[13px] leading-relaxed text-ink-muted">
             Analysing a channel costs us a YouTube read and thousands of comments through a metered
             model, so that is what the tiers are about: how many candidates you compare, how deeply
-            each is read, and who on your team can see it. Creators never pay. Nothing on this page
-            can be bought yet — checkout is not built.
+            each is read, and who on your team can see it. Nothing here can be bought yet —
+            checkout is not built.
           </p>
 
-          <div className="mt-10 grid gap-4 lg:grid-cols-3">
+          <div className="mt-10 grid gap-4 lg:grid-cols-2">
             {PLANS.map((plan) => (
               <div
                 key={plan.name}
@@ -195,7 +179,7 @@ export default function PricingPage() {
                 <thead>
                   <tr className="border-b border-line">
                     <th scope="col" className="rail px-5 py-3">Capability</th>
-                    {['Analyse', 'Team', 'Creator'].map((head) => (
+                    {['Analyse', 'Team'].map((head) => (
                       <th key={head} scope="col" className="rail px-4 py-3 text-center">{head}</th>
                     ))}
                   </tr>
@@ -208,7 +192,6 @@ export default function PricingPage() {
                       </th>
                       <td className="px-4 py-3 text-center"><Cell value={row.analyse} /></td>
                       <td className="px-4 py-3 text-center"><Cell value={row.team} /></td>
-                      <td className="px-4 py-3 text-center"><Cell value={row.creator} /></td>
                     </tr>
                   ))}
                 </tbody>
@@ -242,8 +225,8 @@ export default function PricingPage() {
               <Link href="/campaigns/new">
                 <Button>Create a campaign</Button>
               </Link>
-              <Link href="/@marahwoods">
-                <Button variant="secondary">See a sample report</Button>
+              <Link href="/campaigns">
+                <Button variant="secondary">See your campaigns</Button>
               </Link>
             </div>
           </section>

@@ -1,14 +1,13 @@
 import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 
-import { DEMO_ROLE_COOKIE, type DemoRole } from '@/lib/data/fixtures';
+import { DEMO_ROLE_COOKIE, type DemoRole } from '@/lib/data/demo';
 import { cn } from '@/lib/cn';
 
 const ROLES: { value: DemoRole; label: string }[] = [
   { value: 'anonymous', label: 'Anon' },
   { value: 'free_agency', label: 'Free agency' },
   { value: 'pro_agency', label: 'Pro agency' },
-  { value: 'creator', label: 'Creator' },
 ];
 
 /**

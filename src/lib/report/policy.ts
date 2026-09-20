@@ -78,12 +78,12 @@ export const OFF_PLATFORM_PANEL = false;
  *
  * Two obligations came with it and are not optional:
  *   - derived metrics must be distinguished from API Data wherever they sit
- *     beside it — DERIVED_DISCLOSURE, rendered under the ad-fit tiles;
+ *     beside it — DERIVED_DISCLOSURE, rendered under the comparison table;
  *   - financial projections must state they are not approved by Google —
  *     FINANCIAL_DISCLOSURE, rendered under the CPM.
  * Removing either re-breaks the permission this flag depends on.
  */
-export const AMENDMENT_ACCEPTED = true;
+export const AMENDMENT_ACCEPTED = process.env.ADFIT_YOUTUBE_DERIVED_APPROVAL === 'approved';
 
 export const RETENTION_DAYS = {
   /** III.E.4.d — the base policy. */
@@ -176,7 +176,7 @@ export const DERIVED_DISCLOSURE =
   'Purchase intent, sentiment and brand safety are adfit’s own measurements, computed from public comments. They are not YouTube figures.';
 
 export const FINANCIAL_DISCLOSURE =
-  'Estimated from the creator’s published minimum against their median views — not a rate card, and not approved by Google or YouTube.';
+  'Estimated by dividing a fee you entered by the channel’s median views — not a rate card, and not approved by Google or YouTube.';
 
 
 /**

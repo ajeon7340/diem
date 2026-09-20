@@ -1,3 +1,4 @@
+import { channelDestination } from '@/lib/channel/state';
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 
@@ -9,12 +10,12 @@ import { isSupabaseConfigured } from '@/lib/supabase/server';
 export const metadata: Metadata = { title: 'Create your workspace' };
 export const dynamic = 'force-dynamic';
 
-export default async function BusinessOnboardingPage() {
+export default async function BusinessOnboardingPage({ searchParams }: { searchParams: { channel?: string } }) {
   if (isSupabaseConfigured()) {
     const viewer = await getViewer();
-    if (!viewer.userId) redirect('/join/business');
+    if (!viewer.userId) redirect(channelDestination(searchParams.channel, '/join/business'));
     // One org per user in the MVP; `create_organization` would reject a second.
-    if (viewer.organization) redirect('/directory');
+    if (viewer.organization) redirect(channelDestination(searchParams.channel));
   }
 
   return (
@@ -24,7 +25,7 @@ export default async function BusinessOnboardingPage() {
       title="Name your workspace"
       footer={null}
     >
-      <BusinessOnboardingForm />
+      <BusinessOnboardingForm channel={searchParams.channel} />
     </AuthShell>
   );
 }

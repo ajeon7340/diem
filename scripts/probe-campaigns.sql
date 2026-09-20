@@ -63,6 +63,18 @@ begin
   insert into public.channel_analyses (channel_id, title, comments_analyzed)
     values ('UCshared', 'A creator neither of them has met', 600);
 
+  -- Both agencies saved the SAME reference video, with different reasoning.
+  -- Which videos an agency is studying is competitive information about an
+  -- unannounced campaign, so this is the case the policy exists for.
+  insert into public.campaign_references
+    (campaign_id, video_id, title, channel_id, channel_title, note, analysed_at)
+    values (v_camp_a, 'vidSHARED', 'The format both of them noticed', 'UCref',
+            'Somebody else entirely', 'A''s reason for saving it', now());
+  insert into public.campaign_references
+    (campaign_id, video_id, title, channel_id, channel_title, note, analysed_at)
+    values (v_camp_b, 'vidSHARED', 'The format both of them noticed', 'UCref',
+            'Somebody else entirely', 'B''s reason for saving it', now());
+
   -- And a job is running against that shared channel.
   insert into public.analysis_jobs (channel_id, kind) values ('UCshared', 'classify_intent');
   insert into public.analysis_jobs (channel_id, kind) values ('UCnobodys', 'classify_intent');
@@ -77,6 +89,7 @@ do $$
 declare
   v_a text := current_setting('probe.user_a');
   v_b text := current_setting('probe.user_b');
+  v_camp_a uuid := current_setting('probe.camp_a')::uuid;
   v_n integer;
 begin
   -- ---------------------------------------------------------------------
@@ -106,6 +119,15 @@ begin
   select count(*) into v_n from public.campaign_candidates where proposed_fee is not null;
   perform pg_temp.check('A sees the fee it was quoted', v_n = 1);
 
+  -- ---------------------------------------------------------------------
+  -- So is the research
+  -- ---------------------------------------------------------------------
+  select count(*) into v_n from public.campaign_references;
+  perform pg_temp.check('A sees one reference, not both rows', v_n = 1);
+
+  select count(*) into v_n from public.campaign_references where note like 'B''s%';
+  perform pg_temp.check('A cannot read B''s reason for saving the same video', v_n = 0);
+
   -- The other direction, because a policy that leaks one way and not the
   -- other is a policy nobody tested twice.
   perform set_config('request.jwt.claim.sub', v_b, true);
@@ -115,6 +137,20 @@ begin
 
   select count(*) into v_n from public.campaign_candidates where proposed_fee is not null;
   perform pg_temp.check('B cannot see the fee A was quoted', v_n = 0);
+
+  select count(*) into v_n from public.campaign_references where note like 'A''s%';
+  perform pg_temp.check('B cannot read A''s reason either', v_n = 0);
+
+  -- Writing into somebody else's campaign must fail the WITH CHECK, not
+  -- silently land in a row nobody can read back.
+  begin
+    insert into public.campaign_references
+      (campaign_id, video_id, title, channel_id, channel_title, analysed_at)
+      values (v_camp_a, 'vidSMUGGLED', 'Planted', 'UCref', 'Somebody else', now());
+    perform pg_temp.check('B cannot file a reference into A''s campaign', false);
+  exception when insufficient_privilege or check_violation then
+    perform pg_temp.check('B cannot file a reference into A''s campaign', true);
+  end;
 
   -- ---------------------------------------------------------------------
   -- The ANALYSIS is shared, deliberately
@@ -154,6 +190,7 @@ begin
     not has_table_privilege('anon', 'public.channel_analyses', 'select')
       and not has_table_privilege('anon', 'public.campaigns', 'select')
       and not has_table_privilege('anon', 'public.campaign_candidates', 'select')
+      and not has_table_privilege('anon', 'public.campaign_references', 'select')
   );
 
   -- ---------------------------------------------------------------------

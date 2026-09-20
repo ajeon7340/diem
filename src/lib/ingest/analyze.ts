@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { AMENDMENT_ACCEPTED } from '@/lib/report/policy';
+import type { RawComment as CorpusComment } from './classify';
 import { YouTubeError, ytFetch } from '@/lib/youtube/client';
 import { parseDuration } from '@/lib/youtube/parse';
 import { isCandidate, loadExternalTerms, scanKeywords } from '@/lib/report/keywords';
@@ -58,6 +60,7 @@ const COMMENT_PAGE = 100;
 export interface AnalyzeOptions {
   /** Uploads to read. The default keeps a signup interactive. */
   maxVideos?: number;
+  onStage?: (stage: 'resolution' | 'videos' | 'comments' | 'analysis' | 'report') => Promise<void>;
   /** Comments per video. Bounds a channel with a 40,000-comment hit. */
   maxCommentsPerVideo?: number;
   /** Total comments across the channel, so one signup cannot exhaust the quota. */
@@ -94,8 +97,14 @@ export interface ChannelReport {
   engagementRate: number | null;
   /** Quota units spent. Worth logging: this is a shared, exhaustible budget. */
   units: number;
+  evidence: { videos: VideoEvidence[]; windowDays: number; start: string; end: string; unreadable: number; truncated: boolean };
+  corpus: CorpusComment[];
 }
 
+export interface VideoEvidence {
+  id: string; title: string; publishedAt: string; views: number | null; seconds: number;
+  format: 'short' | 'long' | 'unknown';
+}
 interface RawVideo {
   id: string;
   snippet?: { title?: string; publishedAt?: string; description?: string };
@@ -104,12 +113,7 @@ interface RawVideo {
   paidProductPlacementDetails?: { hasPaidProductPlacement?: boolean };
 }
 
-interface RawComment {
-  id: string;
-  videoId: string;
-  text: string;
-  authorChannelId: string | null;
-}
+
 
 /**
  * Disclosure markers, Korean first because that is where they appear on the
@@ -155,6 +159,7 @@ export async function analyzeChannel(
   const maxComments = options.maxComments ?? 3_000;
   const windowDays = options.windowDays ?? 365;
 
+  await options.onStage?.('resolution');
   let units = 0;
   const byHandle = channelIdOrHandle.startsWith('@');
 
@@ -181,6 +186,7 @@ export async function analyzeChannel(
   const uploads = channel.contentDetails.relatedPlaylists.uploads;
 
   // --- Uploads -------------------------------------------------------------
+  await options.onStage?.('videos');
   const videoIds: string[] = [];
   if (uploads) {
     let pageToken: string | undefined;
@@ -205,7 +211,7 @@ export async function analyzeChannel(
   }
 
   const capped = videoIds.slice(0, maxVideos);
-  const videos: RawVideo[] = [];
+  let videos: RawVideo[] = [];
   for (let i = 0; i < capped.length; i += PAGE) {
     const res = await ytFetch<RawVideo>('videos', {
       // paidProductPlacementDetails is a part on this same call, so the
@@ -225,6 +231,8 @@ export async function analyzeChannel(
     return Number.isFinite(at) && now - at <= windowMs;
   });
 
+  const truncated = capped.length >= maxVideos;
+  videos = inWindow;
   const views = videos.map((v) => Number(v.statistics?.viewCount ?? 0));
   const likes = videos.map((v) => num(v.statistics?.likeCount));
   const commentCounts = videos.map((v) => num(v.statistics?.commentCount));
@@ -305,7 +313,8 @@ export async function analyzeChannel(
   });
 
   // --- Comments -------------------------------------------------------------
-  const comments: RawComment[] = [];
+  await options.onStage?.('comments');
+  const comments: CorpusComment[] = [];
   let postsWithComments = 0;
   let unreadable = 0;
 
@@ -321,7 +330,7 @@ export async function analyzeChannel(
           snippet: {
             topLevelComment: {
               id: string;
-              snippet: { textDisplay?: string; authorChannelId?: { value?: string } };
+              snippet: { textDisplay?: string; authorChannelId?: { value?: string }; likeCount?: number; publishedAt?: string };
             };
           };
         }>('commentThreads', {
@@ -344,10 +353,14 @@ export async function analyzeChannel(
       units += page.units;
       for (const thread of page.items) {
         const c = thread.snippet?.topLevelComment;
-        if (!c) continue;
+        if (!c || comments.length >= maxComments || readHere >= maxCommentsPerVideo) continue;
         comments.push({
           id: c.id,
           videoId: video.id,
+          videoTitle: video.snippet?.title ?? '',
+          author: '',
+          likes: c.snippet?.likeCount ?? 0,
+          publishedAt: c.snippet?.publishedAt ?? '',
           text: c.snippet?.textDisplay ?? '',
           authorChannelId: c.snippet?.authorChannelId?.value ?? null,
         });
@@ -371,7 +384,7 @@ export async function analyzeChannel(
   const counts = new Map<BrandRiskCategory, { count: number; byCreator: number }>();
   for (const category of BRAND_RISK_CATEGORIES) counts.set(category, { count: 0, byCreator: 0 });
 
-  for (const comment of comments) {
+  for (const comment of AMENDMENT_ACCEPTED ? comments : []) {
     if (!isCandidate(comment.text, extra)) continue;
     const matches = scanKeywords(comment.text, extra);
     const categories = new Set(
@@ -487,9 +500,18 @@ export async function analyzeChannel(
     commentsAnalyzed: comments.length,
     commentRisks,
     moderation,
-    commentRegister: measureRegister(comments.map((c) => c.text)),
+    commentRegister: AMENDMENT_ACCEPTED ? measureRegister(comments.map((c) => c.text)) : null,
     engagementRate,
     units,
+    corpus: comments,
+    evidence: {
+      videos: videos.map(v => { const seconds = parseDuration(v.contentDetails?.duration ?? ''); return {
+        id: v.id, title: v.snippet?.title ?? '', publishedAt: v.snippet?.publishedAt ?? '',
+        views: num(v.statistics?.viewCount), seconds, format: seconds === 0 ? 'unknown' : seconds <= 180 ? 'short' : 'long',
+      }; }),
+      windowDays, start: new Date(now - windowMs).toISOString(), end: new Date(now).toISOString(),
+      unreadable, truncated,
+    },
   };
 }
 

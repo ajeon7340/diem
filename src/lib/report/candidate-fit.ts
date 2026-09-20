@@ -1,3 +1,4 @@
+import { AMENDMENT_ACCEPTED } from './policy';
 import 'server-only';
 
 import { AiError, aiModel, generateStructured } from '@/lib/ai/provider';
@@ -201,6 +202,7 @@ function brief(input: CandidateFitInput): string {
 export async function readCandidate(
   input: CandidateFitInput,
 ): Promise<{ ok: true; fit: CandidateFit; model: string } | { ok: false; reason: string }> {
+  if (!AMENDMENT_ACCEPTED) return { ok: false, reason: 'YouTube derived-analysis approval is not configured.' };
   try {
     const { data } = await generateStructured<CandidateFit>({
       system: SYSTEM,

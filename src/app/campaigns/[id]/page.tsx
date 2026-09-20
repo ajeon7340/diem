@@ -3,17 +3,28 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
 import { CandidateCard } from '@/components/campaign/CandidateCard';
+import { ContentIdeas } from '@/components/campaign/ContentIdeas';
+import { ReferenceBox } from '@/components/campaign/ReferenceBox';
+import { SavedReferences } from '@/components/campaign/SavedReferences';
 import { CandidateForm } from '@/components/campaign/CandidateForm';
 import { ComparisonTable } from '@/components/campaign/ComparisonTable';
 import { SiteHeader } from '@/components/shell/SiteHeader';
 import { Panel } from '@/components/ui/Panel';
 import { getCampaign, getCandidates, getChannelJobs } from '@/lib/data/campaigns';
+import { getReferences } from '@/lib/data/references';
+import { CATEGORIES, REGIONS, fetchTrending } from '@/lib/youtube/trending';
 import { standard, toRow } from '@/lib/report/candidate-compare';
 
 export const metadata: Metadata = { title: 'Campaign' };
 export const dynamic = 'force-dynamic';
 
-export default async function CampaignPage({ params }: { params: { id: string } }) {
+export default async function CampaignPage({
+  params,
+  searchParams,
+}: {
+  params: { id: string };
+  searchParams: { region?: string; category?: string };
+}) {
   // RLS decides this, not a check here: a campaign belonging to another
   // organisation simply does not come back, and 404 is the honest answer —
   // "not allowed" would confirm the id exists.
@@ -25,6 +36,22 @@ export default async function CampaignPage({ params }: { params: { id: string } 
   const jobs = await getChannelJobs(candidates.map((c) => c.channelId));
   const brief = standard(campaign);
   const stated = brief.filter((b) => b.value !== null);
+
+  const region = REGIONS.some((r) => r.code === searchParams.region) ? searchParams.region! : 'KR';
+  const category = CATEGORIES.some((c) => c.id === searchParams.category)
+    ? searchParams.category!
+    : null;
+
+  // Both are auxiliary: a spent quota or an unreachable chart costs this page
+  // one panel, never the candidate work it sits under.
+  const [references, trending] = await Promise.all([
+    getReferences(campaign.id),
+    fetchTrending(region, category).catch((e: unknown) => {
+      console.error('[campaign] trending failed', e);
+      return null;
+    }),
+  ]);
+  const readAt = new Date().toISOString();
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -76,6 +103,29 @@ export default async function CampaignPage({ params }: { params: { id: string } 
                 jobs={jobs.get(candidate.channelId) ?? []}
               />
             ))}
+          </div>
+
+          {/* Planning sits BELOW the candidate work, deliberately. Choosing who
+              to brief is the decision this page exists for; what to make with
+              them is the step after it, and putting it above would have a buyer
+              planning content for someone they have not chosen. */}
+          <div className="mt-10 space-y-4">
+            <p className="rail">Planning</p>
+            <ReferenceBox
+              campaignId={campaign.id}
+              candidates={candidates.map((c) => ({
+                id: c.id,
+                title: c.analysis?.title ?? c.submittedAs ?? c.channelId,
+              }))}
+            />
+            <SavedReferences
+              references={references}
+              candidates={candidates.map((c) => ({
+                id: c.id,
+                title: c.analysis?.title ?? c.submittedAs ?? c.channelId,
+              }))}
+            />
+            <ContentIdeas data={trending} campaignId={campaign.id} readAt={readAt} />
           </div>
         </div>
       </main>
