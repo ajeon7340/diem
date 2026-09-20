@@ -15,7 +15,6 @@ import { SavedReferences } from '@/components/campaign/SavedReferences';
 import { CandidateForm } from '@/components/campaign/CandidateForm';
 import { ComparisonTable } from '@/components/campaign/ComparisonTable';
 import { SiteHeader } from '@/components/shell/SiteHeader';
-import { Panel } from '@/components/ui/Panel';
 import { getViewer } from '@/lib/access/viewer';
 import { getCampaign, getCandidates, getChannelJobs } from '@/lib/data/campaigns';
 import { getBrands } from '@/lib/data/brands';
@@ -77,21 +76,23 @@ export default async function CampaignPage({
     <div className="flex min-h-screen flex-col">
       <SiteHeader />
       <main className="flex-1 bg-paper">
-        <div className="mx-auto w-full max-w-5xl px-5 py-10 sm:px-8">
+        <div className="workspace-page max-w-6xl">
           <Link
             href="/campaigns"
             className="text-[12px] text-ink-muted underline-offset-4 hover:underline"
           >
             ← All campaigns
           </Link>
-          <h1 className="mt-3 text-[24px] font-semibold tracking-tight text-ink">
-            {campaign.name}
-          </h1>
+          <div className="mt-4 flex flex-wrap items-start justify-between gap-5">
+            <div>
+              <p className="rail">Campaign</p>
+              <h1 className="mt-2 text-3xl font-semibold tracking-tight text-ink">{campaign.name}</h1>
+              <p className="mt-2 text-sm text-ink-muted">{candidates.length} of 5 candidates · decisions stay private to this workspace</p>
+            </div>
+            <div className="flex items-center gap-2 print:hidden"><a href="#add-candidate" className="primary-action">Add candidate</a><PrintReport /></div>
+          </div>
 
-          {/* The standard, printed. An unstated field shows as unstated: a
-              comparison run against half a brief is still useful, one that
-              hides which half was empty is not. */}
-          <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2">
+          <div className="mt-6 flex flex-wrap gap-x-6 gap-y-3 border-y border-line py-4">
             {stated.length === 0 ? (
               <p className="text-[12px] text-ink-muted">
                 This brief has only a name. Candidates can still be compared on their public
@@ -107,25 +108,24 @@ export default async function CampaignPage({
             )}
           </div>
 
-          <div className="mt-6 print:hidden"><PrintReport/></div>
           <LiveReport active={[...jobs.values()].flat().some(j=>j.status==='queued'||j.status==='running')}/>
-          <details className="mt-6 rounded border bg-surface p-5 print:hidden"><summary className="cursor-pointer text-sm">Edit campaign brief</summary><div className="mt-4"><CampaignForm campaign={campaign} brands={brands} customerType={viewer?.organization?.customerType??null}/></div></details>
-          {!AMENDMENT_ACCEPTED&&<p className="mt-5 text-sm text-ink-muted">Suitability and comment analysis are gated until YouTube approval is configured. Public evidence is below.</p>}
-          <div className="mt-8 space-y-4">
-            <Panel title="Add a candidate" meta="no creator signup required">
-              <CandidateForm campaignId={campaign.id} />
-            </Panel>
+          <details className="surface-card mt-6 print:hidden"><summary className="cursor-pointer px-5 py-4 text-sm font-medium text-ink">Campaign brief <span className="ml-2 font-normal text-ink-muted">Edit brand, audience, objective and budget</span></summary><div className="border-t border-line p-5"><CampaignForm campaign={campaign} brands={brands} customerType={viewer?.organization?.customerType??null}/></div></details>
+          {!AMENDMENT_ACCEPTED&&<p className="mt-5 rounded-xl border border-amber/30 bg-amber-wash px-4 py-3 text-sm leading-relaxed text-ink-muted">Campaign-specific suitability is unavailable until YouTube approval is configured. You can still make decisions using the public report evidence below.</p>}
+          <div className="mt-8 space-y-5">
+            <section id="add-candidate" className="surface-card scroll-mt-8 print:hidden"><div className="border-b border-line px-5 py-4"><p className="rail">Add to this campaign</p><h2 className="mt-2 text-lg font-semibold text-ink">Add a YouTube channel</h2><p className="mt-1 text-sm text-ink-muted">Paste a URL or @handle. The public report is reused when it is still current.</p></div><div className="p-5"><CandidateForm campaignId={campaign.id} /></div></section>
 
-            <ComparisonTable rows={rows} candidates={candidates} />
+            <section className="surface-card overflow-hidden"><div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-4"><div><p className="rail">Candidates</p><h2 className="mt-2 text-lg font-semibold text-ink">Make the shortlist</h2></div><p className="text-xs text-ink-muted">Review status is your decision, separate from analysis status.</p></div><div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-sm"><thead className="bg-paper text-[11px] uppercase tracking-[0.08em] text-ink-faint"><tr><th className="px-5 py-3 font-medium">Channel</th><th className="px-5 py-3 font-medium">Analysis</th><th className="px-5 py-3 font-medium">Campaign evaluation</th><th className="px-5 py-3 font-medium">Review</th><th className="px-5 py-3 font-medium"><span className="sr-only">Open</span></th></tr></thead><tbody>{candidates.length ? candidates.map((candidate, i) => { const row = rows[i]; const active = (jobs.get(candidate.channelId) ?? []).some((job) => job.status === 'queued' || job.status === 'running'); const failed = (jobs.get(candidate.channelId) ?? []).some((job) => job.status === 'failed'); const analysisState = active ? 'In progress' : failed ? 'Needs attention' : row.missing ? 'Not collected' : 'Ready'; return <tr key={candidate.id} className="border-t border-line hover:bg-paper"><td className="px-5 py-4"><a href={`#candidate-${candidate.id}`} className="font-medium text-ink hover:text-indigo">{row.title}</a><p className="mt-1 text-xs text-ink-muted">{candidate.analysis?.handle ?? candidate.submittedAs ?? 'YouTube channel'}</p></td><td className="px-5 py-4 text-xs text-ink-muted">{analysisState}</td><td className="px-5 py-4 text-xs text-ink-muted">{candidate.fit ? candidate.fit.confidence === 'supported' ? 'Fit read ready' : 'Directional read' : 'Not evaluated'}</td><td className="px-5 py-4 text-xs font-medium text-ink">{candidate.status === 'shortlisted' ? 'Priority outreach' : candidate.status === 'considering' ? 'Undecided' : candidate.status === 'hold' ? 'Hold' : 'Excluded'}</td><td className="px-5 py-4 text-right"><a href={`#candidate-${candidate.id}`} className="text-xs font-medium text-indigo hover:underline">Review →</a></td></tr>; }) : <tr><td colSpan={5} className="px-5 py-12 text-center text-sm text-ink-muted">Add up to five candidates to compare their public evidence side by side.</td></tr>}</tbody></table></div></section>
 
-            {candidates.map((candidate, i) => (
-              <details key={candidate.id} className="candidate-detail rounded border bg-surface p-4"><summary className="cursor-pointer text-sm">{candidate.analysis?.title??candidate.submittedAs??'Pending channel'}</summary><div className="mt-4"><CandidateCard
+            {candidates.length > 1 ? <details className="surface-card print:hidden"><summary className="cursor-pointer px-5 py-4 text-sm font-medium text-ink">Compare candidates <span className="ml-2 font-normal text-ink-muted">View evidence side by side</span></summary><div className="border-t border-line"><ComparisonTable rows={rows} candidates={candidates} /></div></details> : null}
+
+            <div className="space-y-4">{candidates.map((candidate, i) => (
+              <details key={candidate.id} className="candidate-detail surface-card overflow-hidden" open={candidates.length === 1}><summary className="cursor-pointer px-5 py-4 text-sm font-medium text-ink">{candidate.analysis?.title??candidate.submittedAs??'Pending channel'} <span className="ml-2 font-normal text-ink-muted">Candidate details and evidence</span></summary><div className="border-t border-line"><CandidateCard
                 campaignId={campaign.id}
                 candidate={candidate}
                 row={rows[i]}
                 jobs={jobs.get(candidate.channelId) ?? []}
               /></div></details>
-            ))}
+            ))}</div>
           </div>
 
           <div className="campaign-print-details hidden print:block">{printReports.map(report=><div key={report.channelId} className="campaign-print-creator"><ChannelReport report={report}/></div>)}</div>
