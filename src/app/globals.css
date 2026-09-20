@@ -14,16 +14,16 @@
 :root {
   color-scheme: light;
 
-  --paper: #f8fafc;        /* slate-50  */
+  --paper: #f7f8fc;        /* slate-50  */
   --surface: #ffffff;
-  --line: #e2e8f0;         /* slate-200 */
+  --line: #e5e7ef;         /* slate-200 */
   --line-strong: #cbd5e1;  /* slate-300 */
 
-  --ink: #0f172a;          /* slate-900 */
+  --ink: #202336;          /* slate-900 */
   --ink-muted: #475569;    /* slate-600 */
-  --ink-faint: #94a3b8;    /* slate-400 */
+  --ink-faint: #68758b;    /* slate-400 */
 
-  --indigo: #4f46e5;
+  --indigo: #5850e6;
   --indigo-hover: #4338ca;
   --indigo-wash: #eef2ff;
 
@@ -254,4 +254,28 @@ body {
   .channel-report .text-xs { font-size: 7.5pt; line-height: 1.4; }
   .channel-report .report-section { padding: 4mm; margin-top: 3mm; }
   .channel-report .report-section > p:last-child { margin-top: 3mm; padding-top: 2mm; }
+}
+
+/* Shared workspace presentation; print reports retain their own layout. */
+@layer components {
+  .workspace-page { @apply mx-auto w-full max-w-shell px-5 py-10 sm:px-8 sm:py-12; }
+  .page-title { @apply text-3xl font-semibold tracking-tight text-ink sm:text-4xl; }
+  .primary-action { @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-indigo px-5 text-sm font-medium text-white transition-colors hover:bg-indigo-hover; }
+  .surface-card { @apply rounded-2xl border border-line bg-surface; }
+}
+a:focus-visible, button:focus-visible, summary:focus-visible {
+  outline: 2px solid var(--indigo); outline-offset: 4px;
+}
+input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 2px solid var(--indigo); outline-offset: 2px;
+}
+@media screen {
+  .channel-report .report-section { border-radius: 16px; padding: 28px; }
+  .channel-report .report-section h2 { letter-spacing: -.025em; }
+  .channel-report .report-section dl > div { background: var(--paper); border-radius: 12px; padding: 16px; }
+  .channel-report .report-section dd { font-variant-numeric: tabular-nums; font-weight: 600; }
+  .channel-report .report-section > p { line-height: 1.75; }
+}
+@media screen and (max-width: 640px) {
+  .channel-report .report-section { padding: 20px; }
 }

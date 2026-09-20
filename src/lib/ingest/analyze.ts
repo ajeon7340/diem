@@ -4,6 +4,7 @@ import { AMENDMENT_ACCEPTED } from '@/lib/report/policy';
 import type { RawComment as CorpusComment } from './classify';
 import { YouTubeError, ytFetch } from '@/lib/youtube/client';
 import { parseDuration } from '@/lib/youtube/parse';
+import { AFFILIATE_MARKERS, DISCLOSURE_MARKERS } from '@/lib/youtube/disclosure';
 import { isCandidate, loadExternalTerms, scanKeywords } from '@/lib/report/keywords';
 import { measureRegister } from '@/lib/report/climate';
 import { BRAND_RISK_CATEGORIES } from '@/types';
@@ -116,15 +117,11 @@ interface RawVideo {
 
 
 /**
- * Disclosure markers, Korean first because that is where they appear on the
- * channels this was built against. Identical policy to `scan:promotions`: the
- * API flag is the only authoritative signal, a tracked link is commercial and
- * undisclosed, and a text marker is a reading of prose.
+ * Disclosure markers moved to `lib/youtube/disclosure.ts` when collaboration
+ * discovery started reading the same prose. Identical policy to
+ * `scan:promotions`: the API flag is the only authoritative signal, a tracked
+ * link is commercial and undisclosed, and a text marker is a reading of prose.
  */
-const DISCLOSURE_MARKERS =
-  /유료\s*광고|유료광고|협찬|광고\s*포함|제공\s*받|파트너십|소정의|#ad\b|#sponsored\b|paid\s+partnership/i;
-const AFFILIATE_MARKERS =
-  /coupa\.ng|link\.coupang|ali\.ski|s\.click\.aliexpress|amzn\.to|bit\.ly\/[A-Za-z0-9]+|rfrl\.co|linktr\.ee|\?(?:af|aff|affiliate|utm_campaign)=/i;
 
 function classifyDisclosure(video: RawVideo): PromotionDisclosure | null {
   if (video.paidProductPlacementDetails?.hasPaidProductPlacement === true) return 'explicit';

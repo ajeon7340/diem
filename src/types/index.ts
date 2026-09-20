@@ -1811,9 +1811,32 @@ export interface Viewer {
  * They read the same comments and measure different things, so they are two
  * jobs rather than one: either can fail, be retried, or be run alone.
  */
-export type AnalysisJobKind = 'collect_channel' | 'classify_comments' | 'classify_intent';
+export type AnalysisJobKind =
+  | 'collect_channel'
+  | 'classify_comments'
+  | 'classify_intent'
+  // The three discovery passes. On the same queue and not a second one, for the
+  // reason 0028 gives: the claiming, leasing and retry rules are the same work
+  // whatever is being computed.
+  | 'discover_criteria'
+  | 'discover_similar'
+  | 'discover_collabs';
 
-export type AnalysisJobStatus = 'queued' | 'running' | 'succeeded' | 'failed';
+/**
+ * `partial` and `cancelled` are TERMINAL AND NOT FAILURES.
+ *
+ * A discovery run that reached its search bound with thirty candidates in hand
+ * neither failed nor finished what it was asked, and the page has to say both.
+ * A customer who cancelled has not caused an error — showing one, with a retry
+ * button, is the product arguing with a decision they made.
+ */
+export type AnalysisJobStatus =
+  | 'queued'
+  | 'running'
+  | 'succeeded'
+  | 'partial'
+  | 'cancelled'
+  | 'failed';
 
 /**
  * A unit of work the product owes a creator.

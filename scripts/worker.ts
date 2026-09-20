@@ -37,6 +37,8 @@ import {
   classifyChannelIntentAndStore,
 } from '@/lib/ingest/channel-classify';
 import { jobMaxComments, jobMaxVideos, positiveEnv } from '@/lib/ingest/worker-config';
+import { runDiscoveryJob } from '@/lib/discovery/run';
+import { discoveryLimits } from '@/lib/discovery/limits';
 import type { AnalysisJobKind } from '@/types';
 
 const args = process.argv.slice(2);
@@ -74,8 +76,10 @@ let stopping = false;
 
 interface JobRow {
   id: string;
-  /** The public channel this job analyses. Never null — 0035 made it the only subject. */
+  /** The public channel this job analyses. Null on a discovery job. */
   channel_id: string;
+  /** The discovery run this job performs. Null on a channel job. */
+  search_id: string | null;
   kind: AnalysisJobKind;
   status: string;
   attempts: number;
@@ -293,9 +297,74 @@ async function runCollection(supabase: SupabaseClient, job: JobRow): Promise<voi
   await finish(supabase, job.id, { status: 'succeeded', comments_scanned: report.commentsAnalyzed });
 }
 
+/**
+ * A discovery run.
+ *
+ * The bounds are tiny next to a classification pass — six searches and forty
+ * quota units by default, seconds rather than minutes — but it goes through the
+ * same claim, lease and heartbeat because the reasons for those have nothing to
+ * do with duration: two workers running one search is double spend against a
+ * budget capped at a hundred searches a day.
+ *
+ * THREE TERMINAL OUTCOMES. A run that reached its bound with candidates in hand
+ * is `partial`, which is neither success nor failure, and a customer who
+ * cancelled gets `cancelled` rather than an error about their own decision.
+ * Neither counts as a failed attempt.
+ */
+async function runDiscovery(supabase: SupabaseClient, job: JobRow): Promise<void> {
+  const searchId = job.search_id;
+  if (!searchId) throw Object.assign(new Error('a discovery job with no search'), { terminal: true });
+
+  const limits = discoveryLimits();
+  log(
+    `discovery ${job.kind} ${searchId} · ≤${limits.searchCalls} searches · ≤${limits.units} units` +
+      `${AMENDMENT_ACCEPTED ? ` · ${aiProvider()} ${aiModel()}` : ' · ranking gated'}`,
+  );
+
+  const started = Date.now();
+  const progress = progressBox();
+  progress.set({ stage: 'fetching' });
+  const beat = heartbeat(supabase, job.id, progress.read());
+
+  const outcome = await runDiscoveryJob(supabase, job.id, searchId, WORKER, {
+    checkpoint: async (stage) => {
+      // The worker's stage vocabulary is fixed by a CHECK constraint (0037), so
+      // the pipeline's own words are mapped rather than written through. A
+      // stage the constraint rejects would fail the heartbeat, which the run
+      // reads as a lost claim and stops on — a spelling mistake becoming a
+      // cancellation.
+      progress.set({ stage: stage === 'storing' ? 'storing' : stage === 'enriching' ? 'analysis' : 'fetching' });
+      return beat();
+    },
+  });
+
+  log(
+    `discovery ${searchId} ${outcome.status} · ${outcome.candidates} candidates · ` +
+      `${outcome.searchCalls} searches · ${outcome.unitsSpent} units · ${outcome.stoppedBecause} · ` +
+      `${Math.round((Date.now() - started) / 1000)}s`,
+  );
+
+  await finish(supabase, job.id, {
+    status: outcome.status,
+    // `findings` is the denominated count this job produced, the same as the
+    // comment passes use it for. Not a percentage, and never an estimate.
+    findings: outcome.candidates,
+  });
+}
+
 const HANDLERS: Partial<Record<AnalysisJobKind, (s: SupabaseClient, j: JobRow) => Promise<void>>> = {
+  // `collect_channel` was implemented in `runCollection` and never registered
+  // here, so every collection job queued by `queue_channel_collection` was
+  // claimed, found no handler, and went back to the queue — the channel-first
+  // flow's own public read, silently never running. The kind is in the enum,
+  // the RPC, the retry path and the probes; this table was the only place it
+  // was missing.
+  collect_channel: runCollection,
   classify_comments: runChannelClassify,
   classify_intent: runChannelIntent,
+  discover_criteria: runDiscovery,
+  discover_similar: runDiscovery,
+  discover_collabs: runDiscovery,
 };
 
 /** Claim and run one job. Returns false when there was nothing to take. */
@@ -399,10 +468,13 @@ async function enqueueMissing(supabase: SupabaseClient): Promise<void> {
   }
 
   const covered = new Set((jobs ?? []).map((j) => `${j.channel_id}:${j.kind}`));
-  // Only the passes this worker can actually run. Queuing a kind with no
-  // handler would fill the table with jobs that can never be claimed to
-  // completion.
-  const KINDS = Object.keys(HANDLERS) as AnalysisJobKind[];
+  // The two passes a channel can be OWED. Deliberately not `Object.keys(HANDLERS)`
+  // any more: that list now includes `collect_channel`, which is queued by
+  // `queue_channel_collection` with a window and a refresh decision, and the
+  // three discovery kinds, which are not about a channel at all. Walking every
+  // analysed channel and queuing a collection for each would re-fetch the whole
+  // table on demand.
+  const KINDS: AnalysisJobKind[] = ['classify_comments', 'classify_intent'];
 
   let queued = 0;
   let skipped = 0;
@@ -433,7 +505,7 @@ async function enqueueMissing(supabase: SupabaseClient): Promise<void> {
 async function showStatus(supabase: SupabaseClient): Promise<void> {
   const { data, error } = await supabase
     .from('analysis_jobs')
-    .select('kind, status, attempts, max_attempts, queued_at, comments_scanned, findings, last_error, channel_id')
+    .select('kind, status, attempts, max_attempts, queued_at, comments_scanned, findings, last_error, channel_id, search_id')
     .order('queued_at', { ascending: false })
     .limit(40);
 
@@ -452,10 +524,15 @@ async function showStatus(supabase: SupabaseClient): Promise<void> {
     findings: number | null;
     last_error: string | null;
   })[]) {
-    const who = row.channel_id;
+    // A discovery job has no channel. `null.padEnd` is the crash that would
+    // otherwise take out the one command an operator runs to find out what is
+    // wrong, at the moment they are running it because something is wrong.
+    const who = row.channel_id ?? row.search_id ?? '—';
     const detail =
-      row.status === 'succeeded'
-        ? `${(row.comments_scanned ?? 0).toLocaleString('en-US')} comments · ${row.findings ?? 0} flagged`
+      row.status === 'succeeded' || row.status === 'partial'
+        ? row.search_id
+          ? `${row.findings ?? 0} candidates`
+          : `${(row.comments_scanned ?? 0).toLocaleString('en-US')} comments · ${row.findings ?? 0} flagged`
         : row.status === 'failed'
           ? (row.last_error ?? '').slice(0, 80)
           : `attempt ${row.attempts}/${row.max_attempts}`;

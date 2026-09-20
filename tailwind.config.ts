@@ -28,7 +28,7 @@ const config: Config = {
         sans: ['var(--font-geist-sans)', 'Pretendard', 'ui-sans-serif', 'system-ui', 'sans-serif'],
         mono: ['var(--font-geist-mono)', 'JetBrains Mono', 'ui-monospace', 'monospace'],
       },
-      borderRadius: { panel: '8px' },
+      borderRadius: { panel: '12px' },
       maxWidth: { shell: '1120px' },
     },
   },

@@ -1,7 +1,7 @@
 import 'server-only';
 
 /**
- * One structured-output call, two providers.
+ * One structured-output call, three providers.
  *
  * Every model call in this product is the same shape: a system prompt, a block
  * of text, and a JSON result whose schema is fixed. That is the only thing the
@@ -9,10 +9,21 @@ import 'server-only';
  * not mean rewriting three call sites, and it must not mean each of them
  * drifting into its own idea of what a failure looks like.
  *
- *   ADFIT_AI_PROVIDER  'anthropic' (default) | 'gemini'
+ *   ADFIT_AI_PROVIDER  'anthropic' (default) | 'gemini' | 'local'
  *   ADFIT_AI_MODEL     overrides the provider's default model id
  *   GEMINI_API_KEY     required for gemini
  *   ANTHROPIC_API_KEY  required for anthropic
+ *   ADFIT_AI_BASE_URL  OpenAI-compatible endpoint for 'local'
+ *   ADFIT_AI_API_KEY   sent as a bearer token to 'local' when the server wants one
+ *
+ * 'local' EXISTS SO NOTHING HERE FORCES A BILL. Both other providers are
+ * metered, and adding a feature that quietly requires one is how a project
+ * acquires a dependency nobody chose. It speaks the OpenAI chat-completions
+ * shape, which llama.cpp, Ollama, vLLM, LM Studio and every other local runner
+ * serves, so a deployment can run every model pass in this product on a box it
+ * already owns with no account anywhere. Quality is the operator's business;
+ * the schema validation and the citation checks downstream are identical either
+ * way, which is the point of doing those downstream.
  *
  * Gemini is called over REST rather than through an SDK. The request shape for
  * `generateContent` with a `responseSchema` is stable and public; an SDK
@@ -28,7 +39,7 @@ import 'server-only';
  * traceable to a source. It stays provider-specific and says so.
  */
 
-export type AiProvider = 'anthropic' | 'gemini';
+export type AiProvider = 'anthropic' | 'gemini' | 'local';
 
 const DEFAULT_MODEL: Record<AiProvider, string> = {
   anthropic: 'claude-opus-5',
@@ -37,10 +48,41 @@ const DEFAULT_MODEL: Record<AiProvider, string> = {
   // and will be rejected with a clear 404 rather than silently billing for
   // something other than what was asked for.
   gemini: 'gemini-3-pro',
+  // Whatever the operator pulled. Named rather than guessed, for the same
+  // reason as gemini above: a wrong default 404s against a server that is
+  // otherwise working, and the error points at this file instead of at the
+  // configuration.
+  local: 'llama3.1',
 };
 
 export function aiProvider(): AiProvider {
-  return process.env.ADFIT_AI_PROVIDER === 'gemini' ? 'gemini' : 'anthropic';
+  const configured = process.env.ADFIT_AI_PROVIDER;
+  if (configured === 'gemini') return 'gemini';
+  if (configured === 'local') return 'local';
+  return 'anthropic';
+}
+
+/** Default matches Ollama's OpenAI-compatible endpoint, the common case. */
+export function aiBaseUrl(): string {
+  return process.env.ADFIT_AI_BASE_URL?.replace(/\/$/, '') || 'http://127.0.0.1:11434/v1';
+}
+
+/**
+ * Whether a model call can be made at all.
+ *
+ * Asked before a gated feature offers itself, so a deployment with the approval
+ * configured and no provider reachable says "no suggestion source is
+ * configured" instead of failing mid-run.
+ */
+export function aiConfigured(): boolean {
+  switch (aiProvider()) {
+    case 'gemini':
+      return Boolean(process.env.GEMINI_API_KEY);
+    case 'local':
+      return Boolean(process.env.ADFIT_AI_BASE_URL);
+    default:
+      return Boolean(process.env.ANTHROPIC_API_KEY);
+  }
 }
 
 export function aiModel(): string {
@@ -98,7 +140,122 @@ export interface StructuredRequest {
 }
 
 export async function generateStructured<T>(request: StructuredRequest): Promise<AiResult<T>> {
-  return aiProvider() === 'gemini' ? viaGemini<T>(request) : viaAnthropic<T>(request);
+  switch (aiProvider()) {
+    case 'gemini':
+      return viaGemini<T>(request);
+    case 'local':
+      return viaLocal<T>(request);
+    default:
+      return viaAnthropic<T>(request);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Local, OpenAI-compatible
+// ---------------------------------------------------------------------------
+
+/**
+ * One POST to /chat/completions with a JSON-schema response format.
+ *
+ * `strict: true` is sent because the servers that honour it produce
+ * schema-valid output and the ones that do not ignore the field — there is no
+ * version of this request that is worse for having asked. Output is parsed
+ * against the caller's zod schema regardless: a local model is likelier than a
+ * hosted one to return prose around the JSON, and every caller in this codebase
+ * already treats model output as untrusted.
+ */
+async function viaLocal<T>({
+  system,
+  cachedUser,
+  user,
+  schema,
+  toolName,
+  maxTokens,
+}: StructuredRequest): Promise<AiResult<T>> {
+  const base = aiBaseUrl();
+  const model = aiModel();
+  const key = process.env.ADFIT_AI_API_KEY;
+
+  let res: Response;
+  try {
+    res = await fetch(`${base}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        ...(key ? { authorization: `Bearer ${key}` } : {}),
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: maxTokens,
+        messages: [
+          { role: 'system', content: system },
+          { role: 'user', content: cachedUser ? `${cachedUser}\n\n${user}` : user },
+        ],
+        response_format: {
+          type: 'json_schema',
+          json_schema: { name: toolName, schema, strict: true },
+        },
+      }),
+    });
+  } catch (err) {
+    // A local server that is not running is the most likely failure by far, and
+    // "fetch failed" sends whoever reads it looking at the network.
+    throw new AiError(
+      `could not reach the local model server at ${base} — is it running? (${err instanceof Error ? err.message : String(err)})`,
+      null,
+      'local',
+    );
+  }
+
+  if (!res.ok) {
+    throw new AiError(`${res.status} ${(await res.text()).slice(0, 300)}`, res.status, 'local');
+  }
+
+  const json = (await res.json()) as {
+    choices?: { message?: { content?: string }; finish_reason?: string }[];
+    usage?: { prompt_tokens?: number; completion_tokens?: number };
+  };
+
+  const choice = json.choices?.[0];
+  const text = choice?.message?.content ?? '';
+  if (!text) {
+    throw new AiError(
+      `empty response (finish_reason: ${choice?.finish_reason ?? 'unknown'})`,
+      null,
+      'local',
+    );
+  }
+
+  let data: T;
+  try {
+    data = JSON.parse(text) as T;
+  } catch {
+    // Some local servers wrap JSON in a fenced block however it was asked for.
+    // One salvage attempt, then the same honest error as everywhere else.
+    const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+    const inner = fenced?.[1] ?? text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1);
+    try {
+      data = JSON.parse(inner) as T;
+    } catch {
+      throw new AiError(
+        choice?.finish_reason === 'length'
+          ? `the answer was cut off at max_tokens (${maxTokens}) — raise the budget`
+          : 'the answer was not valid JSON',
+        null,
+        'local',
+      );
+    }
+  }
+
+  return {
+    data,
+    usage: {
+      inputTokens: json.usage?.prompt_tokens ?? 0,
+      outputTokens: json.usage?.completion_tokens ?? 0,
+      model,
+      provider: 'local',
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------

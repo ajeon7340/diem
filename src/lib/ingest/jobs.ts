@@ -38,6 +38,9 @@ const PASS_NAME: Record<AnalysisJobKind, string> = {
   collect_channel: 'channel analysis',
   classify_comments: 'comment safety scan',
   classify_intent: 'comment classification',
+  discover_criteria: 'creator search',
+  discover_similar: 'similar-channel search',
+  discover_collabs: 'collaboration search',
 };
 
 export function describeJob(job: AnalysisJob | null): string | null {
@@ -65,5 +68,12 @@ export function describeJob(job: AnalysisJob | null): string | null {
         : `The ${pass} did not complete and will be retried.`;
     case 'succeeded':
       return null;
+    case 'partial':
+      // Not a failure and not a completion. What was found stands; what was not
+      // reached is named by the run's own coverage, which the results panel
+      // renders — this sentence must not compete with it by guessing a cause.
+      return `The ${pass} stopped at its limit. What it found is below, and there is more it did not reach.`;
+    case 'cancelled':
+      return `The ${pass} was cancelled. Anything collected before it stopped is kept.`;
   }
 }

@@ -72,3 +72,10 @@ psql -d "${DB}" -v ON_ERROR_STOP=1 -q -f "${HERE}/probe-campaigns.sql" 2>&1 |
 
 # Channel-first flow: reuse, dedupe, private shares, expiry and candidate bounds.
 psql -d "${DB}" -v ON_ERROR_STOP=1 -q -f "${HERE}/probe-channel-flow.sql"
+
+# Discovery: what one customer can learn about another's search, whether a
+# customer can forge a result, and whether "confirmed" can arrive by default.
+echo
+echo "  discovery isolation:"
+psql -d "${DB}" -v ON_ERROR_STOP=1 -q -f "${HERE}/probe-discovery.sql" 2>&1 |
+  sed -E -e 's/^psql:[^ ]+ (NOTICE|ERROR):  ?//' -e 's/^(NOTICE|ERROR):  ?//'

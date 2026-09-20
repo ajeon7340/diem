@@ -1,4 +1,6 @@
 import Link from 'next/link';
+import { AudioLines } from 'lucide-react';
+import { WorkspaceNav } from './WorkspaceNav';
 
 import { getViewer } from '@/lib/access/viewer';
 import { isSupabaseConfigured } from '@/lib/supabase/server';
@@ -21,16 +23,12 @@ export async function SiteHeader() {
 
   return (
     <header className="print:hidden sticky top-0 z-30 border-b border-line bg-surface/90 backdrop-blur-md">
-      <div className="mx-auto flex max-w-shell flex-wrap items-center gap-4 px-5 py-3 sm:px-8">
-        <Link href="/" className="tnum text-[13px] font-semibold tracking-tight text-ink">
-          adfit
+      <div className="mx-auto flex max-w-[1440px] flex-wrap items-center gap-4 px-5 py-4 sm:px-8">
+        <Link href="/" aria-label="adfit home" className="mr-5 flex items-center gap-2.5 text-xl font-semibold tracking-tight text-ink">
+          <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo text-white"><AudioLines size={20} aria-hidden /></span>
+          adfit<span className="text-indigo">.</span>
         </Link>
-
-        <nav className="order-last w-full sm:order-none sm:w-auto -mx-1 flex min-w-0 items-center gap-1 overflow-x-auto px-1 text-[12px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          <NavLink href="/campaigns">Campaigns</NavLink>
-          <NavLink href="/channels">Channel analysis</NavLink>
-          <NavLink href="/settings">Settings</NavLink>
-        </nav>
+        <WorkspaceNav />
 
         <div className="ml-auto flex items-center gap-2.5">
           {viewer.organization ? (

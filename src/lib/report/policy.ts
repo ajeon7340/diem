@@ -468,3 +468,99 @@ export function expireVerbatim<
       : report.publicOpinion,
   };
 }
+
+
+// ---------------------------------------------------------------------------
+// Discovery
+// ---------------------------------------------------------------------------
+
+/**
+ * WHICH HALF OF DISCOVERY NEEDS PAPERWORK, AND WHICH DOES NOT.
+ *
+ * The temptation with "do not create derived data or metrics" is to read it as
+ * a ban on the feature and gate all of it, which is both wrong and expensive:
+ * calling `search.list` with a query the customer typed and showing what came
+ * back is ordinary use of the API for the purpose the API has. Nothing is
+ * derived by handing back the index's own answer.
+ *
+ * So the line is drawn at the point where WE compute a judgement:
+ *
+ *   NOT GATED — retrieval and the facts retrieved. The search itself, the
+ *   parameters it used, the channels resolved from it, their public
+ *   statistics, video titles and descriptions, publication dates, YouTube's own
+ *   `paidProductPlacementDetails` flag, and filtering retrieved rows on figures
+ *   YouTube supplied. A filter reads a number; it does not make one.
+ *
+ *   GATED — every number or sentence that is ours. Relevance and similarity
+ *   scores, a model-written reason, a content profile turned into queries,
+ *   model-proposed competitors, any classification of collaboration evidence
+ *   beyond the platform's own flag, and campaign suitability.
+ *
+ * With approval unset, all three modes still run and still return candidates,
+ * ordered as YouTube ordered them, each one showing the video that matched and
+ * the query that found it. That is a real, useful, honest product — it simply
+ * does not rank, and says so, which is the correct behaviour for a pass whose
+ * scoring step is not permitted rather than not implemented.
+ *
+ * THE APPROVAL, SPECIFICALLY. III.L: "These policies are only applicable to
+ * audited developers with analytics use cases that have explicitly applied for
+ * permission to create additional metrics and/or store statistical data through
+ * the standard quota extension request" — the form at
+ * support.google.com/youtube/contact/yt_api_form. Read 2026-09-20. This
+ * codebase has not applied and does not claim to have; `ADFIT_YOUTUBE_DERIVED_APPROVAL`
+ * is for the operator who has.
+ */
+export const DISCOVERY_RETRIEVAL_ALLOWED = true;
+
+/** Our own relevance and similarity arithmetic. */
+export const DISCOVERY_RANKING = AMENDMENT_ACCEPTED;
+
+/** A reference channel's content read into a profile, and queries built from it. */
+export const DISCOVERY_SIMILARITY_PROFILE = AMENDMENT_ACCEPTED;
+
+/**
+ * Model-proposed competitor brands.
+ *
+ * Gated for a second reason as well as the first: a model naming competitors
+ * from its own training is not evidence about anybody, and Step B searches
+ * YouTube for whatever names come out of it. Unconfirmed names must never reach
+ * a query.
+ */
+export const COMPETITOR_SUGGESTIONS = AMENDMENT_ACCEPTED;
+
+/**
+ * Reading a description to decide what KIND of commercial relationship a video
+ * shows. The platform's own flag is not covered by this — it is API Data, we
+ * are quoting it, and it stays visible either way.
+ */
+export const EVIDENCE_INFERENCE = AMENDMENT_ACCEPTED;
+
+export const DISCOVERY_DISCLOSURE =
+  'Relevance, similarity and evidence readings are adfit’s own, computed from public YouTube data. They are not YouTube figures and not a YouTube recommendation.';
+
+/** What the results panel says when ranking is off rather than empty. */
+export const DISCOVERY_RANKING_WITHHELD =
+  'Results are in the order YouTube returned them. adfit is not scoring or ranking them on this deployment.';
+
+/**
+ * Discovery found a channel. That is all it found.
+ *
+ * Printed beside every result set because the two questions look alike and are
+ * not: whether a channel matches a search, and whether it should carry a given
+ * brand's campaign. The second needs the brief, the report and a person.
+ */
+export const DISCOVERY_NOT_A_RECOMMENDATION =
+  'Appearing here means a public search matched this channel. It is not a judgement that the channel suits your campaign — add it to a campaign for that read.';
+
+/**
+ * No result set here is all of YouTube.
+ *
+ * `search.list` returns a bounded, ordered, undisclosed slice of an index we do
+ * not hold, and this product reads a few pages of it. Every count shown is a
+ * count of what was read.
+ */
+export const DISCOVERY_COVERAGE_DISCLAIMER =
+  'A bounded search, not a census. These are channels this search reached — not every creator on YouTube who fits.';
+
+export const COLLABORATION_COVERAGE_DISCLAIMER =
+  'Public evidence this search reached. Absence of a result is not evidence that a collaboration never happened.';

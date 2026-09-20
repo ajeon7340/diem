@@ -173,6 +173,7 @@ async function main() {
   }
 
   await sweepVerbatim(supabase);
+  await sweepDiscovery(supabase);
 
   // A partial sweep is a partial breach, so it must not exit 0 and look like a
   // success to whatever scheduled it.
@@ -244,6 +245,80 @@ async function sweepVerbatim(supabase: Db) {
   console.log(`  Stripped quotes from ${stripped} of ${stale.length}.`);
   if (stripped !== stale.length) process.exit(1);
   return stripped;
+}
+
+/**
+ * Discovery's own API Data, which is all of it.
+ *
+ * A search result is titles, avatars, descriptions, subscriber counts and
+ * verbatim description excerpts — every field came from the API, so an expired
+ * search is DELETED rather than emptied, exactly like `channel_analyses`.
+ *
+ * TWO THINGS DELIBERATELY SURVIVE, because no YouTube policy reaches them:
+ *
+ *   `competitor_brands` — a list of competitors somebody assembled and
+ *   confirmed. Their work, not YouTube's data. The FK is `on delete set null`
+ *   so the cascade cannot take it.
+ *
+ *   `workspace_candidates` — the fact that this organisation saved this channel.
+ *   The channel id is not API Data; the evidence cached beside it is, so the
+ *   evidence is cleared and the row stays, with its reason replaced by one that
+ *   says what happened rather than by silence.
+ *
+ * Deleting is safe for the product: a saved candidate whose evidence has gone
+ * still opens, still analyses, still joins a campaign. It simply stops being
+ * able to show the video that found it, which is the correct consequence of
+ * being no longer allowed to hold it.
+ */
+async function sweepDiscovery(supabase: Db) {
+  const cutoff = new Date(Date.now() - VERBATIM_RETENTION_DAYS * 86_400_000).toISOString();
+
+  const [searches, evidence, saved] = await Promise.all([
+    supabase.from('discovery_searches').select('id', { count: 'exact', head: true }).lt('created_at', cutoff),
+    supabase.from('collaboration_evidence').select('id', { count: 'exact', head: true }).lt('collected_at', cutoff),
+    supabase.from('workspace_candidates').select('channel_id', { count: 'exact', head: true }).lt('saved_at', cutoff),
+  ]);
+
+  // Same `count === null` guard as above, for the same measured reason: a table
+  // this deployment has not migrated reports no error and no rows, and a sweep
+  // that silently skips a table is a sweep that reports a clean result over
+  // data it never read.
+  for (const [label, result] of [
+    ['discovery_searches', searches],
+    ['collaboration_evidence', evidence],
+    ['workspace_candidates', saved],
+  ] as const) {
+    if (result.error || result.count === null) {
+      console.error(`\n  [retention] cannot read ${label}: ${result.error?.message ?? 'table not present'}`);
+      console.error('  This deployment is missing the discovery migrations. Apply them before');
+      console.error('  scheduling retention, or expired discovery data is never swept.');
+      process.exit(1);
+    }
+  }
+
+  console.log(`\n  expired searches      ${searches.count}`);
+  console.log(`  expired collab rows   ${evidence.count}`);
+  console.log(`  stale saved evidence  ${saved.count}`);
+
+  if (!APPLY) {
+    console.log('  Dry run. Re-run with --apply. Confirmed competitor brands are never swept.');
+    return;
+  }
+
+  const { error: searchError } = await supabase.from('discovery_searches').delete().lt('created_at', cutoff);
+  if (searchError) throw searchError;
+  // Belt and braces: an evidence row whose search was already gone has no
+  // cascade left to ride.
+  const { error: evidenceError } = await supabase.from('collaboration_evidence').delete().lt('collected_at', cutoff);
+  if (evidenceError) throw evidenceError;
+  const { error: savedError } = await supabase
+    .from('workspace_candidates')
+    .update({
+      evidence: [],
+      reason: 'The evidence that surfaced this candidate has passed its 30-day retention deadline and was deleted. Re-run the search to collect it again.',
+    } as never)
+    .lt('saved_at', cutoff);
+  if (savedError) throw savedError;
 }
 
 main().catch((err) => {

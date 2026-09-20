@@ -10,10 +10,19 @@ import 'server-only';
  * it is making, which is why the cost is returned rather than hidden.
  */
 
+import { searchUnitCost } from './quota';
+
 const BASE = 'https://www.googleapis.com/youtube/v3';
 
-/** Documented unit costs. Anything unlisted is a read and costs 1. */
-const COST: Record<string, number> = { search: 100 };
+/**
+ * Documented unit costs. Anything unlisted is a read and costs 1.
+ *
+ * `search` was a hard-coded 100 here — the figure everyone knows, and not what
+ * Google's table says now. It reads it off `quota.ts`, which carries the cell
+ * verbatim with the date it was fetched, so the number this bills has a source
+ * rather than a memory. See the long note there before changing it.
+ */
+const COST: Record<string, () => number> = { search: searchUnitCost };
 
 export class YouTubeError extends Error {
   constructor(
@@ -63,7 +72,11 @@ export async function ytFetch<T = unknown>(
     );
   }
 
-  return { items: body.items ?? [], nextPageToken: body.nextPageToken, units: COST[endpoint.split('/')[0]] ?? 1 };
+  return {
+    items: body.items ?? [],
+    nextPageToken: body.nextPageToken,
+    units: COST[endpoint.split('/')[0]]?.() ?? 1,
+  };
 }
 
 export { parseDuration, parseVideoId } from './parse';

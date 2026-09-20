@@ -7,7 +7,9 @@
 → add an existing report to a new or existing campaign → compare up to five candidates.
 The channel input travels in encoded query parameters through the emailed link and onboarding.
 Creators never register, approve access or connect an account. `/channels/sample` is explicitly fictional.
-Navigation is Campaigns, Channel analysis, Settings; no Instagram entry is provided.
+Navigation is Discover creators, Channel analysis, Campaigns, Settings; no Instagram entry is
+provided. A customer who does not know which channels to evaluate starts at `/discover` instead —
+see **Discover creators** below.
 
 The existing database queue now handles `collect_channel` as well as the comment passes. Its
 lease and unique active-job index preserve work across navigation; collection requests are
@@ -34,6 +36,89 @@ following pages; campaign export starts with comparison and then creator reports
 notes/prices are omitted from campaign PDFs. Downloads cannot be remotely revoked: each
 export prints its data deadline and an instruction to refresh or delete the local copy.
 
+## Discover creators
+
+`/discover` is where the workflow now starts. A customer who does not yet know which channels to
+evaluate had no entry point before this; three modes produce candidates, and all three end in the
+same place the pasted-URL flow does — `workspace_channels`, `channel_analyses` and
+`campaign_candidates`. There is no second reporting pipeline: a discovered channel is the same
+channel a pasted URL produces.
+
+| Mode | Input | What it does |
+| --- | --- | --- |
+| Search by criteria | topics, product, language, market, length, subscriber range, exclusions | One `search.list` per term, in the customer's own words, then `channels.list` and `videos.list` to enrich |
+| Find similar channels | a channel URL or @handle | Resolves the reference, samples its recent uploads, searches using its own video titles, excludes itself |
+| Explore competitor collaborations | product, category, need, known competitors | Step A names brands and a person confirms them; Step B searches only confirmed brands for public evidence |
+
+Navigation is Discover creators, Channel analysis, Campaigns, Settings. YouTube only; no Instagram
+entry is provided. Creators never register, approve access or connect an account.
+
+**Quota.** Google's quota table, read 2026-09-20, gives `search.list` as "100 quota per day. Each
+call costs 1 quota." — a daily cap on search CALLS, not 100 units per call. Both readings are
+implemented: `lib/youtube/quota.ts` meters units and search calls separately and a run stops at
+whichever bound it reaches first, so the feature is correct whichever reading is right.
+`ADFIT_YOUTUBE_SEARCH_UNITS=100` bills it the historical way. One criteria run costs 4 searches and
+about 6 units by default. Discovery reads no comments: the deep pass runs when a candidate is
+opened or added to a campaign.
+
+**States.** Queued, searching, partially completed, cancelled, completed, completed with
+insufficient evidence, and failed are seven distinct states, not four (`lib/discovery/state.ts`).
+Partial and cancelled are terminal and are NOT failures, and neither counts as a failed attempt.
+Progress is observed stages only — no percentage, because a run does not know how many queries it
+will make until a bound bites.
+
+**What discovery will not say.** Pinned by `npm run verify:discovery`, which runs twice — once with
+the derived-analysis approval unset and once with it configured:
+
+- **Search relevance, similarity, collaboration evidence and campaign suitability are four
+  different questions** and never one score. Appearing in a search is not a recommendation.
+- **A paid-promotion flag does not name a sponsor.** `explicit_paid` requires YouTube's flag AND
+  the brand named in the description, and even then says the attribution is read from the
+  description. A flagged video that merely mentions the brand stays a mention. Verified live
+  against real data: videos flagged for paid promotion that name "Comandante" are reported as
+  mentions, not as Comandante campaigns.
+- **A mention is not a relationship, an affiliate link is not a fee, a gift is not a campaign.**
+  Each class carries what it does not establish, stored on the row rather than written in a
+  component.
+- **Absence of evidence is not evidence of absence.** No result means this bounded search reached
+  nothing — never that no collaboration happened, and never "no matching creators" when the quota
+  ran out or a request failed.
+- **Missing signals are not zeros.** A score is taken over the signals that had evidence, the band
+  is capped by how much of the total weight that was, and below half the coverage a candidate is
+  provisional and sorts after everything measured. Near-equal scores tie and the UI says their
+  order inside a group is arbitrary.
+- **The explanation stage cannot change the ranking.** The order is frozen before reasons are
+  written and compared after; a reorder or a dropped row throws.
+- **Every generated sentence cites video ids**, checked against the videos actually retrieved. An
+  uncheckable citation is dropped and the deterministic reason stands.
+- **Language and region are search parameters, not audience measurements.** Similarity is between
+  what channels publish — never audience overlap, shared viewers, demographics or purchasing.
+
+**Policy.** Retrieval is not gated: calling `search.list` with a customer's query and showing what
+came back creates no derived data. Gated on `ADFIT_YOUTUBE_DERIVED_APPROVAL=approved` are our own
+relevance and similarity scores, model-written reasons, the content profile, model-proposed
+competitors, and any evidence classification beyond YouTube's own flag. With approval unset all
+three modes still run and return candidates in YouTube's own order, and say they are not ranked.
+The approval route is III.L — the standard quota extension request at
+`support.google.com/youtube/contact/yt_api_form`, read 2026-09-20. This repository has not applied
+and does not claim to have.
+
+**One unresolved interpretation, named rather than buried.** Similar-channel mode, with approval
+unset, builds its queries from the reference channel's own recent video TITLES, used verbatim as
+search strings. The reading taken here is that putting a title YouTube returned back into YouTube's
+search box uses API Data to make a request rather than creating a new metric from it, and that
+III.E.4.h(ii) therefore does not reach it. It is arguable the other way. The affected feature is
+exactly one: `verbatimQueries` in `lib/discovery/similar.ts`. If an operator's reading differs, gate
+that function behind `DISCOVERY_SIMILARITY_PROFILE` and similar mode becomes approval-only; the
+other two modes are unaffected.
+
+**Privacy.** Everything discovery stores is org-private, including the collaboration evidence — the
+videos are public, but WHICH BRANDS a customer is following is their competitive position stated
+out loud, and a shared cache would let any customer read any other's competitor list. The only
+shared cache remains `channel_analyses`. Verbatim excerpts are Non-Authorized Data: 30 days,
+enforced in the read policy as well as by `npm run retention`. A confirmed competitor list is the
+customer's own work and is never swept on YouTube's clock.
+
 ### Operator configuration and handoff
 
 - Apply the additive migrations through `0038` using the normal deployment process. No live
@@ -46,8 +131,18 @@ export prints its data deadline and an instruction to refresh or delete the loca
   permitted only after the operator establishes the applicable YouTube approval for the actual
   uses. This task did not establish or claim approval. Without it, comment categorization,
   sentiment, inferred collaboration markers and campaign suitability remain gated.
-- Approved model work also needs the existing configured AI provider credentials. No new paid
-  data provider was added, and no service was purchased.
+- Approved model work also needs a configured AI provider. `ADFIT_AI_PROVIDER=local` with
+  `ADFIT_AI_BASE_URL` pointing at any OpenAI-compatible server (llama.cpp, Ollama, vLLM, LM Studio)
+  runs every model pass with no account and no bill; `anthropic` and `gemini` remain as they were.
+  No new paid data provider was added and no service was purchased — discovery uses the YouTube
+  Data API only, with no scraping, no unofficial endpoint and no third-party index.
+- Discovery bounds are configurable (`ADFIT_DISCOVERY_*` in `.env.local.example`). Verify the
+  current quota costs against your own console before raising them; the numbers here were read off
+  Google's table on 2026-09-20 and are recorded with that date in `lib/youtube/quota.ts`.
+- **`collect_channel` had no handler in the worker.** It was implemented in `runCollection` and
+  missing from the `HANDLERS` table, so every collection job `queue_channel_collection` created was
+  claimed, found no handler and returned to the queue — the channel-first flow's own public read
+  never ran. Registered now. Any channel stuck with no report should be re-queued.
 - Schedule the existing `npm run retention -- --apply` daily. Channel snapshots (including
   names, descriptions, raw corpus, video evidence and derived values) conservatively expire at
   30 days. Reads and shared reports enforce that deadline even if the sweep is delayed. The
@@ -62,7 +157,24 @@ export prints its data deadline and an instruction to refresh or delete the loca
 `npm run verify` includes the existing suites plus `verify:channel-flow` (input round-trip,
 state semantics, retention, approval-off projections, actual period and comment bounds) and
 SQL probes for duplicate jobs, report reuse, five-candidate enforcement, private sharing,
-revocation, source expiry and legacy data preservation. `npx tsc --noEmit`, the scripts type
+revocation, source expiry and legacy data preservation.
+
+Discovery adds `verify:discovery` and `verify:discovery-approved` — the same 140-odd assertions run
+twice, with the derived-analysis approval unset and configured, because a gate checked in one state
+ships permanently open or permanently shut. They cover canonical deduplication, reference-channel
+exclusion, post-retrieval filtering with its counts, evidence classification against all five
+rules, missing signals not becoming zeros, tied groups, the frozen ranking order, citation checking,
+quota exhaustion, partial results, cancellation and the seven job states. `probe-discovery.sql`
+adds 21 row-admission checks: what one organisation can learn about another's search and competitor
+list, that a customer cannot write their own results, that `confirmed` cannot arrive as a default,
+that evidence past 30 days is unreadable whether or not the sweep ran, and that a confirmed
+competitor list survives its search expiring.
+
+Everything above runs on fixtures. `npm run discovery:check` is separate and deliberately so: it
+spends real quota against a real key, writes nothing, and is the only thing that proves the
+parameters we send are parameters YouTube accepts. All three modes were exercised through it
+during development — the live runs are what caught two-character stopwords matching a drama channel
+against a coffee channel, and a multi-word keyword being looked for only as an exact phrase. `npx tsc --noEmit`, the scripts type
 check, and `npm run lint` cover the application and worker. Browser/PDF checks cover fixture
 sign-in and onboarding, mobile overflow, and print layout.
 
