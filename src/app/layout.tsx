@@ -14,13 +14,18 @@ const geistMono = localFont({
   weight: '100 900',
 });
 
+// Left describing a media kit for creators, and the demographics and purchase
+// intent that came with their own analytics, long after none of that existed.
+// This is the first thing a browser tab, a bookmark and a shared link show, so
+// a stale title is not cosmetic: it promises a product we removed, and names
+// two figures we now refuse to report at all.
 export const metadata: Metadata = {
   title: {
-    default: 'adfit — Verified AI Media Kit & Collaboration Hub',
+    default: 'adfit — Evaluate YouTube creators before reaching out',
     template: '%s · adfit',
   },
   description:
-    'A verified media kit for creators, and the ad-fit report brands need before they commit budget. Real demographics, comment-level purchase intent, and brand-safety flags — from the creator\u2019s own platform analytics.',
+    'Analyse any public YouTube channel against your campaign: recent content, public performance and sponsorship evidence, with sources and unknowns in view. Creators do not need to register, approve access or connect an account.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

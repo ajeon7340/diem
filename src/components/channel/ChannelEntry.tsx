@@ -6,7 +6,7 @@ export function ChannelEntry({ initial = '', resolved = {} }: { initial?: string
  const [preview, resolve] = useFormState<ChannelState,FormData>(previewChannel,resolved);
  const [started,start] = useFormState<ChannelState,FormData>(startChannel,{});
  return <div className="space-y-5">
- <form action={resolve} className="flex flex-col gap-3 sm:flex-row"><label className="flex-1"><span className="sr-only">YouTube channel URL or @handle</span><input name="channel" defaultValue={initial} required maxLength={200} placeholder="YouTube channel URL or @handle" className="w-full rounded-md border p-3" /></label><Submit>Resolve channel</Submit></form>
+ <form action={resolve} className="flex flex-col gap-3 sm:flex-row"><label className="flex-1"><span className="sr-only">YouTube channel URL or @handle</span><input name="channel" defaultValue={initial} required maxLength={200} autoComplete="off" autoCapitalize="none" spellCheck={false} placeholder="YouTube channel URL or @handle" className="w-full rounded-md border p-3" /></label><Submit>Resolve channel</Submit></form>
  {preview.message && <p role="alert">{preview.message}</p>}
  {preview.channel && <div className="rounded-lg border bg-surface p-6"><div className="flex items-center gap-4">
  {/* eslint-disable-next-line @next/next/no-img-element */}

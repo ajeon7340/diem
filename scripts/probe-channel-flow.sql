@@ -61,6 +61,92 @@ begin
  perform pg_temp.assert_ok(to_regclass('public.creators') is not null,'legacy creator data schema preserved');
 
  -- ---------------------------------------------------------------------
+ -- Workspace setup persists both answers, and only the two
+ --
+ -- Onboarding asks for a name and brand-or-agency and nothing else. Both have
+ -- to survive the round trip, because the whole point of asking so little is
+ -- that what little is asked actually sticks.
+ -- ---------------------------------------------------------------------
+ update organizations set customer_type='agency' where id=oa;
+ perform pg_temp.assert_ok(
+  (select customer_type from organizations where id=oa)='agency',
+  'customer type persists');
+
+ failed:=false;
+ begin update organizations set customer_type='influencer' where id=oa;
+ exception when check_violation then failed:=true; end;
+ perform pg_temp.assert_ok(failed,'and only brand or agency is accepted');
+
+ -- Nothing else is required to have a usable workspace: the campaign created
+ -- at the top of this probe carries no budget, objective or brief.
+ perform pg_temp.assert_ok(
+  (select count(*) from campaigns where organization_id=oa and budget_total is null)>=1,
+  'a workspace works with no budget or campaign detail');
+
+ -- ---------------------------------------------------------------------
+ -- Viewing an existing report saves it without collecting again
+ --
+ -- The confirmation screen offers View report when current data exists. That
+ -- path must add the channel to the workspace and queue NOTHING — re-collecting
+ -- a channel somebody just asked to look at is the exact waste the shared cache
+ -- exists to avoid, and it would also reset the report they wanted to read.
+ -- ---------------------------------------------------------------------
+ -- `evidence.windowDays` is part of what makes a snapshot reusable: a request
+ -- for 90 days must not be answered from a 30-day collection, so the fixture
+ -- has to carry the period it was collected over.
+ insert into channel_analyses(channel_id,title,data_fetched_at,evidence)
+  values('UCreuse','Reuse',now(),'{"windowDays":90}');
+ insert into workspace_channels values(oa,'UCreuse',now())
+  on conflict (organization_id,channel_id) do nothing;
+ insert into workspace_channels values(oa,'UCreuse',now())
+  on conflict (organization_id,channel_id) do nothing;
+ perform pg_temp.assert_ok(
+  (select count(*) from workspace_channels where organization_id=oa and channel_id='UCreuse')=1,
+  'saving a channel twice keeps one reference');
+ perform pg_temp.assert_ok(
+  not exists(select 1 from analysis_jobs where channel_id='UCreuse'),
+  'and viewing an existing report queues no collection');
+
+ -- The same channel in a second workspace is a second reference to one shared
+ -- report, not a second collection.
+ insert into workspace_channels values(ob,'UCreuse',now());
+ perform pg_temp.assert_ok(
+  (select count(*) from workspace_channels where channel_id='UCreuse')=2,
+  'two workspaces reference one report');
+ perform pg_temp.assert_ok(
+  (select count(*) from channel_analyses where channel_id='UCreuse')=1,
+  'and the report itself is stored once');
+
+ -- Current data also suppresses a fresh request at the queue, not only in the
+ -- interface — a second browser tab must not be able to start one.
+ perform pg_temp.assert_ok(
+  not queue_channel_collection('UCreuse',90,false),
+  'current data suppresses a duplicate collection request');
+ perform pg_temp.assert_ok(
+  queue_channel_collection('UCreuse',90,true),
+  'but an explicit refresh is honoured');
+
+ -- Reuse is period-aware. A different window is a different question and has
+ -- to be collected, however current the stored snapshot is.
+ update analysis_jobs set status='succeeded',finished_at=now() where channel_id='UCreuse';
+ perform pg_temp.assert_ok(
+  queue_channel_collection('UCreuse',30,false),
+  'a different period is collected rather than reused');
+
+ -- ---------------------------------------------------------------------
+ -- Failure recovery
+ -- ---------------------------------------------------------------------
+ insert into channel_analyses(channel_id,title) values('UCrecover','Recover');
+ insert into analysis_jobs(channel_id,kind,status,finished_at,last_error)
+  values('UCrecover','collect_channel','failed',now(),'quota exceeded');
+ perform pg_temp.assert_ok(
+  queue_channel_collection('UCrecover',90,true),
+  'a failed collection can be started again');
+ perform pg_temp.assert_ok(
+  (select count(*) from analysis_jobs where channel_id='UCrecover' and status='failed')=1,
+  'and the failure is kept as history rather than overwritten');
+
+ -- ---------------------------------------------------------------------
  -- A worker that lost its lease must not overwrite a newer result
  --
  -- The classify passes check `stillMine` BETWEEN batches, which bounds what a

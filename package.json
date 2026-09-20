@@ -7,7 +7,7 @@
     "dev": "next dev",
     "lint": "next lint",
     "start": "next start",
-    "verify": "npm run verify:actions && npm run verify:candidates && npm run verify:claims && npm run verify:climate && npm run verify:cluster-build && npm run verify:clusters && npm run verify:concurrent && npm run verify:drivers && npm run verify:intent && npm run verify:jobs && npm run verify:keywords && npm run verify:migrations && npm run verify:moderation && npm run verify:onboarding && npm run verify:policy && npm run verify:reference && npm run verify:retention && npm run verify:safety && npm run verify:schemas && npm run verify:sufficiency && npm run verify:channel-flow",
+    "verify": "npm run verify:actions && npm run verify:candidates && npm run verify:claims && npm run verify:climate && npm run verify:cluster-build && npm run verify:clusters && npm run verify:concurrent && npm run verify:drivers && npm run verify:intent && npm run verify:jobs && npm run verify:keywords && npm run verify:migrations && npm run verify:moderation && npm run verify:onboarding && npm run verify:onboarding-flow && npm run verify:policy && npm run verify:reference && npm run verify:retention && npm run verify:safety && npm run verify:schemas && npm run verify:sufficiency && npm run verify:channel-flow",
     "ai:check": "tsx --env-file=.env.local --tsconfig tsconfig.scripts.json scripts/ai-check.ts",
     "dev:session": "tsx --env-file=.env.local --tsconfig tsconfig.scripts.json scripts/dev-session.ts",
     "retention": "tsx --env-file=.env.local --tsconfig tsconfig.scripts.json scripts/retention.ts",
@@ -34,7 +34,8 @@
     "verify:candidates": "tsx --tsconfig tsconfig.scripts.json scripts/verify-candidates.ts",
     "verify:reference": "tsx --tsconfig tsconfig.scripts.json scripts/verify-reference.ts",
     "verify:channel-flow": "tsx --tsconfig tsconfig.scripts.json scripts/verify-channel-flow.ts",
-    "verify:claims": "tsx --tsconfig tsconfig.scripts.json scripts/verify-claims.ts"
+    "verify:claims": "tsx --tsconfig tsconfig.scripts.json scripts/verify-claims.ts",
+    "verify:onboarding-flow": "tsx --tsconfig tsconfig.scripts.json scripts/verify-onboarding-flow.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",

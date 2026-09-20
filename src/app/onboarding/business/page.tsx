@@ -1,4 +1,4 @@
-import { channelDestination } from '@/lib/channel/state';
+import { nextStep } from '@/lib/channel/state';
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 
@@ -13,9 +13,9 @@ export const dynamic = 'force-dynamic';
 export default async function BusinessOnboardingPage({ searchParams }: { searchParams: { channel?: string } }) {
   if (isSupabaseConfigured()) {
     const viewer = await getViewer();
-    if (!viewer.userId) redirect(channelDestination(searchParams.channel, '/join/business'));
+    if (!viewer.userId) redirect(nextStep({ signedIn: false, hasWorkspace: false }, searchParams.channel));
     // One org per user in the MVP; `create_organization` would reject a second.
-    if (viewer.organization) redirect(channelDestination(searchParams.channel));
+    if (viewer.organization) redirect(nextStep({ signedIn: true, hasWorkspace: true }, searchParams.channel));
   }
 
   return (

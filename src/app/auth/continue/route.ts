@@ -1,4 +1,4 @@
-import { channelDestination } from '@/lib/channel/state';
+import { nextStep } from '@/lib/channel/state';
 import { NextResponse, type NextRequest } from 'next/server';
 
 import { getViewer } from '@/lib/access/viewer';
@@ -19,7 +19,9 @@ export async function GET(request: NextRequest) {
   const { origin } = request.nextUrl;
 
   if (!isSupabaseConfigured()) {
-    return NextResponse.redirect(`${origin}${channelDestination(request.nextUrl.searchParams.get('channel'), '/onboarding/business')}`);
+    return NextResponse.redirect(
+      `${origin}${nextStep({ signedIn: true, hasWorkspace: false }, request.nextUrl.searchParams.get('channel'))}`,
+    );
   }
 
   const viewer = await getViewer();
@@ -28,11 +30,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${origin}/signin?error=link_expired`);
   }
 
-  if (viewer.organization) {
-    return NextResponse.redirect(`${origin}${channelDestination(request.nextUrl.searchParams.get('channel'))}`);
-  }
-
-  // Authenticated but never onboarded — finish signing up rather than landing
-  // on a marketing page with no account.
-  return NextResponse.redirect(`${origin}${channelDestination(request.nextUrl.searchParams.get('channel'), '/onboarding/business')}`);
+  return NextResponse.redirect(
+    `${origin}${nextStep(
+      { signedIn: true, hasWorkspace: Boolean(viewer.organization) },
+      request.nextUrl.searchParams.get('channel'),
+    )}`,
+  );
 }

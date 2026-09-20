@@ -4,12 +4,12 @@ import { redirect } from 'next/navigation';
 import { SiteHeader } from '@/components/shell/SiteHeader';
 import { ChannelEntry } from '@/components/channel/ChannelEntry';
 import { getViewer } from '@/lib/access/viewer';
-import { channelDestination } from '@/lib/channel/state';
+import { nextStep } from '@/lib/channel/state';
 import { createSessionClient, isSupabaseConfigured } from '@/lib/supabase/server';
 export const dynamic='force-dynamic';
 export default async function Channels({searchParams}:{searchParams:{channel?:string}}) {
  const viewer=await getViewer();
- if(!viewer.organization) redirect(channelDestination(searchParams.channel,viewer.userId?'/onboarding/business':'/join/business'));
+ if(!viewer.organization) redirect(nextStep({signedIn:Boolean(viewer.userId),hasWorkspace:false},searchParams.channel));
  let reports:{channel_id:string;title:string;handle:string|null}[]=[];
  let pending:string[]=[];
  if(isSupabaseConfigured()) {
