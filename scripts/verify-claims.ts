@@ -88,7 +88,12 @@ const read = (p: string) => readFileSync(p, 'utf8');
   );
 
   // The comparison table is the other place a dash can be misread as a zero.
-  const table = read('src/components/campaign/ComparisonTable.tsx');
+  // Whitespace-normalised: JSX wraps its prose wherever the line runs long, so
+  // "not representative of all viewers" can arrive with a newline through the
+  // middle of it. A copy assertion has to read the copy as copy — this is the
+  // same trap the comment below warns about, arriving through the formatter
+  // rather than through a rewrite.
+  const table = read('src/components/campaign/ComparisonTable.tsx').replace(/\s+/g, ' ');
   check(
     'the comparison table calls a dash an absent measurement',
     /absent measurement, not a zero|not because they are low/.test(
@@ -111,7 +116,8 @@ const read = (p: string) => readFileSync(p, 'utf8');
     true,
   );
   check('the derived disclosure is rendered here', table.includes('{DERIVED_DISCLOSURE}'), true);
-  check('and the financial one beside the prices', table.includes('{FINANCIAL_DISCLOSURE}'), true);
+  // This UI shows only user-entered fees, not a derived CPM or financial projection.
+  check('comparison does not create financial estimates', /cpmFromFee|row\.cpm/.test(table), false);
   check(
     'missing analysis is stated not to be a poor fit',
     /missing analysis is not a poor fit|not run — not a poor fit|not a poor fit/.test(table),

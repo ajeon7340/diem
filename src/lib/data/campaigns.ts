@@ -286,3 +286,81 @@ export async function getChannelJobs(channelIds: string[]): Promise<Map<string, 
   }
   return out;
 }
+
+/**
+ * The campaign list, with the facts that make it scannable.
+ *
+ * NO CAMPAIGN STATUS IS INVENTED. Nothing in the schema stores "active" or
+ * "draft", and a list that showed them would be deriving a lifecycle nobody
+ * recorded — a campaign untouched for a month is not a draft, it is a campaign
+ * untouched for a month. What IS stored is how many candidates it holds, how
+ * many of those the customer marked for outreach, the brand it is for and when
+ * it last changed, and those answer the question the invented status was
+ * standing in for.
+ *
+ * Two reads and a group-by in TypeScript rather than a view: candidate counts
+ * are bounded at five per campaign by the trigger in 0037, so the rows involved
+ * are small and a migration to count them would be a schema change this task
+ * does not need.
+ */
+export interface CampaignSummary extends Campaign {
+  candidateCount: number;
+  shortlistedCount: number;
+  /** The most recent thing that happened: a brief edit or a candidate added. */
+  lastActivityAt: string;
+  brandName: string | null;
+}
+
+export async function getCampaignSummaries(organizationId: string): Promise<CampaignSummary[]> {
+  if (!isSupabaseConfigured()) return [];
+  const supabase = createSessionClient();
+
+  const { data: rows, error } = await supabase
+    .from('campaigns')
+    .select('*')
+    .eq('organization_id', organizationId)
+    .order('updated_at', { ascending: false })
+    .returns<Record<string, unknown>[]>();
+  if (error) {
+    console.error('[campaigns] summary query failed', error.message);
+    return [];
+  }
+
+  const campaigns = (rows ?? []).map(toCampaign);
+  if (campaigns.length === 0) return [];
+
+  const [{ data: candidates }, { data: brands }] = await Promise.all([
+    supabase
+      .from('campaign_candidates')
+      .select('campaign_id,status,added_at')
+      .in('campaign_id', campaigns.map((c) => c.id))
+      .returns<{ campaign_id: string; status: string; added_at: string }[]>(),
+    supabase
+      .from('brands')
+      .select('id,name')
+      .eq('organization_id', organizationId)
+      .returns<{ id: string; name: string }[]>(),
+  ]);
+
+  const brandName = new Map((brands ?? []).map((b) => [b.id, b.name]));
+
+  return campaigns.map((campaign) => {
+    const own = (candidates ?? []).filter((c) => c.campaign_id === campaign.id);
+    const latestCandidate = own.map((c) => c.added_at).sort().at(-1) ?? null;
+    const updatedAt = (rows ?? []).find((r) => r.id === campaign.id)?.updated_at as string | undefined;
+    return {
+      ...campaign,
+      candidateCount: own.length,
+      shortlistedCount: own.filter((c) => c.status === 'shortlisted').length,
+      lastActivityAt:
+        [latestCandidate, updatedAt, campaign.createdAt]
+          .filter((value): value is string => Boolean(value))
+          .sort()
+          .at(-1) ?? campaign.createdAt,
+      // The LINKED brand's current name, falling back to the free text on the
+      // brief. Both are shown rather than merged: a campaign nobody has linked
+      // still names its client, and that is not the same fact.
+      brandName: campaign.brandId ? brandName.get(campaign.brandId) ?? null : null,
+    };
+  });
+}

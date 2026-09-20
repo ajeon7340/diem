@@ -26,7 +26,7 @@ function Submit() {
   const { pending } = useFormStatus();
   return (
     <Button type="submit" size="lg" disabled={pending} className="w-full">
-      {pending ? 'Creating…' : 'Save campaign'}
+      {pending ? 'Saving…' : 'Save campaign'}
     </Button>
   );
 }
@@ -119,10 +119,7 @@ export function CampaignForm({
 
       <div className="rounded-panel border border-line bg-paper px-4 py-3.5">
         <p className="text-[13px] font-medium text-ink">
-          What every candidate is measured against{' '}
-          <span className="font-normal text-ink-muted">
-            Optional — each one you answer makes the read about this campaign rather than general.
-          </span>
+          Campaign context <span className="font-normal text-ink-muted">· Optional</span>
         </p>
 
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -248,10 +245,6 @@ export function CampaignForm({
 
       <Submit />
 
-      <p className="text-center text-[11px] leading-relaxed text-ink-faint">
-        No creator has to sign up, approve you, or connect an account. Every figure on the next
-        page comes from public YouTube data, and says so.
-      </p>
     </form>
   );
 }

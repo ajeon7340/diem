@@ -224,9 +224,9 @@ check(
   true,
 );
 check(
-  'the financial disclaimer is rendered beside the CPM',
-  reads('src/components/campaign/ComparisonTable.tsx').includes('{FINANCIAL_DISCLOSURE}'),
-  true,
+  'comparison shows no derived CPM requiring a financial disclaimer',
+  /cpmFromFee|row\.cpm/.test(reads('src/components/campaign/ComparisonTable.tsx')),
+  false,
 );
 // And it must not describe a figure we no longer have. The old wording said
 // the CPM came from "the creator's published minimum" — a creator-declared

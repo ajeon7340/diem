@@ -5,7 +5,7 @@ import { redirect } from 'next/navigation';
 import { archiveBrand, setDefaultBrand } from '@/app/actions/brand';
 import { revokeShare } from '@/app/actions/channel';
 import { BrandForm } from '@/components/brand/BrandForm';
-import { SiteHeader } from '@/components/shell/SiteHeader';
+import { PanelSection, WorkspaceLayout } from '@/components/shell/WorkspaceLayout';
 import { WorkspaceForm } from '@/components/settings/WorkspaceForm';
 import { Badge } from '@/components/ui/Badge';
 import { getViewer } from '@/lib/access/viewer';
@@ -18,8 +18,8 @@ export const dynamic = 'force-dynamic';
 
 const SECTIONS = [
   ['workspace', 'Workspace'],
-  ['brands', 'Brands'],
-  ['sharing', 'Sharing'],
+  ['brands', 'Brand profiles'],
+  ['sharing', 'Sharing and reports'],
 ] as const;
 
 type Section = (typeof SECTIONS)[number][0];
@@ -62,23 +62,41 @@ export default async function Settings({ searchParams }: { searchParams: { secti
   const live = brands.filter((b) => b.archivedAt === null);
   const archived = brands.filter((b) => b.archivedAt !== null);
 
-  return (
-    <div className="flex min-h-screen flex-col">
-      <SiteHeader />
-      <main className="flex-1 bg-paper">
-        <div className="mx-auto w-full max-w-[1000px] px-4 py-6 sm:px-6 lg:px-8">
-          <h1 className="text-xl font-semibold tracking-tight text-ink">Settings</h1>
+  const agency = viewer.organization.customerType === 'agency';
 
-          <div className="mt-4 flex flex-col gap-5 sm:flex-row sm:items-start sm:gap-8">
-            <nav aria-label="Settings sections" className="sm:w-[160px] sm:shrink-0">
-              <ul className="flex gap-1 overflow-x-auto sm:flex-col">
+  return (
+    <WorkspaceLayout
+      panel={
+        <div className="space-y-4 rounded-2xl border border-line bg-surface p-4">
+          <PanelSection>
+            <p className="rail">Settings</p>
+            <h1 className="mt-1.5 text-[17px] font-semibold tracking-tight text-ink">
+              {viewer.organization.name}
+            </h1>
+            <p className="mt-1 text-[12px] text-ink-muted">
+              {viewer.organization.customerType === null
+                ? // Null is not "brand": every workspace made before the
+                  // question was asked stores null, and saying so is the
+                  // difference between a default and an answer nobody gave.
+                  'Account type not set'
+                : agency
+                  ? 'Agency — campaigns for client brands'
+                  : 'Brand — campaigns for your own products'}
+            </p>
+          </PanelSection>
+
+          <PanelSection title="Sections">
+            <nav aria-label="Settings sections">
+              <ul className="space-y-0.5">
                 {SECTIONS.map(([id, title]) => (
                   <li key={id}>
                     <Link
                       href={`/settings?section=${id}`}
                       aria-current={section === id ? 'page' : undefined}
-                      className={`block whitespace-nowrap rounded-lg px-3 py-2 text-[13px] font-medium transition-colors ${
-                        section === id ? 'bg-indigo-wash text-indigo' : 'text-ink-muted hover:bg-surface hover:text-ink'
+                      className={`block rounded-lg px-2.5 py-1.5 text-[13px] transition-colors ${
+                        section === id
+                          ? 'bg-indigo-wash font-medium text-indigo'
+                          : 'text-ink-muted hover:bg-paper hover:text-ink'
                       }`}
                     >
                       {title}
@@ -87,176 +105,181 @@ export default async function Settings({ searchParams }: { searchParams: { secti
                 ))}
               </ul>
             </nav>
+          </PanelSection>
 
-            <div className="min-w-0 flex-1">
-              {section === 'workspace' ? (
-                <section className="rounded-xl border border-line bg-surface p-5">
-                  <h2 className="text-[15px] font-semibold text-ink">Workspace</h2>
-                  <p className="mt-1 max-w-[62ch] text-[12px] leading-relaxed text-ink-muted">
-                    An agency runs campaigns for several client brands from one workspace; a brand runs its
-                    own. Briefs, notes, fees and decisions stay private to this workspace either way.
-                  </p>
-                  <WorkspaceForm name={viewer.organization.name} customerType={viewer.organization.customerType} />
-                </section>
-              ) : null}
+          <PanelSection title="What stays private">
+            <p className="text-[11px] leading-relaxed text-ink-faint">
+              Briefs, shortlists, notes, quoted fees and brand profiles never leave this workspace,
+              and are excluded from shared links and exports by default.
+            </p>
+          </PanelSection>
+        </div>
+      }
+    >
+      {section === 'workspace' ? (
+        <section className="rounded-xl border border-line bg-surface p-5">
+          <h2 className="text-[15px] font-semibold text-ink">Workspace</h2>
+          <p className="mt-1 max-w-[62ch] text-[12px] leading-relaxed text-ink-muted">
+            An agency runs campaigns for several client brands from one workspace; a brand runs its
+            own. Briefs, notes, fees and decisions stay private to this workspace either way.
+          </p>
+          <WorkspaceForm name={viewer.organization.name} customerType={viewer.organization.customerType} />
+        </section>
+      ) : null}
 
-              {section === 'brands' ? (
-                <section className="space-y-4">
-                  <div className="rounded-xl border border-line bg-surface p-5">
-                    <h2 className="text-[15px] font-semibold text-ink">Brands</h2>
-                    <p className="mt-1 max-w-[62ch] text-[12px] leading-relaxed text-ink-muted">
-                      The brand a campaign is for. Saved once and reused by discovery, so nobody retypes what
-                      the product is. {viewer.organization.customerType === 'agency' ? 'Add one per client.' : 'Add one per product line.'}
-                    </p>
+      {section === 'brands' ? (
+        <section className="space-y-4">
+          <div className="rounded-xl border border-line bg-surface p-5">
+            <h2 className="text-[15px] font-semibold text-ink">Brands</h2>
+            <p className="mt-1 max-w-[62ch] text-[12px] leading-relaxed text-ink-muted">
+              The brand a campaign is for. Saved once and reused by discovery, so nobody retypes what
+              the product is. {viewer.organization.customerType === 'agency' ? 'Add one per client.' : 'Add one per product line.'}
+            </p>
 
-                    {live.length === 0 ? (
-                      <p className="mt-4 rounded-lg border border-dashed border-line px-3 py-6 text-center text-[12px] text-ink-muted">
-                        No brands yet. Discovery and channel analysis work without one — a brand just saves
-                        you retyping the product on every search.
-                      </p>
-                    ) : (
-                      <ul className="mt-4 divide-y divide-line rounded-lg border border-line">
-                        {live.map((brand) => (
-                          <li key={brand.id} className="px-3 py-3">
-                            <div className="flex flex-wrap items-start gap-x-3 gap-y-2">
-                              <div className="min-w-0 flex-1">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <span className="text-[13px] font-medium text-ink">{brand.name}</span>
-                                  {viewer.organization!.defaultBrandId === brand.id ? (
-                                    <Badge tone="indigo">Default</Badge>
-                                  ) : null}
-                                  {brand.categories.slice(0, 2).map((category) => (
-                                    <span key={category} className="text-[11px] text-ink-faint">
-                                      {category}
-                                    </span>
-                                  ))}
-                                </div>
-                                {brand.sells ? (
-                                  <p className="mt-0.5 line-clamp-1 text-[12px] text-ink-muted">{brand.sells}</p>
-                                ) : null}
-                                {brand.markets.length || brand.contentLanguages.length ? (
-                                  <p className="mt-0.5 text-[11px] text-ink-faint">
-                                    {[
-                                      brand.markets.map(countryName).join(', '),
-                                      brand.contentLanguages.map(languageName).join(', '),
-                                    ]
-                                      .filter(Boolean)
-                                      .join(' · ')}
-                                  </p>
-                                ) : null}
-                              </div>
-                              <div className="flex shrink-0 items-center gap-2">
-                                {viewer.organization!.defaultBrandId === brand.id ? null : (
-                                  <form action={setDefaultBrand}>
-                                    <input type="hidden" name="brandId" value={brand.id} />
-                                    <button
-                                      type="submit"
-                                      className="min-h-8 rounded-lg border border-line-strong bg-surface px-2.5 text-[12px] font-medium text-ink hover:bg-paper"
-                                    >
-                                      Make default
-                                    </button>
-                                  </form>
-                                )}
-                                <form action={archiveBrand}>
-                                  <input type="hidden" name="brandId" value={brand.id} />
-                                  <button
-                                    type="submit"
-                                    className="min-h-8 rounded-lg px-2 text-[12px] text-ink-muted hover:text-ink"
-                                    title="Hides it from selectors. Campaigns and their history are kept."
-                                  >
-                                    Archive
-                                  </button>
-                                </form>
-                              </div>
-                            </div>
-
-                            <details className="mt-2">
-                              <summary className="cursor-pointer text-[12px] text-ink-muted underline-offset-4 hover:text-ink hover:underline">
-                                Edit
-                              </summary>
-                              <div className="mt-3 border-t border-line pt-3">
-                                <BrandForm brand={brand} customerType={viewer.organization!.customerType} />
-                              </div>
-                            </details>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-
-                    <details className="mt-4" open={live.length === 0}>
-                      <summary className="cursor-pointer text-[13px] font-medium text-indigo">
-                        {viewer.organization.customerType === 'agency' ? 'Add another client brand' : 'Add another brand'}
-                      </summary>
-                      <div className="mt-3 border-t border-line pt-4">
-                        <BrandForm
-                          customerType={viewer.organization.customerType}
-                          workspaceName={viewer.organization.name}
-                          makeDefault={live.length === 0}
-                        />
-                      </div>
-                    </details>
-                  </div>
-
-                  {archived.length ? (
-                    <div className="rounded-xl border border-line bg-surface p-5">
-                      <h2 className="text-[15px] font-semibold text-ink">Archived</h2>
-                      <p className="mt-1 text-[12px] text-ink-muted">
-                        Hidden from selectors. Their campaigns and history are untouched.
-                      </p>
-                      <ul className="mt-3 divide-y divide-line rounded-lg border border-line">
-                        {archived.map((brand) => (
-                          <li key={brand.id} className="flex items-center gap-3 px-3 py-2.5">
-                            <span className="min-w-0 flex-1 truncate text-[13px] text-ink-muted">{brand.name}</span>
-                            <form action={archiveBrand}>
-                              <input type="hidden" name="brandId" value={brand.id} />
-                              <input type="hidden" name="restore" value="true" />
-                              <button type="submit" className="min-h-8 rounded-lg px-2 text-[12px] text-indigo">
-                                Restore
-                              </button>
-                            </form>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ) : null}
-                </section>
-              ) : null}
-
-              {section === 'sharing' ? (
-                <section className="rounded-xl border border-line bg-surface p-5">
-                  <h2 className="text-[15px] font-semibold text-ink">Shared reports</h2>
-                  <p className="mt-1 max-w-[62ch] text-[12px] leading-relaxed text-ink-muted">
-                    Revoking disables the link immediately. Copies already downloaded cannot be recalled — they
-                    carry their own printed data deadline and must be deleted or refreshed by it.
-                  </p>
-                  {shares.length === 0 ? (
-                    <p className="mt-4 rounded-lg border border-dashed border-line px-3 py-6 text-center text-[12px] text-ink-muted">
-                      No shared links.
-                    </p>
-                  ) : (
-                    <ul className="mt-4 divide-y divide-line rounded-lg border border-line">
-                      {shares.map((share) => (
-                        <li key={share.token}>
-                          <form action={revokeShare} className="flex items-center justify-between gap-4 px-3 py-2.5">
-                            <input name="token" type="hidden" value={share.token} />
-                            <span className="tnum text-[12px] text-ink-muted">
-                              Created {new Date(share.created_at).toLocaleDateString('en-US')} · Expires{' '}
-                              {new Date(share.expires_at).toLocaleDateString('en-US')}
+            {live.length === 0 ? (
+              <p className="mt-4 rounded-lg border border-dashed border-line px-3 py-6 text-center text-[12px] text-ink-muted">
+                No brands yet. Discovery and channel analysis work without one — a brand just saves
+                you retyping the product on every search.
+              </p>
+            ) : (
+              <ul className="mt-4 divide-y divide-line rounded-lg border border-line">
+                {live.map((brand) => (
+                  <li key={brand.id} className="px-3 py-3">
+                    <div className="flex flex-wrap items-start gap-x-3 gap-y-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-[13px] font-medium text-ink">{brand.name}</span>
+                          {viewer.organization!.defaultBrandId === brand.id ? (
+                            <Badge tone="indigo">Default</Badge>
+                          ) : null}
+                          {brand.categories.slice(0, 2).map((category) => (
+                            <span key={category} className="text-[11px] text-ink-faint">
+                              {category}
                             </span>
-                            <button type="submit" className="min-h-8 shrink-0 rounded-lg px-2 text-[12px] text-indigo">
-                              Revoke
+                          ))}
+                        </div>
+                        {brand.sells ? (
+                          <p className="mt-0.5 line-clamp-1 text-[12px] text-ink-muted">{brand.sells}</p>
+                        ) : null}
+                        {brand.markets.length || brand.contentLanguages.length ? (
+                          <p className="mt-0.5 text-[11px] text-ink-faint">
+                            {[
+                              brand.markets.map(countryName).join(', '),
+                              brand.contentLanguages.map(languageName).join(', '),
+                            ]
+                              .filter(Boolean)
+                              .join(' · ')}
+                          </p>
+                        ) : null}
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        {viewer.organization!.defaultBrandId === brand.id ? null : (
+                          <form action={setDefaultBrand}>
+                            <input type="hidden" name="brandId" value={brand.id} />
+                            <button
+                              type="submit"
+                              className="min-h-8 rounded-lg border border-line-strong bg-surface px-2.5 text-[12px] font-medium text-ink hover:bg-paper"
+                            >
+                              Make default
                             </button>
                           </form>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </section>
-              ) : null}
-            </div>
+                        )}
+                        <form action={archiveBrand}>
+                          <input type="hidden" name="brandId" value={brand.id} />
+                          <button
+                            type="submit"
+                            className="min-h-8 rounded-lg px-2 text-[12px] text-ink-muted hover:text-ink"
+                            title="Hides it from selectors. Campaigns and their history are kept."
+                          >
+                            Archive
+                          </button>
+                        </form>
+                      </div>
+                    </div>
+
+                    <details className="mt-2">
+                      <summary className="cursor-pointer text-[12px] text-ink-muted underline-offset-4 hover:text-ink hover:underline">
+                        Edit
+                      </summary>
+                      <div className="mt-3 border-t border-line pt-3">
+                        <BrandForm brand={brand} customerType={viewer.organization!.customerType} />
+                      </div>
+                    </details>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <details className="mt-4" open={live.length === 0}>
+              <summary className="cursor-pointer text-[13px] font-medium text-indigo">
+                {viewer.organization.customerType === 'agency' ? 'Add another client brand' : 'Add another brand'}
+              </summary>
+              <div className="mt-3 border-t border-line pt-4">
+                <BrandForm
+                  customerType={viewer.organization.customerType}
+                  workspaceName={viewer.organization.name}
+                  makeDefault={live.length === 0}
+                />
+              </div>
+            </details>
           </div>
-        </div>
-      </main>
-    </div>
+
+          {archived.length ? (
+            <div className="rounded-xl border border-line bg-surface p-5">
+              <h2 className="text-[15px] font-semibold text-ink">Archived</h2>
+              <p className="mt-1 text-[12px] text-ink-muted">
+                Hidden from selectors. Their campaigns and history are untouched.
+              </p>
+              <ul className="mt-3 divide-y divide-line rounded-lg border border-line">
+                {archived.map((brand) => (
+                  <li key={brand.id} className="flex items-center gap-3 px-3 py-2.5">
+                    <span className="min-w-0 flex-1 truncate text-[13px] text-ink-muted">{brand.name}</span>
+                    <form action={archiveBrand}>
+                      <input type="hidden" name="brandId" value={brand.id} />
+                      <input type="hidden" name="restore" value="true" />
+                      <button type="submit" className="min-h-8 rounded-lg px-2 text-[12px] text-indigo">
+                        Restore
+                      </button>
+                    </form>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+
+      {section === 'sharing' ? (
+        <section className="rounded-xl border border-line bg-surface p-5">
+          <h2 className="text-[15px] font-semibold text-ink">Shared reports</h2>
+          <p className="mt-1 max-w-[62ch] text-[12px] leading-relaxed text-ink-muted">
+            Revoking disables the link immediately. Copies already downloaded cannot be recalled — they
+            carry their own printed data deadline and must be deleted or refreshed by it.
+          </p>
+          {shares.length === 0 ? (
+            <p className="mt-4 rounded-lg border border-dashed border-line px-3 py-6 text-center text-[12px] text-ink-muted">
+              No shared links.
+            </p>
+          ) : (
+            <ul className="mt-4 divide-y divide-line rounded-lg border border-line">
+              {shares.map((share) => (
+                <li key={share.token}>
+                  <form action={revokeShare} className="flex items-center justify-between gap-4 px-3 py-2.5">
+                    <input name="token" type="hidden" value={share.token} />
+                    <span className="tnum text-[12px] text-ink-muted">
+                      Created {new Date(share.created_at).toLocaleDateString('en-US')} · Expires{' '}
+                      {new Date(share.expires_at).toLocaleDateString('en-US')}
+                    </span>
+                    <button type="submit" className="min-h-8 shrink-0 rounded-lg px-2 text-[12px] text-indigo">
+                      Revoke
+                    </button>
+                  </form>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      ) : null}
+    </WorkspaceLayout>
   );
 }

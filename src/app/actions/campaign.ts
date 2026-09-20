@@ -194,17 +194,23 @@ export async function addCandidate(
 
 /** Shortlist, reject, or put back under consideration. */
 export async function setCandidateStatus(formData: FormData): Promise<void> {
+  await updateCandidateReview({ status: 'idle' }, formData);
+}
+
+export async function updateCandidateReview(_prev: CandidateState, formData: FormData): Promise<CandidateState> {
   const viewer = await getViewer();
-  if (!viewer.organization) return;
+  if (!viewer.organization || !isSupabaseConfigured()) return { status: 'error', message: 'Sign in to save your decision.' };
 
   const id = String(formData.get('candidateId') ?? '');
   const status = String(formData.get('status') ?? '');
-  if (!['considering', 'shortlisted', 'hold', 'rejected'].includes(status)) return;
+  if (!['considering', 'shortlisted', 'hold', 'rejected'].includes(status)) return { status: 'error', message: 'Choose a valid review status.' };
 
   const supabase = createSessionClient();
-  const { error } = await supabase.from('campaign_candidates').update({ status }).eq('id', id);
-  if (error) console.error('[candidates] status update failed', error.message);
-  revalidatePath(`/campaigns/${String(formData.get('campaignId') ?? '')}`);
+  const campaignId = String(formData.get('campaignId') ?? '');
+  const { data, error } = await supabase.from('campaign_candidates').update({ status }).eq('id', id).eq('campaign_id', campaignId).select('id').maybeSingle();
+  if (error || !data) return { status: 'error', message: 'Could not save your decision. Please try again.' };
+  revalidatePath(`/campaigns/${campaignId}`);
+  return { status: 'ok', message: 'Decision saved.' };
 }
 
 /**
@@ -220,9 +226,13 @@ export async function setCandidateStatus(formData: FormData): Promise<void> {
  * candidates get discarded on the numbers alone.
  */
 export async function writeCandidateFit(formData: FormData): Promise<void> {
-  if (!AMENDMENT_ACCEPTED) return;
+  await evaluateCandidate({ status: 'idle' }, formData);
+}
+
+export async function evaluateCandidate(_prev: CandidateState, formData: FormData): Promise<CandidateState> {
+  if (!AMENDMENT_ACCEPTED) return { status: 'error', message: 'Campaign assessment is not available.' };
   const viewer = await getViewer();
-  if (!viewer.organization) return;
+  if (!viewer.organization) return { status: 'error', message: 'Sign in to assess this candidate.' };
 
   const candidateId = String(formData.get('candidateId') ?? '');
   const campaignId = String(formData.get('campaignId') ?? '');
@@ -257,14 +267,14 @@ export async function writeCandidateFit(formData: FormData): Promise<void> {
         avoid_topics: string | null;
       }>(),
   ]);
-  if (!candidate || !campaign) return;
+  if (!candidate || !campaign) return { status: 'error', message: 'Candidate unavailable.' };
 
   const { data: row } = await supabase
     .from('channel_analyses')
     .select('*')
     .eq('channel_id', candidate.channel_id)
     .maybeSingle<Record<string, unknown>>();
-  if (!row || !freshData(row.data_fetched_at)) return;
+  if (!row || !freshData(row.data_fetched_at)) return { status: 'error', message: 'Refresh the public report before assessing this candidate.' };
 
   const outputs = (row.output_stats ?? []) as PlatformOutput[];
   const youtube = outputs.find((o) => o.platform === 'youtube') ?? outputs[0] ?? null;
@@ -312,16 +322,20 @@ export async function writeCandidateFit(formData: FormData): Promise<void> {
 
   if (!read.ok) {
     console.error('[candidates] fit read failed', { candidateId, reason: read.reason });
-    return;
+    return { status: 'error', message: 'Assessment could not be completed. Please try again.' };
   }
 
-  const { error } = await supabase.rpc('save_campaign_fit', {
+  const { data: saved, error } = await supabase.rpc('save_campaign_fit', {
     p_candidate:candidateId,p_campaign:campaignId,p_brief_at:campaign.updated_at,
     p_data_at:row.data_fetched_at,p_fit:read.fit,p_model:read.model,
   });
-  if (error) console.error('[candidates] fit write failed', error.message);
+  if (error || saved !== true) {
+    if (error) console.error('[candidates] fit write failed', error.message);
+    return { status: 'error', message: 'Could not save the assessment. The brief or report may have changed; please try again.' };
+  }
 
   revalidatePath(`/campaigns/${campaignId}`);
+  return { status: 'ok', message: 'Campaign assessment updated.' };
 }
 
 export async function updateCampaign(_prev: CampaignState, form: FormData): Promise<CampaignState> {
