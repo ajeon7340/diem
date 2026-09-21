@@ -66,25 +66,24 @@ export default async function Settings({ searchParams }: { searchParams: { secti
 
   return (
     <WorkspaceLayout
+      header={{
+        eyebrow: 'Settings',
+        title: viewer.organization.name,
+        meta: (
+          <span>
+            {viewer.organization.customerType === null
+              ? // Null is not "brand": every workspace made before the question
+                // was asked stores null, and saying so is the difference
+                // between a default and an answer nobody gave.
+                'Account type not set'
+              : agency
+                ? 'Agency — campaigns for client brands'
+                : 'Brand — campaigns for your own products'}
+          </span>
+        ),
+      }}
       panel={
-        <div className="space-y-4 rounded-2xl border border-line bg-surface p-4">
-          <PanelSection>
-            <p className="rail">Settings</p>
-            <h1 className="mt-1.5 text-[17px] font-semibold tracking-tight text-ink">
-              {viewer.organization.name}
-            </h1>
-            <p className="mt-1 text-[12px] text-ink-muted">
-              {viewer.organization.customerType === null
-                ? // Null is not "brand": every workspace made before the
-                  // question was asked stores null, and saying so is the
-                  // difference between a default and an answer nobody gave.
-                  'Account type not set'
-                : agency
-                  ? 'Agency — campaigns for client brands'
-                  : 'Brand — campaigns for your own products'}
-            </p>
-          </PanelSection>
-
+        <div className="surface space-y-4 p-4">
           <PanelSection title="Sections">
             <nav aria-label="Settings sections">
               <ul className="space-y-0.5">
@@ -93,7 +92,7 @@ export default async function Settings({ searchParams }: { searchParams: { secti
                     <Link
                       href={`/settings?section=${id}`}
                       aria-current={section === id ? 'page' : undefined}
-                      className={`block rounded-lg px-2.5 py-1.5 text-[13px] transition-colors ${
+                      className={`press block rounded-[var(--r-md)] px-2.5 py-1.5 text-[13px] transition-colors duration-150 ${
                         section === id
                           ? 'bg-indigo-wash font-medium text-indigo'
                           : 'text-ink-muted hover:bg-paper hover:text-ink'

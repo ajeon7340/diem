@@ -34,6 +34,48 @@
   --amber-wash: #fffbeb;
   --rose: #e11d48;
   --rose-wash: #fff1f2;
+
+  /*
+   * ---------------------------------------------------------------------
+   * APPLICATION SHELL
+   * ---------------------------------------------------------------------
+   *
+   * The nav is a real column, so its width is a variable the main area reads
+   * rather than a number repeated in two places that drift.
+   */
+  --nav-w: 232px;
+  --nav-w-collapsed: 60px;
+  --header-h: 52px;
+
+  /*
+   * RADIUS SCALE. Nested surfaces are concentric: outer = inner + padding.
+   * A 12px card holding an 8px control needs 4px of padding between them, and
+   * the pair looks wrong at any other combination.
+   */
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-xl: 16px;
+
+  /*
+   * ELEVATION IS SHADOW, STRUCTURE IS BORDER. A border drawn only to suggest
+   * depth makes every surface read as a box; layered transparent shadows lift
+   * without adding another line to the page. Borders stay where they separate.
+   */
+  --shadow-raise: 0 1px 2px rgba(23, 26, 44, 0.04), 0 1px 1px rgba(23, 26, 44, 0.03);
+  --shadow-panel: 0 1px 2px rgba(23, 26, 44, 0.05), 0 8px 24px rgba(23, 26, 44, 0.07);
+  --shadow-overlay: 0 1px 2px rgba(23, 26, 44, 0.06), 0 16px 48px rgba(23, 26, 44, 0.14);
+
+  /*
+   * MOTION. Strong curves, short durations. `ease-in` is never used on an
+   * interface element: it withholds movement at the exact moment the user is
+   * watching, so the same duration feels slower.
+   */
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --t-press: 120ms;
+  --t-hover: 150ms;
+  --t-panel: 220ms;
 }
 
 * {
@@ -397,7 +439,8 @@ body {
   .workspace-page { @apply mx-auto w-full max-w-shell px-5 py-10 sm:px-8 sm:py-12; }
   .page-title { @apply text-3xl font-semibold tracking-tight text-ink sm:text-4xl; }
   .primary-action { @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-indigo px-5 text-sm font-medium text-white transition-colors hover:bg-indigo-hover; }
-  .surface-card { @apply rounded-2xl border border-line bg-surface; }
+  /* Legacy alias for `.surface`. One recipe, so the two cannot drift. */
+  .surface-card { @apply rounded-[var(--r-lg)] border border-line bg-surface shadow-[var(--shadow-raise)]; }
 }
 a:focus-visible, button:focus-visible, summary:focus-visible {
   outline: 2px solid var(--indigo); outline-offset: 4px;
@@ -420,4 +463,164 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 }
 @media screen and (max-width: 640px) {
   .channel-report .report-section { padding: 20px; }
+}
+
+
+/*
+ * ===========================================================================
+ * APPLICATION SHELL AND SHARED SURFACES
+ * ===========================================================================
+ *
+ * WHY THESE ARE CSS CLASSES AND NOT TAILWIND STRINGS. A surface, a list row and
+ * a table cell appear on five pages each; when each page spells its own
+ * `rounded-xl border border-line bg-surface p-4`, they drift — and the product
+ * reads as five products. One definition each, here, and a page that wants to
+ * differ has to say so.
+ */
+
+.app-shell {
+  display: flex;
+  min-height: 100dvh;
+  background: var(--paper);
+}
+
+.app-main {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+/*
+ * A PAGE CENTRES ITS CONTENT WITH `mx-auto`, AND THAT BROKE IT.
+ *
+ * `main` is a flex item of the column above. An auto margin on the cross axis
+ * cancels `align-items: stretch`, so the item sized itself to its own
+ * max-content instead of to the column — 686px inside a 390px phone, with the
+ * whole page scrolling sideways. Stretching it back explicitly costs nothing
+ * on desktop, where it was already the container's width, and is the one rule
+ * standing between every page and horizontal overflow.
+ */
+.app-main > main,
+.app-main > header {
+  width: 100%;
+  min-width: 0;
+}
+
+/* The nav column. `width` transitions because the main area reflows with it;
+   this is an infrequent, deliberate action, so the movement is worth showing. */
+.app-nav {
+  width: var(--nav-w);
+  transition: width var(--t-panel) var(--ease-out);
+}
+.app-nav[data-collapsed='true'] { width: var(--nav-w-collapsed); }
+
+/*
+ * SURFACES
+ *
+ * `.surface` is the white content panel: one hairline for structure, one
+ * shadow for the millimetre of lift that separates it from the paper ground.
+ */
+.surface {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-raise);
+}
+
+/* A row in a list of records. The hover is a surface change, not a border. */
+.row {
+  display: grid;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  transition: background-color var(--t-hover) var(--ease-out);
+}
+.row:hover { background: var(--paper); }
+.row[data-selected='true'] { background: var(--indigo-wash); }
+
+/*
+ * DATA TABLES. Numbers are tabular and right-aligned so columns compare down
+ * the page; text is left-aligned and wraps rather than truncating, because a
+ * clipped Korean title is a title nobody can read.
+ */
+.data-table { width: 100%; border-collapse: collapse; }
+.data-table th {
+  text-align: left;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+.data-table td {
+  padding: 10px 12px;
+  font-size: 13px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+.data-table tbody tr:last-child td { border-bottom: 0; }
+.data-table tbody tr { transition: background-color var(--t-hover) var(--ease-out); }
+.data-table tbody tr:hover { background: var(--paper); }
+.data-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* A table too wide for the column scrolls inside its own box. The PAGE never
+   scrolls sideways; a horizontal scrollbar on the document is a layout bug. */
+.table-scroll { overflow-x: auto; overscroll-behavior-x: contain; }
+
+/*
+ * PRESS FEEDBACK. 0.96, and only on pointer devices — a touch device fires
+ * hover on tap and the two together read as a stutter.
+ */
+.press { transition: transform var(--t-press) var(--ease-out); }
+.press:active { transform: scale(0.96); }
+
+/*
+ * FOCUS. Always visible, never removed, and the same ring everywhere so a
+ * keyboard user learns it once.
+ */
+.focusable:focus-visible,
+.app-shell a:focus-visible,
+.app-shell button:focus-visible,
+.app-shell select:focus-visible,
+.app-shell input:focus-visible,
+.app-shell textarea:focus-visible,
+.app-shell summary:focus-visible {
+  outline: 2px solid var(--indigo);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+
+/* Enter animation for the detail panel. Exits are handled by the native
+   dialog; enters are what the user is waiting on. */
+@keyframes panel-in-right {
+  from { opacity: 0; transform: translateX(16px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.workspace-drawer[open] { animation: panel-in-right var(--t-panel) var(--ease-out) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .app-nav,
+  .row,
+  .press,
+  .data-table tbody tr { transition: none; }
+  .workspace-drawer[open] { animation: none; }
+}
+
+@media print {
+  /*
+   * NO APPLICATION CHROME ON PAPER. The navigation, the mobile strip and the
+   * page header are all ways of getting around a product nobody is using while
+   * reading a PDF — and the page header repeats the identity the report prints
+   * for itself two inches below it.
+   */
+  .app-nav, .app-header, .app-page-header { display: none !important; }
+  /* White, not the paper ground: the shell's background otherwise prints as a
+     grey band around every page of the export. */
+  .app-shell { display: block; min-height: 0; background: #fff !important; }
+  .app-main { display: block; }
+  .surface { box-shadow: none; }
 }

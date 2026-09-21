@@ -1,7 +1,7 @@
 import { CollaborationRecords } from '@/components/channel/CollaborationRecords';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
-import { PanelSection, WorkspaceLayout } from '@/components/shell/WorkspaceLayout';
+import { WorkspaceLayout } from '@/components/shell/WorkspaceLayout';
 import { Badge } from '@/components/ui/Badge';
 import { ChannelReport } from '@/components/channel/ChannelReport';
 import { LiveReport, ReportActions } from '@/components/channel/ReportActions';
@@ -50,90 +50,95 @@ export default async function ReportPage({params,searchParams}:{params:{id:strin
  return (
   <WorkspaceLayout
    width="wide"
-   sticky
-   panel={
-    <div className="space-y-4 rounded-2xl border border-line bg-surface p-4 print:hidden">
-     <PanelSection>
-      <Link href="/channels" className="text-[11px] text-ink-muted underline-offset-4 hover:underline">
-       ← Channel analysis
+   header={{
+    // IDENTITY, STATE AND ACTIONS IN ONE STRIP. They were a 340px rail beside
+    // the report, so a document written to be read at a comfortable measure
+    // had two-thirds of a laptop screen, and the rail said the channel's name
+    // a second time next to the report's own header.
+    icon: report?.avatar ? (
+     // eslint-disable-next-line @next/next/no-img-element
+     <img
+      src={report.avatar}
+      alt=""
+      width={36}
+      height={36}
+      className="h-9 w-9 rounded-full outline outline-1 -outline-offset-1 outline-black/10"
+     />
+    ) : null,
+    title: report?.title ?? params.id,
+    meta: (
+     <>
+      {report?.handle ? <span>{report.handle}</span> : null}
+      <Badge tone={stateTone}>{state}</Badge>
+      {report ? (
+       <span className="tnum">
+        collected {new Date(report.fetchedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+       </span>
+      ) : null}
+      <Link href="/channels" className="text-indigo underline-offset-4 hover:underline">
+       All reports
       </Link>
-      <div className="mt-2 flex items-center gap-2.5">
-       {report?.avatar ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={report.avatar} alt="" width={36} height={36} className="h-9 w-9 shrink-0 rounded-full" />
-       ) : null}
-       <div className="min-w-0">
-        <h1 className="truncate text-[15px] font-semibold tracking-tight text-ink">{report?.title ?? params.id}</h1>
-        {report?.handle ? <p className="truncate text-[11px] text-ink-muted">{report.handle}</p> : null}
-       </div>
-      </div>
-
-      {/* STATUS IS ONE LINE. It had a heading, a badge on its own row and up to
-          three explanatory sentences under it — a quarter of the rail spent
-          saying "Completed". The badge carries the state; the date carries the
-          rest; anything genuinely in flight still gets its own line below. */}
-      <p className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1">
-       <Badge tone={stateTone}>{state}</Badge>
-       {report ? (
-        <span className="tnum text-[11px] text-ink-faint">
-         collected {new Date(report.fetchedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
-        </span>
-       ) : null}
-      </p>
-      {active ? (
-       <>
-        <AnalysisProgress jobs={jobs} />
-        <p className="mt-1 text-[11px] leading-relaxed text-ink-muted">
-         Safe to leave — this continues in the background.
-        </p>
-       </>
-      ) : null}
-      {state === 'Failed' ? (
-       <p className="mt-1 text-[11px] leading-relaxed text-ink-muted">
-        Nothing about this channel is implied.
-       </p>
-      ) : null}
-     </PanelSection>
-
-     <PanelSection>
-      <ReportActions
-       channelId={params.id}
-       campaigns={campaigns}
-       brands={brands.map((b) => ({ id: b.id, name: b.name }))}
-       days={report?.windowDays}
-      />
-     </PanelSection>
-
-     {overview && report ? (
-      <PanelSection>
-       <form className="space-y-1.5">
-        {searchParams.brand ? <input type="hidden" name="brand" value={searchParams.brand} /> : null}
-        <label className="block text-[12px] font-medium text-ink" htmlFor="format">
-         Content format
-        </label>
-        <select
-         id="format"
-         name="format"
-         defaultValue={searchParams.format ?? 'all'}
-         className="min-h-10 w-full rounded-lg border border-line bg-surface px-2.5 text-[13px]"
-        >
-         <option value="all">All formats</option>
-         <option value="short">Short, 3 min or less (proxy)</option>
-         <option value="long">Long-form</option>
-        </select>
-        <button className="text-[12px] text-indigo underline-offset-4 hover:underline">Apply</button>
-       </form>
-      </PanelSection>
-     ) : null}
-    </div>
-   }
+     </>
+    ),
+    secondary: (
+     <ReportActions
+      channelId={params.id}
+      campaigns={campaigns}
+      brands={brands.map((b) => ({ id: b.id, name: b.name }))}
+      days={report?.windowDays}
+      layout="inline"
+     />
+    ),
+    tabs: (
+     <ReportTabs
+      channelId={params.id}
+      view={view}
+      brand={searchParams.brand ?? null}
+      campaign={searchParams.campaign ?? null}
+     />
+    ),
+   }}
   >
    <LiveReport active={active} />
-   <ReportTabs channelId={params.id} view={view} brand={searchParams.brand ?? null} campaign={searchParams.campaign ?? null} />
+
+   {/* Anything genuinely in flight or failed gets a line of its own, above the
+       report. A finished collection says so in the header and nowhere else. */}
+   {active ? (
+    <div className="mb-4 rounded-[var(--r-md)] border border-line bg-surface px-3 py-2.5 print:hidden">
+     <AnalysisProgress jobs={jobs} />
+     <p className="mt-1 text-[11px] leading-relaxed text-ink-muted">
+      Safe to leave — this continues in the background.
+     </p>
+    </div>
+   ) : state === 'Failed' ? (
+    <p className="mb-4 rounded-[var(--r-md)] border border-rose/30 bg-rose-wash px-3 py-2 text-[12px] text-ink print:hidden">
+     Our collection failed. Nothing about this channel is implied.
+    </p>
+   ) : null}
 
    {overview ? (
     report ? (
-     <div className="mt-5">
+     <div className="mx-auto max-w-[1080px]">
+      {/* The format filter sits with the report it filters, not in a rail. */}
+      <form className="mb-3 flex flex-wrap items-center gap-2 print:hidden">
+       {searchParams.brand ? <input type="hidden" name="brand" value={searchParams.brand} /> : null}
+       <label className="text-[12px] text-ink-muted" htmlFor="format">
+        Show
+       </label>
+       <select
+        id="format"
+        name="format"
+        defaultValue={searchParams.format ?? 'all'}
+        className="min-h-8 rounded-[var(--r-md)] border border-line bg-surface px-2 text-[12px] text-ink"
+       >
+        <option value="all">All formats</option>
+        <option value="short">Short, 3 min or less (proxy)</option>
+        <option value="long">Long-form</option>
+       </select>
+       <button className="press min-h-8 rounded-[var(--r-md)] border border-line-strong bg-surface px-2.5 text-[12px] font-medium text-ink hover:bg-paper">
+        Apply
+       </button>
+      </form>
       {/* The rail already names the channel; the report's own header would be
           the same avatar, name and handle a second time. It still prints. */}
       <ChannelReport
@@ -163,8 +168,8 @@ export default async function ReportPage({params,searchParams}:{params:{id:strin
      </div>
     )
    ) : (
-    <div className="mt-5 space-y-5">
-     <div className="rounded-xl border border-line bg-surface p-4 print:hidden">
+    <div className="mx-auto max-w-[1080px] space-y-4">
+     <div className="surface p-4 print:hidden">
       <RelevanceLauncher
        channelId={params.id}
        brands={brands.map((b) => ({ id: b.id, name: b.name }))}

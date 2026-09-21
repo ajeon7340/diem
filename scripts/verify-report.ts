@@ -737,7 +737,34 @@ check('with a bounded thumbnail', css.includes('.channel-report .evidence-thumb,
 check('raw urls no longer interrupt prose', css.includes('.channel-report a[href^="http"]::after {'), false);
 check('they survive in the appendix reference list', css.includes('.channel-report .report-appendix a[href^="http"]::after'), true);
 check('each printed sheet carries the report identity', css.includes('.channel-report .report-page-foot'), true);
-check('and the component prints a page number', component.includes('page {page} of 2'), true);
+check('and the component prints a page number', component.includes('page {page} of {sheets}'), true);
+check(
+  'the total matches the break it actually made',
+  component.includes("const sheets = report.videos.length >= 12 ? 2 : 1;"),
+  true,
+);
+// Singular/plural, because these sentences name counts that are usually 1.
+check(
+  'one upload "reports", it does not "report"',
+  limitations(report({ videos: [video({ id: 'a', views: null }), video({ id: 'b' }), video({ id: 'c' })] })).some(
+    (l) => l.includes('1 comparable upload reports no view count'),
+  ),
+  true,
+);
+check(
+  'and so does one with no duration',
+  limitations(report({ videos: [video({ id: 'a', format: 'unknown', seconds: null }), video({ id: 'b' })] })).some(
+    (l) => l.includes('1 upload reports no duration publicly'),
+  ),
+  true,
+);
+check(
+  'the summary agrees',
+  factualSummary(report({ videos: [video({ id: 'a', format: 'unknown', seconds: null }), video({ id: 'b' }), video({ id: 'c' })] }))
+    .join(' ')
+    .includes('1 upload reports no duration in the public metadata and sits'),
+  true,
+);
 check('the relevance footer says the brief is inside it', read('src/components/report/RelevanceReport.tsx').includes('contains your brief — internal'), true);
 check('the metric row stays a row in print', css.includes('.channel-report .report-metrics .grid { display: grid;'), true);
 check('the print background is white', css.includes('background: #fff !important;'), true);

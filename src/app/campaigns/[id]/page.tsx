@@ -94,7 +94,7 @@ export default async function CampaignPage({
     campaign.brand;
 
   return (
-    <WorkspaceLayout width="wide">
+    <WorkspaceLayout width="wide" bare>
       <LiveReport
         active={views.some(
           (view) => view.state === 'queued' || view.state === 'running',

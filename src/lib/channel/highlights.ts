@@ -199,7 +199,7 @@ export function factualSummary(report: ChannelReportView, now = Date.now()): str
   if (parts.length) lines.push(`The sample splits into ${parts.join(', and ')}.`);
   if (unknown.length) {
     lines.push(
-      `${unknown.length} upload${unknown.length === 1 ? '' : 's'} report no duration in the public metadata and ${unknown.length === 1 ? 'sits' : 'sit'} outside the format comparison.`,
+      `${unknown.length} upload${unknown.length === 1 ? '' : 's'} report${unknown.length === 1 ? 's' : ''} no duration in the public metadata and ${unknown.length === 1 ? 'sits' : 'sit'} outside the format comparison.`,
     );
   }
 
@@ -357,13 +357,13 @@ export function limitations(report: ChannelReportView): string[] {
   }
   if (unknown > 0) {
     out.push(
-      `${unknown} upload${unknown === 1 ? '' : 's'} report no duration publicly, so ${unknown === 1 ? 'it sits' : 'they sit'} outside the long-form and short comparison.`,
+      `${unknown} upload${unknown === 1 ? '' : 's'} report${unknown === 1 ? 's' : ''} no duration publicly, so ${unknown === 1 ? 'it sits' : 'they sit'} outside the long-form and short comparison.`,
     );
   }
   const p = performance(report.videos, Date.parse(report.fetchedAt));
   if (p.unreported > 0) {
     out.push(
-      `${p.unreported} comparable upload${p.unreported === 1 ? '' : 's'} report no view count. That is unknown, not zero, and ${p.unreported === 1 ? 'it is' : 'they are'} excluded from every median and range.`,
+      `${p.unreported} comparable upload${p.unreported === 1 ? '' : 's'} report${p.unreported === 1 ? 's' : ''} no view count. That is unknown, not zero, and ${p.unreported === 1 ? 'it is' : 'they are'} excluded from every median and range.`,
     );
   }
   if (!report.derivedAllowed) {

@@ -11,7 +11,7 @@ import { ModeTabs } from '@/components/discovery/ModeTabs';
 import { NarrowingProvider, PerformanceFilters } from '@/components/discovery/Narrowing';
 import { ResultList } from '@/components/discovery/ResultList';
 import { ModeForm } from '@/components/discovery/SearchForms';
-import { SiteHeader } from '@/components/shell/SiteHeader';
+import { WorkspaceLayout } from '@/components/shell/WorkspaceLayout';
 import { Badge } from '@/components/ui/Badge';
 import { getViewer } from '@/lib/access/viewer';
 import { getCampaign, getCampaigns } from '@/lib/data/campaigns';
@@ -82,40 +82,44 @@ export default async function DiscoveryResults({ params }: { params: { id: strin
   );
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <SiteHeader />
-      <main className="flex-1 bg-paper">
-        <div className="mx-auto w-full max-w-[1440px] px-4 py-6 sm:px-6 lg:px-8">
-          <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-2">
-            <Link href="/discover" className="text-[12px] text-ink-muted underline-offset-4 hover:underline">
-              ← All searches
-            </Link>
-            <h1 className="text-xl font-semibold tracking-tight text-ink">
-              {DISCOVERY_MODES[search.mode].label}
-            </h1>
+    <WorkspaceLayout
+      width="wide"
+      bare
+      header={{
+        eyebrow: 'Discovery',
+        title: DISCOVERY_MODES[search.mode].label,
+        meta: (
+          <>
             <Badge
               tone={live ? 'indigo' : state === 'failed' ? 'rose' : state === 'partial' ? 'amber' : 'slate'}
             >
               {SEARCH_STATE_LABEL[state]}
             </Badge>
-            <span className="tnum text-[11px] text-ink-faint">
+            <span className="tnum">
               {search.collectedAt
                 ? `collected ${search.collectedAt.slice(0, 16).replace('T', ' ')} UTC`
                 : `started ${search.createdAt.slice(0, 16).replace('T', ' ')} UTC`}
             </span>
-            {live ? (
-              <form action={cancelSearch} className="ml-auto">
-                <input type="hidden" name="searchId" value={search.id} />
-                <button
-                  type="submit"
-                  className="min-h-8 rounded-lg border border-line-strong bg-surface px-2.5 text-[12px] font-medium text-ink hover:bg-paper"
-                >
-                  Cancel
-                </button>
-              </form>
-            ) : null}
-          </div>
-
+            <Link href="/discover" className="text-indigo underline-offset-4 hover:underline">
+              All searches
+            </Link>
+          </>
+        ),
+        primary: live ? (
+          <form action={cancelSearch}>
+            <input type="hidden" name="searchId" value={search.id} />
+            <button
+              type="submit"
+              className="press inline-flex min-h-9 items-center rounded-[var(--r-md)] border border-line-strong bg-surface px-3 text-[13px] font-medium text-ink hover:bg-paper"
+            >
+              Cancel search
+            </button>
+          </form>
+        ) : undefined,
+      }}
+    >
+      <main className="flex-1 px-4 py-5 sm:px-6">
+        <div className="mx-auto w-full max-w-[1480px]">
           {/* The provider wraps BOTH columns: the performance filters render in
               the rail, the rows they hide are in the list beside it. */}
           <NarrowingProvider>
@@ -267,7 +271,7 @@ export default async function DiscoveryResults({ params }: { params: { id: strin
           </NarrowingProvider>
         </div>
       </main>
-    </div>
+    </WorkspaceLayout>
   );
 }
 

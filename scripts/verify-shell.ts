@@ -60,13 +60,33 @@ check('the rail is inside the 320–360px band', shell.includes('lg:w-[340px]'),
 check('and does not shrink when the work area grows', shell.includes('lg:shrink-0'), true);
 check('the work area cannot be pushed sideways by long content', shell.includes('min-w-0 flex-1'), true);
 check('below lg the rail stacks above the work rather than squeezing beside it',
-  shell.includes('flex flex-col gap-5 lg:flex-row'), true);
-check('the rail keeps the existing top navigation', shell.includes('<SiteHeader />'), true);
+  shell.includes('flex flex-col gap-4 lg:flex-row'), true);
+// THE NAVIGATION MOVED OUT OF THE TOP BAR. It is a persistent left column now,
+// and the page's own rail is not allowed to duplicate it: two answers to "where
+// am I" on one screen is what this shell exists to stop.
+check('global navigation is the left column', shell.includes('<AppShell'), true);
+check('and it is not repeated in a top bar', shell.includes('<SiteHeader'), false);
+const nav = code('src/components/shell/AppNav.tsx');
+check('the nav collapses', nav.includes("data-collapsed={collapsed"), true);
+check('and remembers the choice', nav.includes('localStorage.setItem(STORE'), true);
+check('a collapsed item keeps its accessible name', nav.includes("collapsed ? 'sr-only' : 'truncate'"), true);
+check('and still marks the current page', nav.includes("aria-current={active ? 'page' : undefined}"), true);
+check('the mobile drawer closes on Escape', nav.includes("event.key === 'Escape'"), true);
+check('and focus returns to the button that opened it',
+  code('src/components/shell/AppShell.tsx').includes('opener.current?.focus()'), true);
+check('the workspace is named once, in the nav', nav.includes('title={workspace}'), true);
+check('and no page rail repeats the global links',
+  [CHANNELS, CAMPAIGNS, CAMPAIGN, SETTINGS].every((path) => !code(path).includes('<WorkspaceNav')), true);
 check('and is labelled as page controls, not a second navigation',
   shell.includes('aria-label="Page controls"'), true);
 check('sticky is opt-in rather than the default', shell.includes('sticky = false'), true);
 
-check('only the campaign decision page pins its rail', /<ContextWorkspace\s+sticky/.test(code('src/components/campaign/CampaignWorkspace.tsx')), true);
+// The campaign page no longer HAS a rail: a comparison table needs the width,
+// and the brief it used to hold is a line in the header and a dialog away.
+check('the campaign page gives its width to the table',
+  code('src/components/campaign/CampaignWorkspace.tsx').includes('<ContextWorkspace'), false);
+check('and states the brief in its header instead',
+  code('src/components/campaign/CampaignWorkspace.tsx').includes('summary={briefLine'), true);
 check('the campaign list does not', /<WorkspaceLayout[\s\S]{0,120}sticky/.test(code(CAMPAIGNS)), false);
 check('nor the report library', /<WorkspaceLayout[\s\S]{0,120}sticky/.test(code(CHANNELS)), false);
 
@@ -193,23 +213,32 @@ check('sharing keeps revoke and expiry', settings.includes('revokeShare') && set
 const CHANNEL_DETAIL = 'src/app/channels/[id]/page.tsx';
 const detail = code(CHANNEL_DETAIL);
 check('the report page uses the shared shell', detail.includes('<WorkspaceLayout'), true);
-check('and pins its rail, like the campaign decision page', /<WorkspaceLayout[\s\S]{0,120}sticky/.test(detail), true);
-// Compared on the rendered elements, not the words: an earlier version matched
-// the `ReportActions` import at the top of the file and reported the rail
-// backwards, and a later one matched section headings that no longer exist —
-// status is one line now, and a line does not need a heading above it.
+// THE RAIL IS GONE FROM THE REPORT PAGE. A document written to be read needs
+// the measure, and a 340px column beside it left the report two-thirds of a
+// laptop screen while repeating the channel's name next to the report's own
+// header. Identity, state and actions are one header strip; the report has the
+// page. What is asserted is the ORDER a reader meets them in.
+check('the report page has no rail', /<WorkspaceLayout[\s\S]{0,200}panel=\{/.test(detail), false);
 check(
-  'status leads the rail, above the actions',
+  'identity comes before state in the header',
+  detail.indexOf('title: report?.title') < detail.indexOf('<Badge tone={stateTone}>'),
+  true,
+);
+check(
+  'and state before the actions',
   detail.indexOf('<Badge tone={stateTone}>') < detail.indexOf('<ReportActions'),
   true,
 );
 check(
-  'and it is one line rather than a titled block',
+  'status is one line rather than a titled block',
   detail.includes('title="Status"'),
   false,
 );
-check('add-to-campaign and share live in the rail', /panel=\{[\s\S]*?<ReportActions/.test(detail), true);
-check('so does the format control', /panel=\{[\s\S]*?htmlFor="format"/.test(detail), true);
+check('add-to-campaign and share are in the header', /secondary:[\s\S]{0,200}<ReportActions/.test(detail), true);
+check('and open as popovers rather than growing the strip',
+  code('src/components/channel/ReportActions.tsx').includes("layout === 'inline'"), true);
+check('the format control sits with the report it filters',
+  detail.indexOf('htmlFor="format"') > detail.indexOf('<ChannelReport') || /max-w-\[1080px\][\s\S]{0,600}htmlFor="format"/.test(detail), true);
 check(
   'the report does not repeat the identity the rail already shows',
   detail.includes('identity={false}'),
@@ -227,6 +256,19 @@ check('and sharing still names what the link will show', actions.includes('What 
 const sample = code('src/app/channels/sample/page.tsx');
 check('the sample reads the real approval flag rather than forcing themes on', sample.includes('AMENDMENT_ACCEPTED ? CLUSTERS : []'), true);
 check('and its derivedAllowed comes from the same flag', sample.includes('derivedAllowed: AMENDMENT_ACCEPTED'), true);
+
+
+// ---------------------------------------------------------------------------
+// The shell never reaches paper
+// ---------------------------------------------------------------------------
+
+const css = read('src/app/globals.css');
+check('navigation is not printed', css.includes('.app-nav, .app-header, .app-page-header { display: none !important; }'), true);
+check('and the shell prints on white, not the paper ground', css.includes('.app-shell { display: block; min-height: 0; background: #fff !important; }'), true);
+// The flex column that broke every page at phone width: an auto margin on the
+// cross axis cancels `stretch`, so `main` sized itself to its own max-content.
+check('a centred main still fills the column', css.includes('.app-main > main,'), true);
+check('and cannot be pushed wider than it', css.includes('  width: 100%;\n  min-width: 0;\n}'), true);
 
 console.log(`\n  ${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);

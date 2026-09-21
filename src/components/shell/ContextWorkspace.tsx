@@ -22,10 +22,10 @@ export function ContextWorkspace({
   sticky?: boolean;
 }) {
   return (
-    <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:gap-8">
+    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-6">
       <aside
         aria-label="Page controls"
-        className={`w-full ${RAIL_WIDTH} lg:shrink-0 ${sticky ? 'lg:sticky lg:top-24 lg:max-h-[calc(100dvh-7rem)] lg:overflow-y-auto' : ''}`}
+        className={`w-full ${RAIL_WIDTH} lg:shrink-0 ${sticky ? 'lg:sticky lg:top-4 lg:max-h-[calc(100dvh-2rem)] lg:overflow-y-auto' : ''}`}
       >
         {sidebar}
       </aside>

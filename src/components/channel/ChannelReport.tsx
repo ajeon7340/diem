@@ -397,11 +397,14 @@ function PageFoot({
   page: number;
   campaign: CampaignContext | null;
 }) {
+  // The break is conditional, so the TOTAL is too: a short report that fits one
+  // sheet must not print "page 1 of 2" on the only sheet there is.
+  const sheets = report.videos.length >= 12 ? 2 : 1;
   return (
     <p className="report-page-foot hidden tnum">
       {campaign ? 'Campaign report' : 'Channel report'} · {report.title}
       {report.handle ? ` (${report.handle})` : ''} · collected {shortDate(report.fetchedAt)} ·
-      page {page} of 2
+      page {page} of {sheets}
       {campaign ? ' · contains campaign context — internal' : ''}
     </p>
   );

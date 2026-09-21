@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 
 import { CampaignForm } from '@/components/campaign/CampaignForm';
-import { SiteHeader } from '@/components/shell/SiteHeader';
+import { WorkspaceLayout } from '@/components/shell/WorkspaceLayout';
 import { getViewer } from '@/lib/access/viewer';
 import { getBrands } from '@/lib/data/brands';
 import { isSupabaseConfigured } from '@/lib/supabase/server';
@@ -18,10 +18,9 @@ export default async function NewCampaignPage({searchParams}:{searchParams:{chan
   if (!viewer.organization) {
     return (
       <Shell>
-        <p className="rail">Campaigns</p>
-        <h1 className="mt-2 text-[24px] font-semibold tracking-tight text-ink">
+        <h2 className="text-[17px] font-semibold tracking-tight text-ink">
           Create a workspace first
-        </h1>
+        </h2>
         <p className="mt-3 max-w-[56ch] text-[13px] leading-relaxed text-ink-muted">
           A campaign belongs to a company or agency, so that your briefs, your shortlists and the
           fees you were quoted stay yours. It takes one field.
@@ -65,13 +64,10 @@ export default async function NewCampaignPage({searchParams}:{searchParams:{chan
   );
 }
 
-function Shell({ children }: { children: React.ReactNode }) {
+async function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-screen flex-col">
-      <SiteHeader />
-      <main className="flex-1 bg-paper">
-        <div className="mx-auto w-full max-w-2xl px-5 py-10 sm:px-8">{children}</div>
-      </main>
-    </div>
+    <WorkspaceLayout header={{ eyebrow: 'Campaigns', title: 'New campaign' }}>
+      <div className="mx-auto w-full max-w-2xl">{children}</div>
+    </WorkspaceLayout>
   );
 }

@@ -25,7 +25,7 @@ export function ReportTabs({
   });
 
   return (
-    <div role="tablist" aria-label="Report" className="mt-4 flex gap-1 border-b border-line print:hidden">
+    <div role="tablist" aria-label="Report" className="-mb-px flex gap-1 print:hidden">
       {[
         ['overview', 'Channel overview', `/channels/${channelId}`],
         ['relevance', 'Brand relevance', `/channels/${channelId}?${query}`],
@@ -35,7 +35,7 @@ export function ReportTabs({
           href={href}
           role="tab"
           aria-selected={view === id}
-          className={`-mb-px border-b-2 px-3 py-2 text-[13px] font-medium transition-colors ${
+          className={`border-b-2 px-2.5 pb-2.5 pt-1 text-[13px] font-medium transition-colors duration-150 ${
             view === id
               ? 'border-indigo text-indigo'
               : 'border-transparent text-ink-muted hover:text-ink'

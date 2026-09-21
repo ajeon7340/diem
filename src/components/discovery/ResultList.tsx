@@ -96,7 +96,7 @@ export function ResultList({
 
   return (
     <div className="space-y-3">
-      <div className="sticky top-[4.5rem] z-10 rounded-xl border border-line bg-surface/95 px-3.5 py-3 backdrop-blur">
+      <div className="surface sticky top-2 z-10 bg-surface/95 px-3.5 py-3 backdrop-blur">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <h2 className="text-[13px] font-semibold text-ink">
             {narrowed.length === candidates.length

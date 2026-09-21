@@ -955,7 +955,7 @@ void (async () => {
     ),
     true,
   );
-  check('and is bounded by the viewport so it can scroll inside', panel.includes('lg:max-h-[calc(100vh-7rem)]'), true);
+  check('and is bounded by the viewport so it can scroll inside', panel.includes('lg:max-h-[calc(100dvh-2rem)]'), true);
   check('below lg it is a drawer, not a squeezed column', panel.includes('lg:hidden') && panel.includes('aria-controls="discovery-filters"'), true);
   check('Escape closes it', panel.includes("event.key === 'Escape'"), true);
   check('and focus returns to the control that opened it', panel.includes('opener.current?.focus()'), true);

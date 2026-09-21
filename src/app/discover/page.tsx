@@ -8,7 +8,7 @@ import { FilterPanel } from '@/components/discovery/FilterPanel';
 import { ModeTabs } from '@/components/discovery/ModeTabs';
 import { ModeForm } from '@/components/discovery/SearchForms';
 import { StartGuide } from '@/components/discovery/StartGuide';
-import { SiteHeader } from '@/components/shell/SiteHeader';
+import { WorkspaceLayout } from '@/components/shell/WorkspaceLayout';
 import { getViewer } from '@/lib/access/viewer';
 import { getCampaign, getCampaigns } from '@/lib/data/campaigns';
 import { getBrands, pickBrand } from '@/lib/data/brands';
@@ -66,25 +66,25 @@ export default async function DiscoverPage({
   const jobs = await getSearchJobs(searches.map((s) => s.id));
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <SiteHeader />
-      <main className="flex-1 bg-paper">
-        <div className="mx-auto w-full max-w-[1440px] px-4 py-6 sm:px-6 lg:px-8">
-          {/* No visible page heading: the navigation already says which part of
-              the product this is, and repeating it costs a row on every visit.
-              The h1 stays for screen readers, which have no highlighted menu
-              item to go on. */}
-          <h1 className="sr-only">Discover creators</h1>
-
-          {campaign ? (
-            <p className="mb-4 rounded-lg border border-indigo/25 bg-indigo-wash px-3 py-2 text-[12px] text-indigo">
-              Searching for <strong className="font-semibold">{campaign.name}</strong>.{' '}
-              <Link href="/discover" className="underline underline-offset-4">
-                Clear
-              </Link>
-            </p>
-          ) : null}
-
+    <WorkspaceLayout
+      width="wide"
+      header={{
+        title: 'Discover creators',
+        meta: campaign ? (
+          <>
+            <span>
+              searching for <strong className="font-medium text-ink">{campaign.name}</strong>
+            </span>
+            <Link href="/discover" className="text-indigo underline-offset-4 hover:underline">
+              Clear
+            </Link>
+          </>
+        ) : undefined,
+      }}
+      bare
+    >
+      <main className="flex-1 px-4 py-5 sm:px-6">
+        <div className="mx-auto w-full max-w-[1480px]">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-6">
             <FilterPanel>
               <div className="shrink-0 space-y-3 border-b border-line p-3">
@@ -190,7 +190,7 @@ export default async function DiscoverPage({
           </div>
         </div>
       </main>
-    </div>
+    </WorkspaceLayout>
   );
 }
 

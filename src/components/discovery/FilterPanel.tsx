@@ -93,8 +93,8 @@ export function FilterPanel({
             : 'hidden',
           // Column at lg and up: the same rail width every other workspace page
           // uses, pinned under the header and never taller than the viewport.
-          `lg:static lg:z-auto lg:flex lg:max-h-[calc(100vh-7rem)] ${RAIL_WIDTH} lg:shrink-0 lg:self-start`,
-          'lg:sticky lg:top-24',
+          `lg:static lg:z-auto lg:flex lg:max-h-[calc(100dvh-2rem)] ${RAIL_WIDTH} lg:shrink-0 lg:self-start`,
+          'lg:sticky lg:top-4',
         ].join(' ')}
       >
         <button

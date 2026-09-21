@@ -79,17 +79,35 @@ export default async function CampaignsPage({
   return (
     <WorkspaceLayout
       width="wide"
+      header={{
+        // The page is named ONCE. It used to be named three times: a rail card
+        // headed "Campaigns", a sentence under it, and an "All campaigns"
+        // heading beside the table.
+        title: selectedBrand ? selectedBrand.name : 'Campaigns',
+        eyebrow: selectedBrand ? (agency ? 'Client' : 'Brand') : undefined,
+        meta: (
+          <>
+            <span className="tnum">
+              {shown.length} {shown.length === 1 ? 'campaign' : 'campaigns'}
+            </span>
+            {selectedBrand ? (
+              <Link href={href({ brand: null })} className="text-indigo underline-offset-4 hover:underline">
+                {agency ? 'All clients' : 'All brands'}
+              </Link>
+            ) : null}
+          </>
+        ),
+        primary: (
+          <Link
+            href="/campaigns/new"
+            className="press inline-flex min-h-9 items-center rounded-[var(--r-md)] bg-indigo px-3 text-[13px] font-medium text-white hover:bg-indigo-hover"
+          >
+            New campaign
+          </Link>
+        ),
+      }}
       panel={
-        <div className="space-y-4 rounded-2xl border border-line bg-surface p-4">
-          <PanelSection>
-            <p className="rail">{viewer.organization?.name ?? 'Campaigns'}</p>
-            <h1 className="mt-1.5 text-[17px] font-semibold tracking-tight text-ink">Campaigns</h1>
-            <p className="mt-1 text-[12px] text-ink-muted">Briefs and shortlists, private to this workspace.</p>
-            <Link href="/campaigns/new" className="primary-action mt-3 w-full">
-              New campaign
-            </Link>
-          </PanelSection>
-
+        <div className="surface space-y-4 p-4">
           {brands.length > 0 ? (
             <PanelSection title={agency ? 'Client brand' : 'Brand'}>
               <ul className="space-y-0.5">
@@ -142,22 +160,13 @@ export default async function CampaignsPage({
         </div>
       }
     >
-      <div className="flex flex-wrap items-baseline justify-between gap-3">
-        <h2 className="text-xl font-semibold tracking-tight text-ink">
-          {selectedBrand ? selectedBrand.name : 'All campaigns'}
-        </h2>
-        <p className="tnum text-[12px] text-ink-faint">
-          {shown.length} {shown.length === 1 ? 'campaign' : 'campaigns'}
-        </p>
-      </div>
-
       {!isSupabaseConfigured() ? (
-        <p className="mt-3 rounded-lg border border-amber/30 bg-amber-wash px-3 py-2 text-[12px] text-ink-muted">
+        <p className="mb-3 rounded-[var(--r-md)] border border-amber/30 bg-amber-wash px-3 py-2 text-[12px] text-ink-muted">
           Campaigns can’t be saved yet. Ask whoever administers this workspace to finish setup.
         </p>
       ) : null}
 
-      <div className="surface-card mt-4 overflow-hidden">
+      <div className="surface overflow-hidden">
         {shown.length === 0 ? (
           <div className="px-5 py-12 text-center">
             <p className="text-[13px] font-medium text-ink">
@@ -170,28 +179,28 @@ export default async function CampaignsPage({
             </p>
             <Link
               href={campaigns.length === 0 ? '/campaigns/new' : '/campaigns'}
-              className="primary-action mt-5"
+              className="press mt-4 inline-flex min-h-9 items-center rounded-[var(--r-md)] bg-indigo px-3 text-[13px] font-medium text-white hover:bg-indigo-hover"
             >
               {campaigns.length === 0 ? 'Create a campaign' : 'Show all campaigns'}
             </Link>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] text-left text-[13px]">
+          <div className="table-scroll">
+            <table className="data-table min-w-[760px]">
               <caption className="sr-only">Campaigns in this workspace</caption>
-              <thead className="border-b border-line bg-paper text-[11px] uppercase tracking-[0.08em] text-ink-faint">
+              <thead>
                 <tr>
-                  <th scope="col" className="px-4 py-2.5 font-medium">Campaign</th>
-                  <th scope="col" className="px-4 py-2.5 font-medium">{agency ? 'Client' : 'Brand'}</th>
-                  <th scope="col" className="px-4 py-2.5 font-medium">Objective</th>
-                  <th scope="col" className="px-4 py-2.5 font-medium">Candidates</th>
-                  <th scope="col" className="px-4 py-2.5 font-medium">Last activity</th>
+                  <th scope="col">Campaign</th>
+                  <th scope="col">{agency ? 'Client' : 'Brand'}</th>
+                  <th scope="col">Objective</th>
+                  <th scope="col" className="w-40">Candidates</th>
+                  <th scope="col" className="w-32">Last activity</th>
                 </tr>
               </thead>
               <tbody>
                 {shown.map((campaign) => (
-                  <tr key={campaign.id} className="border-b border-line last:border-0 hover:bg-paper">
-                    <td className="px-4 py-3">
+                  <tr key={campaign.id}>
+                    <td>
                       <Link
                         href={`/campaigns/${campaign.id}`}
                         className="font-medium text-ink hover:text-indigo"
@@ -204,16 +213,16 @@ export default async function CampaignsPage({
                         </p>
                       ) : null}
                     </td>
-                    <td className="px-4 py-3 text-[12px] text-ink-muted">
+                    <td className="text-[12px] text-ink-muted">
                       {campaign.brandName ?? campaign.brand ?? <span className="text-ink-faint">Not set</span>}
                       {campaign.brandName === null && campaign.brand ? (
                         <span className="ml-1.5 text-[10px] text-ink-faint">unlinked</span>
                       ) : null}
                     </td>
-                    <td className="px-4 py-3 text-[12px] text-ink-muted">
+                    <td className="text-[12px] text-ink-muted">
                       {campaign.objective ?? <span className="text-ink-faint">Not stated</span>}
                     </td>
-                    <td className="px-4 py-3">
+                    <td>
                       <span className="tnum text-[12px] text-ink">{campaign.candidateCount} of 5</span>
                       {campaign.shortlistedCount > 0 ? (
                         <Badge tone="emerald" className="ml-2">
@@ -221,7 +230,7 @@ export default async function CampaignsPage({
                         </Badge>
                       ) : null}
                     </td>
-                    <td className="tnum px-4 py-3 text-[12px] text-ink-muted">
+                    <td className="tnum text-[12px] text-ink-muted">
                       {new Date(campaign.lastActivityAt).toLocaleDateString('en-GB', {
                         day: 'numeric',
                         month: 'short',

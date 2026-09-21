@@ -66,20 +66,29 @@ export default async function Channels({
   return (
     <WorkspaceLayout
       width="wide"
+      header={{
+        title: 'Channel analysis',
+        meta: (
+          <>
+            <span className="tnum">
+              {shown.length} shown{query ? ` for “${query}”` : ''}
+            </span>
+            <span className="tnum">{rows.length} saved</span>
+            <span>reports expire 30 days after collection</span>
+          </>
+        ),
+        summary: 'Reports are reused when you add a channel to a campaign — nothing is collected twice.',
+      }}
       panel={
-        <div className="space-y-4 rounded-2xl border border-line bg-surface p-4">
-          <PanelSection>
-            <p className="rail">Channel analysis</p>
-            <h1 className="mt-1.5 text-[17px] font-semibold tracking-tight text-ink">
-              New channel analysis
-            </h1>
-            <p className="mt-1 text-[12px] text-ink-muted">Paste a URL or @handle.</p>
-            <div className="mt-3">
-              <ChannelEntry initial={searchParams.channel} resolved={resolved} />
-            </div>
+        <div className="surface space-y-4 p-4">
+          {/* THE LOOKUP IS THE PAGE'S ONE CONTROL, so it leads the rail. The
+              heading it used to sit under said "New channel analysis" beside a
+              page header that said "Channel analysis". */}
+          <PanelSection title="Analyse a channel">
+            <ChannelEntry initial={searchParams.channel} resolved={resolved} />
           </PanelSection>
 
-          <PanelSection title="Report library">
+          <PanelSection title="Filter">
             <form method="get" action="/channels" className="mb-3">
               {active !== 'all' ? <input type="hidden" name="state" value={active} /> : null}
               <label className="sr-only" htmlFor="library-search">
@@ -96,24 +105,11 @@ export default async function Channels({
               />
             </form>
             <FilterLinks options={counts} active={active} hrefFor={href} legend="Filter reports" />
-            <p className="mt-3 text-[11px] text-ink-faint">
-              {rows.length} saved · reports expire 30 days after collection
-            </p>
           </PanelSection>
         </div>
       }
     >
-      <div className="flex flex-wrap items-baseline justify-between gap-3">
-        <h2 className="text-xl font-semibold tracking-tight text-ink">Your channel reports</h2>
-        <p className="tnum text-[12px] text-ink-faint">
-          {shown.length} shown{query ? ` for “${query}”` : ''}
-        </p>
-      </div>
-      <p className="mt-1.5 text-[12px] text-ink-muted">
-        Reused when you add a channel to a campaign — nothing is collected twice.
-      </p>
-
-      <div className="surface-card mt-4 overflow-hidden">
+      <div className="surface overflow-hidden">
         {shown.length === 0 ? (
           <div className="px-5 py-12 text-center">
             <p className="text-[13px] font-medium text-ink">

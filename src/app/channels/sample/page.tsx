@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { ChannelReport } from '@/components/channel/ChannelReport';
 import { PrintReport } from '@/components/channel/ReportActions';
 import { RelevanceReport } from '@/components/report/RelevanceReport';
-import { SiteHeader } from '@/components/shell/SiteHeader';
+import { WorkspaceLayout } from '@/components/shell/WorkspaceLayout';
 import type { ChannelReportView } from '@/lib/channel/report';
 import { requirementMatrix, type RelevanceContext } from '@/lib/relevance/requirements';
 import { AMENDMENT_ACCEPTED } from '@/lib/report/policy';
@@ -153,21 +153,24 @@ const CONTEXT: RelevanceContext = {
   },
 };
 
-export default function Sample() {
+export default async function Sample() {
   const rows = requirementMatrix(REPORT, CONTEXT);
 
   return (
-    <>
-      <SiteHeader />
-      <main className="report-page mx-auto max-w-5xl px-6 py-10">
+    <WorkspaceLayout
+      header={{
+        eyebrow: 'Channel analysis',
+        title: 'Sample report',
+        meta: <span>A fictional creator, so the two reports can be read before analysing anything.</span>,
+        secondary: <PrintReport />,
+      }}
+      bare
+    >
+      <main className="report-page mx-auto max-w-5xl px-4 py-6 sm:px-6">
         <p className="mb-4 rounded-lg border border-amber/40 bg-amber-wash px-4 py-3 text-[13px] font-medium text-ink">
           Sample · a fictional creator and a fictional brand. Every figure, title and link here is
           invented, and none refers to a real channel.
         </p>
-        <div className="print:hidden">
-          <PrintReport />
-        </div>
-
         <ChannelReport report={REPORT} />
 
         <div className="mt-10 border-t border-line pt-8">
@@ -192,6 +195,6 @@ export default function Sample() {
           </Link>
         </p>
       </main>
-    </>
+    </WorkspaceLayout>
   );
 }
