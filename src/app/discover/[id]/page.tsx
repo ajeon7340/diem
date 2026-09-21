@@ -8,6 +8,7 @@ import { EmptyState } from '@/components/discovery/EmptyState';
 import { ContextBar } from '@/components/discovery/ContextBar';
 import { FilterPanel } from '@/components/discovery/FilterPanel';
 import { ModeTabs } from '@/components/discovery/ModeTabs';
+import { NarrowingProvider, PerformanceFilters } from '@/components/discovery/Narrowing';
 import { ResultList } from '@/components/discovery/ResultList';
 import { ModeForm } from '@/components/discovery/SearchForms';
 import { SiteHeader } from '@/components/shell/SiteHeader';
@@ -115,6 +116,9 @@ export default async function DiscoveryResults({ params }: { params: { id: strin
             ) : null}
           </div>
 
+          {/* The provider wraps BOTH columns: the performance filters render in
+              the rail, the rows they hide are in the list beside it. */}
+          <NarrowingProvider>
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-6">
             <FilterPanel summary={filterSummary(search.mode, search.params)}>
               <div className="shrink-0 space-y-3 border-b border-line p-3">
@@ -134,6 +138,10 @@ export default async function DiscoveryResults({ params }: { params: { id: strin
                 defaults={context.defaults}
                 context={context}
               />
+              {/* Below the form and outside it, because Search does not apply
+                  these — they narrow the rows already retrieved, the moment
+                  they change. Nothing to narrow, nothing to show. */}
+              {candidates.length > 0 ? <PerformanceFilters /> : null}
             </FilterPanel>
 
             <div className="min-w-0 flex-1 space-y-4">
@@ -256,6 +264,7 @@ export default async function DiscoveryResults({ params }: { params: { id: strin
               </footer>
             </div>
           </div>
+          </NarrowingProvider>
         </div>
       </main>
     </div>

@@ -83,3 +83,69 @@ export function inBands(value: number | null, bands: Band[]): boolean | null {
   if (value === null) return null;
   return bands.length === 0 || bands.some((item) => inBand(value, item));
 }
+
+/**
+ * The same question asked with two ends instead of one pick.
+ *
+ * A band is one choice out of six, which is fine until somebody wants "15,000
+ * to 200,000" and the bands nearest it are "10,000 – 100,000" and "100,000 –
+ * 1M". A range lets them say the thing they meant. Both live here because both
+ * are read the same way — see `inRange` and `inBand`, which agree on the one
+ * rule that matters: an unmeasured figure is not a small one.
+ *
+ * STEPS, NOT A TEXT BOX. The ends are chosen from a list rather than typed, so
+ * there is no "17,428 subscribers" filter implying a precision the retrieved
+ * rows do not have, and no keystroke that silently filters the page away.
+ *
+ * STILL A POST-RETRIEVAL FILTER, exactly as the bands were. `search.list` takes
+ * no subscriber or view parameter, so "100K to 1M" narrows the rows this search
+ * read — never all of YouTube.
+ */
+export interface Range {
+  /** Inclusive lower bound. Null is unbounded, never zero. */
+  min: number | null;
+  /** Inclusive upper bound. Null is unbounded. */
+  max: number | null;
+}
+
+export const NO_RANGE: Range = { min: null, max: null };
+
+export const SUBSCRIBER_STEPS = [
+  1_000, 5_000, 10_000, 25_000, 50_000, 100_000, 250_000, 500_000, 1_000_000, 5_000_000, 10_000_000,
+];
+
+/**
+ * Lower ceiling than subscribers on purpose: this is the median of a handful of
+ * videos one search retrieved, not a channel's lifetime reach.
+ */
+export const VIEW_STEPS = [
+  1_000, 5_000, 10_000, 25_000, 50_000, 100_000, 250_000, 500_000, 1_000_000, 5_000_000,
+];
+
+export function rangeIsSet({ min, max }: Range): boolean {
+  return min !== null || max !== null;
+}
+
+/**
+ * True inside, false outside, null unmeasured — and true for everyone when
+ * nothing has been set.
+ *
+ * The null is the whole point. A channel that hides its subscriber count has
+ * not failed a "over 10,000" filter; it has declined to answer it. Callers keep
+ * those rows and say how many they kept, rather than deleting a creator for
+ * privacy settings they chose.
+ */
+export function inRange(value: number | null, range: Range): boolean | null {
+  if (!rangeIsSet(range)) return true;
+  if (value === null) return null;
+  if (range.min !== null && value < range.min) return false;
+  if (range.max !== null && value > range.max) return false;
+  return true;
+}
+
+/** 1K, 250K, 10M — the rail is 300px wide and "10,000,000" does not fit twice. */
+export function stepLabel(value: number): string {
+  if (value >= 1_000_000) return `${value / 1_000_000}M`;
+  if (value >= 1_000) return `${value / 1_000}K`;
+  return String(value);
+}

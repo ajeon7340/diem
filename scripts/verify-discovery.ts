@@ -1115,19 +1115,29 @@ void (async () => {
   // done. What is asserted is that they still exist and still say what they
   // measure, not where they sit.
   check('the form no longer spends a search on a size filter', criteriaForm.includes('name="subscribers"'), false);
-  check('subscribers narrow the results live', list.includes('SUBSCRIBER_BANDS'), true);
-  check('and so do views', list.includes('VIEW_BANDS'), true);
-  check('neither runs a new search', list.includes('No new search runs.'), true);
+  const narrowing = readFileSync('src/components/discovery/Narrowing.tsx', 'utf8');
+  check('subscribers narrow the results live, from the rail', narrowing.includes('SUBSCRIBER_STEPS'), true);
+  check('and so do views', narrowing.includes('VIEW_STEPS'), true);
+  check('the list reads them rather than owning them', list.includes('useNarrowing()'), true);
   check(
     'an unmeasured figure is kept rather than filtered out',
-    list.includes('inBand(candidate.subscribers, subBand)') && list.includes('=== false'),
+    list.includes('inRange(candidate.subscribers, subscribers)') && list.includes('=== false'),
     true,
   );
   check(
-    'the view band still says whose median it is',
-    list.includes('Median views of the videos this search retrieved'),
+    'and how many were kept that way is printed',
+    list.includes('with figures hidden, kept'),
     true,
   );
+  check(
+    'select all selects what is shown, not what was hidden',
+    list.includes('narrowed.map((c) => c.channelId)'),
+    true,
+  );
+  // The three filters Modash-style panels put beside these two cannot be
+  // honest here, so there is no disabled control pretending otherwise.
+  check('no growth filter is offered', narrowing.includes('growth rate'), false);
+  check('and the absence is stated rather than left blank', narrowing.includes('No growth or engagement rates'), true);
   check(
     'and the form now offers Location where topics used to be',
     criteriaForm.includes('label="Location"'),

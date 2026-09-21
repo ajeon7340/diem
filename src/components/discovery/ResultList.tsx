@@ -10,7 +10,8 @@ import {
 } from '@/app/actions/discovery';
 import { INITIAL_DISCOVERY } from '@/app/actions/state';
 import { ResultCard } from './ResultCard';
-import { SUBSCRIBER_BANDS, VIEW_BANDS, band, inBand, medianViews } from '@/lib/discovery/ranges';
+import { useNarrowing } from './Narrowing';
+import { inRange, medianViews, rangeIsSet } from '@/lib/discovery/ranges';
 import type { DiscoveryCandidate } from '@/lib/discovery/types';
 
 /**
@@ -53,34 +54,32 @@ export function ResultList({
   /**
    * LIVE, BECAUSE THESE NEVER TOUCHED THE SEARCH.
    *
-   * Subscriber count and typical views are applied to rows that came back, not
-   * to the index — `search.list` has no parameter for either. They used to sit
-   * in the search form, where changing one meant spending another of the day's
-   * hundred searches to re-narrow results already on the screen. Here they
-   * narrow instantly and cost nothing.
-   *
-   * The filters that DO change the query — category, location, language — stay
-   * in the form, because changing them genuinely means asking YouTube a
-   * different question.
+   * Subscriber count and typical views are read off rows that came back, not
+   * asked of the index — `search.list` has no parameter for either. The two
+   * controls live in the filter rail, which is where somebody looks for them;
+   * the state lives above both columns. See `Narrowing`.
    */
-  const [subs, setSubs] = useState('any');
-  const [views, setViews] = useState('any');
+  const { subscribers, views } = useNarrowing();
   const [saveState, save] = useFormState(saveCandidates, INITIAL_DISCOVERY);
   const [campaignState, addToCampaign] = useFormState(addCandidatesToCampaign, INITIAL_DISCOVERY);
 
-  const narrowed = useMemo(() => {
-    const subBand = band(SUBSCRIBER_BANDS, subs);
-    const viewBand = band(VIEW_BANDS, views);
-    return candidates.filter((candidate) => {
-      // Unmeasured is kept, never dropped: a hidden subscriber count is not a
-      // small one, and a channel whose retrieved videos reported no views has
-      // not failed the filter.
-      const bySubs = inBand(candidate.subscribers, subBand);
-      if (bySubs === false) return false;
-      const byViews = inBand(medianViews(candidate.evidence.map((e) => e.views)), viewBand);
-      return byViews !== false;
-    });
-  }, [candidates, subs, views]);
+  // Unmeasured is kept, never dropped: a hidden subscriber count is not a small
+  // one, and a channel whose retrieved videos reported no views has not failed
+  // the filter. How many were kept that way is COUNTED and printed, so "12 of
+  // 40" never quietly includes rows the filter could not actually judge.
+  const { narrowed, unjudged } = useMemo(() => {
+    const kept: DiscoveryCandidate[] = [];
+    let unjudged = 0;
+    for (const candidate of candidates) {
+      const bySubs = inRange(candidate.subscribers, subscribers);
+      if (bySubs === false) continue;
+      const byViews = inRange(medianViews(candidate.evidence.map((e) => e.views)), views);
+      if (byViews === false) continue;
+      if (bySubs === null || byViews === null) unjudged += 1;
+      kept.push(candidate);
+    }
+    return { narrowed: kept, unjudged };
+  }, [candidates, subscribers, views]);
 
   const shown = useMemo(() => {
     if (order === 'search') return narrowed;
@@ -107,40 +106,16 @@ export function ResultList({
           <span className="text-[11px] text-ink-faint">
             {ranked ? 'ranked by adfit' : 'in the order YouTube returned'}
           </span>
+          {/* Said out loud rather than folded into the count: with a range set,
+              these are rows the filter could not judge, kept because a hidden
+              figure is not a failing one. */}
+          {unjudged > 0 && (rangeIsSet(subscribers) || rangeIsSet(views)) ? (
+            <span className="tnum text-[11px] text-ink-faint">
+              {unjudged} with figures hidden, kept
+            </span>
+          ) : null}
 
-          <label className="ml-auto flex items-center gap-1.5 text-[11px] text-ink-muted">
-            <span className="sr-only sm:not-sr-only">Subscribers</span>
-            <select
-              value={subs}
-              onChange={(event) => setSubs(event.target.value)}
-              className="min-h-8 rounded-lg border border-line bg-surface px-2 text-[12px] text-ink"
-              title="Narrows the results already on this page. No new search runs."
-            >
-              {SUBSCRIBER_BANDS.map((option) => (
-                <option key={option.id} value={option.id}>
-                  {option.id === 'any' ? 'Any size' : option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="flex items-center gap-1.5 text-[11px] text-ink-muted">
-            <span className="sr-only sm:not-sr-only">Views</span>
-            <select
-              value={views}
-              onChange={(event) => setViews(event.target.value)}
-              className="min-h-8 rounded-lg border border-line bg-surface px-2 text-[12px] text-ink"
-              title="Median views of the videos this search retrieved. Narrows this page only."
-            >
-              {VIEW_BANDS.map((option) => (
-                <option key={option.id} value={option.id}>
-                  {option.id === 'any' ? 'Any views' : option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="flex items-center gap-2 text-[11px] text-ink-muted">
+          <label className="ml-auto flex items-center gap-2 text-[11px] text-ink-muted">
             <span className="sr-only sm:not-sr-only">Order</span>
             <select
               value={order}
@@ -170,11 +145,14 @@ export function ResultList({
 
         <div className="mt-2.5 flex flex-wrap items-center gap-2 border-t border-line pt-2.5">
           <label className="inline-flex items-center gap-2 text-[12px] text-ink">
+            {/* Select all selects what is SHOWN. Selecting rows a filter has
+                hidden, and then saving them, is how somebody ends up with a
+                shortlist they never saw. */}
             <input
               type="checkbox"
               className="h-4 w-4"
-              checked={selected.length === candidates.length && candidates.length > 0}
-              onChange={(event) => setSelected(event.target.checked ? candidates.map((c) => c.channelId) : [])}
+              checked={narrowed.length > 0 && selected.length === narrowed.length}
+              onChange={(event) => setSelected(event.target.checked ? narrowed.map((c) => c.channelId) : [])}
             />
             Select all
           </label>
