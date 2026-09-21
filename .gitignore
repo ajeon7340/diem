@@ -39,4 +39,5 @@ next-env.d.ts
 /supabase/.temp/
 
 # Agent skills installed for tooling, not project code
-/.agents/
+/.agents/skills/
+/.claude/skills/
