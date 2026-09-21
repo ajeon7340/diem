@@ -7,7 +7,8 @@ import { RelevanceReport } from '@/components/report/RelevanceReport';
 import { SiteHeader } from '@/components/shell/SiteHeader';
 import type { ChannelReportView } from '@/lib/channel/report';
 import { requirementMatrix, type RelevanceContext } from '@/lib/relevance/requirements';
-import type { Promotion } from '@/types';
+import { AMENDMENT_ACCEPTED } from '@/lib/report/policy';
+import type { CommentCluster, Promotion } from '@/types';
 
 export const metadata: Metadata = { title: 'Sample report' };
 export const dynamic = 'force-dynamic';
@@ -59,6 +60,38 @@ const PROMOTIONS: Promotion[] = [
   } as Promotion,
 ];
 
+/**
+ * Illustrative comment themes.
+ *
+ * Rendered only where the derived-analysis approval is configured, exactly as a
+ * real report's would be — the sample reads the same flag rather than forcing
+ * the section on, so what it shows is what this deployment can actually do.
+ */
+const CLUSTERS: CommentCluster[] = [
+  {
+    id: 'sample-c1',
+    label: 'Questions about grind size for espresso',
+    share: 0.34,
+    commentCount: 68,
+    sentiment: null,
+    exampleComment: 'What setting are you on for a 18g dose?',
+    comments: [
+      { text: 'What setting are you on for a 18g dose?', postTitle: 'Grind size in 40 seconds', url: null, likes: 12, publishedAt: new Date(NOW - 40 * DAY).toISOString() },
+    ],
+  },
+  {
+    id: 'sample-c2',
+    label: 'Asking whether it works for travel',
+    share: 0.19,
+    commentCount: 38,
+    sentiment: null,
+    exampleComment: 'Would this survive being thrown in a rucksack?',
+    comments: [
+      { text: 'Would this survive being thrown in a rucksack?', postTitle: '집에서 에스프레소 내리기', url: null, likes: 5, publishedAt: new Date(NOW - 32 * DAY).toISOString() },
+    ],
+  },
+] as CommentCluster[];
+
 const REPORT: ChannelReportView = {
   channelId: 'sample',
   title: 'Everyday Workshop',
@@ -71,13 +104,14 @@ const REPORT: ChannelReportView = {
   end: new Date(NOW).toISOString(),
   windowDays: 90,
   videos: VIDEOS,
-  comments: 0,
+  // The corpus exists either way; whether it can be CLASSIFIED is the gate.
+  comments: AMENDMENT_ACCEPTED ? 201 : 0,
   unreadable: 1,
   truncated: false,
   promotions: PROMOTIONS,
-  clusters: [],
-  derivedAllowed: false,
-  analysedAt: null,
+  clusters: AMENDMENT_ACCEPTED ? CLUSTERS : [],
+  derivedAllowed: AMENDMENT_ACCEPTED,
+  analysedAt: AMENDMENT_ACCEPTED ? new Date(NOW).toISOString() : null,
   contentProfile: null,
 };
 

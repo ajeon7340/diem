@@ -395,9 +395,8 @@ function CommentBlock({ report }: { report: ChannelReportView }) {
           </p>
           {report.unreadable > 0 ? (
             <p className="mb-2 text-[11px] leading-relaxed text-ink-muted">
-              Comments could not be read on {report.unreadable} sampled upload
-              {report.unreadable === 1 ? '' : 's'}. That limits the evidence and says nothing negative
-              about the audience.
+              {`Comments could not be read on ${report.unreadable} sampled upload${report.unreadable === 1 ? '' : 's'}.`}{' '}
+              That limits the evidence and says nothing negative about the audience.
             </p>
           ) : null}
           <ul className="space-y-2.5">

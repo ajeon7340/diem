@@ -182,5 +182,39 @@ check('no operator configuration is exposed', /ADFIT_|operator|environment varia
 check('and nothing here could enable restricted analysis', /AMENDMENT_ACCEPTED/.test(settings), false);
 check('sharing keeps revoke and expiry', settings.includes('revokeShare') && settings.includes('Expires'), true);
 
+// ---------------------------------------------------------------------------
+// The channel report page joins the shell
+//
+// Status, the actions and the view control used to sit in a stack above the
+// report, where all three scrolled away the moment anybody started reading —
+// and "is this finished?" is the question they exist to answer.
+// ---------------------------------------------------------------------------
+
+const CHANNEL_DETAIL = 'src/app/channels/[id]/page.tsx';
+const detail = code(CHANNEL_DETAIL);
+check('the report page uses the shared shell', detail.includes('<WorkspaceLayout'), true);
+check('and pins its rail, like the campaign decision page', /<WorkspaceLayout[\s\S]{0,120}sticky/.test(detail), true);
+// Compared on the section titles, not the words: the first version matched the
+// `ReportActions` import at the top of the file and reported the rail backwards.
+check(
+  'status leads the rail',
+  detail.indexOf('title="Status"') < detail.indexOf('title="Actions"'),
+  true,
+);
+check('add-to-campaign and share live in the rail', /panel=\{[\s\S]*?<ReportActions/.test(detail), true);
+check('so does the format control', /panel=\{[\s\S]*?htmlFor="format"/.test(detail), true);
+check('the tabs stay with the report, not in the rail', detail.indexOf('<ReportTabs') > detail.indexOf('</aside>') || !detail.includes('</aside>'), true);
+check('the old tinted status bar is gone', detail.includes('bg-indigo-wash p-4 text-sm'), false);
+
+const actions = code('src/components/channel/ReportActions.tsx');
+check('the actions fit a narrow rail rather than a full-width row', actions.includes('my-6 space-y-4'), false);
+check('add to campaign is still offered', actions.includes('Add to campaign'), true);
+check('and sharing still names what the link will show', actions.includes('What the link shows'), true);
+
+// The comment gate is environment-only and stays that way.
+const sample = code('src/app/channels/sample/page.tsx');
+check('the sample reads the real approval flag rather than forcing themes on', sample.includes('AMENDMENT_ACCEPTED ? CLUSTERS : []'), true);
+check('and its derivedAllowed comes from the same flag', sample.includes('derivedAllowed: AMENDMENT_ACCEPTED'), true);
+
 console.log(`\n  ${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);

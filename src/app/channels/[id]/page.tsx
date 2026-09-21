@@ -1,7 +1,8 @@
 import { CollaborationRecords } from '@/components/channel/CollaborationRecords';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
-import { SiteHeader } from '@/components/shell/SiteHeader';
+import { PanelSection, WorkspaceLayout } from '@/components/shell/WorkspaceLayout';
+import { Badge } from '@/components/ui/Badge';
 import { ChannelReport } from '@/components/channel/ChannelReport';
 import { LiveReport, ReportActions } from '@/components/channel/ReportActions';
 import { getViewer } from '@/lib/access/viewer';
@@ -42,27 +43,151 @@ export default async function ReportPage({params,searchParams}:{params:{id:strin
  const freshness=context&&report?freshnessOf(stored?{evidenceFetchedAt:stored.evidenceFetchedAt,contextFingerprint:stored.contextFingerprint}:null,report.fetchedAt,contextFingerprint(context)):'missing';
  const active=jobs.some(j=>j.status==='queued'||j.status==='running');
  const state=reportState(jobs,!!report,(report?.derivedAllowed && !report.comments ? 0 : report?.videos.length)??0,(report?.unreadable??0)>0);
- return <><SiteHeader/><main className="report-page mx-auto max-w-5xl px-6 py-10"><Link className="text-sm text-indigo print:hidden" href="/channels">← Channel analysis</Link><LiveReport active={active}/><div className="my-5 rounded border bg-indigo-wash p-4 text-sm print:hidden"><strong>{state}</strong>{active&&<span className="ml-2 text-ink-muted">Safe to leave — this continues in the background.</span>}<AnalysisProgress jobs={jobs}/>{report&&active&&<p className="mt-2 text-[12px] text-ink-muted">Results from {new Date(report.fetchedAt).toLocaleString('en-US')} stay below until the new ones land.</p>}{state==='Failed'&&<p className="mt-2">Collection failed. Nothing negative about this channel is implied.</p>}</div>
- <ReportActions channelId={params.id} campaigns={campaigns} brands={brands.map(b=>({id:b.id,name:b.name}))} days={report?.windowDays}/>
- <ReportTabs channelId={params.id} view={view} brand={searchParams.brand??null} campaign={searchParams.campaign??null}/>
- {view==='overview'?(report?<><form className="my-5 flex items-center gap-3 text-sm print:hidden"><label>Content format <select name="format" defaultValue={searchParams.format??'all'} className="rounded border p-2"><option value="all">All formats</option><option value="short">Shorts / short videos (proxy)</option><option value="long">Long-form</option></select></label><button className="text-indigo">Apply view</button></form><ChannelReport report={report} format={['short','long'].includes(searchParams.format??'')?searchParams.format:'all'}/></>:
- /* FIVE STATES, and the one that used to be missing is `expired`. A row that
-    exists but is past its 30-day deadline came back null from `publicReport`
-    and rendered as "no current report", which reads as never collected —
-    opposite events, identical sentence. */
- <div className="py-6 text-sm"><p className="font-medium">{row?'This report has passed its retention deadline':active?'Collecting now':state==='Failed'?'Collection could not be completed':'Not collected yet'}</p><p className="mt-1.5 max-w-[60ch] leading-relaxed text-ink-muted">{row
-  ?`Public data is deleted 30 days after collection. Refresh to collect it again.`
-  :active
-   ?'Results appear when collection finishes.'
-   :state==='Failed'
-    ?'Our collection failed — this says nothing about the channel. Try again.'
-    :'Start analysis to collect this channel’s public evidence.'}</p></div>)
- :<div className="my-5 space-y-5">
-  <div className="rounded-xl border border-line bg-surface p-4 print:hidden"><RelevanceLauncher channelId={params.id} brands={brands.map(b=>({id:b.id,name:b.name}))} campaigns={campaigns.map(c=>({id:c.id,name:c.name,brandId:c.brandId}))} selectedBrand={selectedBrand?.id??null} selectedCampaign={selectedCampaign?.id??null} hasStored={Boolean(stored)}/></div>
-  {!report?<p className="text-sm text-ink-muted">There is no current evidence for this channel, so there is nothing to read against a brand. Collect it first.</p>
-   :!context?<p className="text-sm text-ink-muted">Choose a brand to analyse this channel against. The channel report needs no brand.</p>
-   :<RelevanceReport report={report} context={context} rows={stored?.matrix?.length?stored.matrix:requirementMatrix(report,context)} narrative={stored?.narrative??null} freshness={freshness} writtenAt={stored?.createdAt??null} writtenAgainst={stored?.evidenceFetchedAt??null}/>}
- </div>}
- <CollaborationRecords channelId={params.id} records={records??[]}/>
- </main></>;
+
+ const overview = view === 'overview';
+ const stateTone = active ? 'indigo' : state === 'Failed' ? 'rose' : state.startsWith('Partially') || state.includes('insufficient') ? 'amber' : report ? 'emerald' : 'slate';
+
+ return (
+  <WorkspaceLayout
+   width="wide"
+   sticky
+   panel={
+    <div className="space-y-4 rounded-2xl border border-line bg-surface p-4 print:hidden">
+     <PanelSection>
+      <Link href="/channels" className="text-[11px] text-ink-muted underline-offset-4 hover:underline">
+       ← Channel analysis
+      </Link>
+      <div className="mt-2 flex items-center gap-2.5">
+       {report?.avatar ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={report.avatar} alt="" width={36} height={36} className="h-9 w-9 shrink-0 rounded-full" />
+       ) : null}
+       <div className="min-w-0">
+        <h1 className="truncate text-[15px] font-semibold tracking-tight text-ink">{report?.title ?? params.id}</h1>
+        {report?.handle ? <p className="truncate text-[11px] text-ink-muted">{report.handle}</p> : null}
+       </div>
+      </div>
+     </PanelSection>
+
+     {/* STATUS LEADS THE RAIL. It was a tinted bar above the report, where it
+         scrolled away the moment anybody started reading — and it is the one
+         thing that answers "is this finished?". */}
+     <PanelSection title="Status">
+      <Badge tone={stateTone}>{state}</Badge>
+      {active ? (
+       <p className="mt-1.5 text-[11px] leading-relaxed text-ink-muted">
+        Safe to leave — this continues in the background.
+       </p>
+      ) : null}
+      <AnalysisProgress jobs={jobs} />
+      {report && active ? (
+       <p className="tnum mt-1.5 text-[11px] text-ink-faint">
+        Showing the collection from {new Date(report.fetchedAt).toLocaleDateString('en-GB')} until the new one lands.
+       </p>
+      ) : null}
+      {state === 'Failed' ? (
+       <p className="mt-1.5 text-[11px] leading-relaxed text-ink-muted">
+        Our collection failed. Nothing about this channel is implied.
+       </p>
+      ) : null}
+     </PanelSection>
+
+     <PanelSection title="Actions">
+      <ReportActions
+       channelId={params.id}
+       campaigns={campaigns}
+       brands={brands.map((b) => ({ id: b.id, name: b.name }))}
+       days={report?.windowDays}
+      />
+     </PanelSection>
+
+     {overview && report ? (
+      <PanelSection title="View">
+       <form className="space-y-1.5">
+        {searchParams.brand ? <input type="hidden" name="brand" value={searchParams.brand} /> : null}
+        <label className="block text-[12px] font-medium text-ink" htmlFor="format">
+         Content format
+        </label>
+        <select
+         id="format"
+         name="format"
+         defaultValue={searchParams.format ?? 'all'}
+         className="min-h-10 w-full rounded-lg border border-line bg-surface px-2.5 text-[13px]"
+        >
+         <option value="all">All formats</option>
+         <option value="short">Short, 3 min or less (proxy)</option>
+         <option value="long">Long-form</option>
+        </select>
+        <button className="text-[12px] text-indigo underline-offset-4 hover:underline">Apply</button>
+       </form>
+      </PanelSection>
+     ) : null}
+    </div>
+   }
+  >
+   <LiveReport active={active} />
+   <ReportTabs channelId={params.id} view={view} brand={searchParams.brand ?? null} campaign={searchParams.campaign ?? null} />
+
+   {overview ? (
+    report ? (
+     <div className="mt-5">
+      <ChannelReport report={report} format={['short', 'long'].includes(searchParams.format ?? '') ? searchParams.format : 'all'} />
+     </div>
+    ) : (
+     /* FIVE STATES, and the one that used to be missing is `expired`. A row
+        that exists but is past its 30-day deadline came back null from
+        `publicReport` and rendered as "no current report", which reads as never
+        collected — opposite events, identical sentence. */
+     <div className="py-8 text-sm">
+      <p className="font-medium">
+       {row ? 'This report has passed its retention deadline' : active ? 'Collecting now' : state === 'Failed' ? 'Collection could not be completed' : 'Not collected yet'}
+      </p>
+      <p className="mt-1.5 max-w-[60ch] leading-relaxed text-ink-muted">
+       {row
+        ? 'Public data is deleted 30 days after collection. Refresh to collect it again.'
+        : active
+         ? 'Results appear when collection finishes.'
+         : state === 'Failed'
+          ? 'Our collection failed — this says nothing about the channel. Try again.'
+          : 'Start analysis to collect this channel’s public evidence.'}
+      </p>
+     </div>
+    )
+   ) : (
+    <div className="mt-5 space-y-5">
+     <div className="rounded-xl border border-line bg-surface p-4 print:hidden">
+      <RelevanceLauncher
+       channelId={params.id}
+       brands={brands.map((b) => ({ id: b.id, name: b.name }))}
+       campaigns={campaigns.map((c) => ({ id: c.id, name: c.name, brandId: c.brandId }))}
+       selectedBrand={selectedBrand?.id ?? null}
+       selectedCampaign={selectedCampaign?.id ?? null}
+       hasStored={Boolean(stored)}
+      />
+     </div>
+     {!report ? (
+      <p className="text-sm text-ink-muted">
+       There is no current evidence for this channel, so there is nothing to read against a brand. Collect it first.
+      </p>
+     ) : !context ? (
+      <p className="text-sm text-ink-muted">
+       Choose a brand to analyse this channel against. The channel report needs no brand.
+      </p>
+     ) : (
+      <RelevanceReport
+       report={report}
+       context={context}
+       rows={stored?.matrix?.length ? stored.matrix : requirementMatrix(report, context)}
+       narrative={stored?.narrative ?? null}
+       freshness={freshness}
+       writtenAt={stored?.createdAt ?? null}
+       writtenAgainst={stored?.evidenceFetchedAt ?? null}
+      />
+     )}
+    </div>
+   )}
+
+   <CollaborationRecords channelId={params.id} records={records ?? []} />
+  </WorkspaceLayout>
+ );
 }
