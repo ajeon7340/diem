@@ -10,7 +10,7 @@
 export type DiscoveryMode = 'criteria' | 'similar' | 'competitor';
 
 export const DISCOVERY_MODES: Record<DiscoveryMode, { label: string; blurb: string }> = {
-  criteria: { label: 'Search by criteria', blurb: 'Filter by category, size and language.' },
+  criteria: { label: 'Search by criteria', blurb: 'Browse by location, then narrow the results.' },
   similar: { label: 'Find similar channels', blurb: 'Start from a channel you already like.' },
   competitor: {
     label: 'Explore competitor collaborations',

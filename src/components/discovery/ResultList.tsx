@@ -10,6 +10,7 @@ import {
 } from '@/app/actions/discovery';
 import { INITIAL_DISCOVERY } from '@/app/actions/state';
 import { ResultCard } from './ResultCard';
+import { SUBSCRIBER_BANDS, VIEW_BANDS, band, inBand, medianViews } from '@/lib/discovery/ranges';
 import type { DiscoveryCandidate } from '@/lib/discovery/types';
 
 /**
@@ -49,14 +50,42 @@ export function ResultList({
 }) {
   const [selected, setSelected] = useState<string[]>([]);
   const [order, setOrder] = useState<Order>('search');
+  /**
+   * LIVE, BECAUSE THESE NEVER TOUCHED THE SEARCH.
+   *
+   * Subscriber count and typical views are applied to rows that came back, not
+   * to the index — `search.list` has no parameter for either. They used to sit
+   * in the search form, where changing one meant spending another of the day's
+   * hundred searches to re-narrow results already on the screen. Here they
+   * narrow instantly and cost nothing.
+   *
+   * The filters that DO change the query — category, location, language — stay
+   * in the form, because changing them genuinely means asking YouTube a
+   * different question.
+   */
+  const [subs, setSubs] = useState('any');
+  const [views, setViews] = useState('any');
   const [saveState, save] = useFormState(saveCandidates, INITIAL_DISCOVERY);
   const [campaignState, addToCampaign] = useFormState(addCandidatesToCampaign, INITIAL_DISCOVERY);
 
+  const narrowed = useMemo(() => {
+    const subBand = band(SUBSCRIBER_BANDS, subs);
+    const viewBand = band(VIEW_BANDS, views);
+    return candidates.filter((candidate) => {
+      // Unmeasured is kept, never dropped: a hidden subscriber count is not a
+      // small one, and a channel whose retrieved videos reported no views has
+      // not failed the filter.
+      const bySubs = inBand(candidate.subscribers, subBand);
+      if (bySubs === false) return false;
+      const byViews = inBand(medianViews(candidate.evidence.map((e) => e.views)), viewBand);
+      return byViews !== false;
+    });
+  }, [candidates, subs, views]);
+
   const shown = useMemo(() => {
-    if (order === 'search') return candidates;
-    // A hidden count is not a small one, so it sorts last rather than as zero.
-    return [...candidates].sort((a, b) => (b.subscribers ?? -1) - (a.subscribers ?? -1));
-  }, [candidates, order]);
+    if (order === 'search') return narrowed;
+    return [...narrowed].sort((a, b) => (b.subscribers ?? -1) - (a.subscribers ?? -1));
+  }, [narrowed, order]);
 
   function toggle(channelId: string) {
     setSelected((current) =>
@@ -71,13 +100,47 @@ export function ResultList({
       <div className="sticky top-[4.5rem] z-10 rounded-xl border border-line bg-surface/95 px-3.5 py-3 backdrop-blur">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <h2 className="text-[13px] font-semibold text-ink">
-            {candidates.length} creator{candidates.length === 1 ? '' : 's'}
+            {narrowed.length === candidates.length
+              ? `${candidates.length} creator${candidates.length === 1 ? '' : 's'}`
+              : `${narrowed.length} of ${candidates.length} creators`}
           </h2>
           <span className="text-[11px] text-ink-faint">
             {ranked ? 'ranked by adfit' : 'in the order YouTube returned'}
           </span>
 
-          <label className="ml-auto flex items-center gap-2 text-[11px] text-ink-muted">
+          <label className="ml-auto flex items-center gap-1.5 text-[11px] text-ink-muted">
+            <span className="sr-only sm:not-sr-only">Subscribers</span>
+            <select
+              value={subs}
+              onChange={(event) => setSubs(event.target.value)}
+              className="min-h-8 rounded-lg border border-line bg-surface px-2 text-[12px] text-ink"
+              title="Narrows the results already on this page. No new search runs."
+            >
+              {SUBSCRIBER_BANDS.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.id === 'any' ? 'Any size' : option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="flex items-center gap-1.5 text-[11px] text-ink-muted">
+            <span className="sr-only sm:not-sr-only">Views</span>
+            <select
+              value={views}
+              onChange={(event) => setViews(event.target.value)}
+              className="min-h-8 rounded-lg border border-line bg-surface px-2 text-[12px] text-ink"
+              title="Median views of the videos this search retrieved. Narrows this page only."
+            >
+              {VIEW_BANDS.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.id === 'any' ? 'Any views' : option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="flex items-center gap-2 text-[11px] text-ink-muted">
             <span className="sr-only sm:not-sr-only">Order</span>
             <select
               value={order}

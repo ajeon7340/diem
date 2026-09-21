@@ -67,32 +67,35 @@ export default async function ReportPage({params,searchParams}:{params:{id:strin
         {report?.handle ? <p className="truncate text-[11px] text-ink-muted">{report.handle}</p> : null}
        </div>
       </div>
-     </PanelSection>
 
-     {/* STATUS LEADS THE RAIL. It was a tinted bar above the report, where it
-         scrolled away the moment anybody started reading — and it is the one
-         thing that answers "is this finished?". */}
-     <PanelSection title="Status">
-      <Badge tone={stateTone}>{state}</Badge>
+      {/* STATUS IS ONE LINE. It had a heading, a badge on its own row and up to
+          three explanatory sentences under it — a quarter of the rail spent
+          saying "Completed". The badge carries the state; the date carries the
+          rest; anything genuinely in flight still gets its own line below. */}
+      <p className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+       <Badge tone={stateTone}>{state}</Badge>
+       {report ? (
+        <span className="tnum text-[11px] text-ink-faint">
+         collected {new Date(report.fetchedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+        </span>
+       ) : null}
+      </p>
       {active ? (
-       <p className="mt-1.5 text-[11px] leading-relaxed text-ink-muted">
-        Safe to leave — this continues in the background.
-       </p>
-      ) : null}
-      <AnalysisProgress jobs={jobs} />
-      {report && active ? (
-       <p className="tnum mt-1.5 text-[11px] text-ink-faint">
-        Showing the collection from {new Date(report.fetchedAt).toLocaleDateString('en-GB')} until the new one lands.
-       </p>
+       <>
+        <AnalysisProgress jobs={jobs} />
+        <p className="mt-1 text-[11px] leading-relaxed text-ink-muted">
+         Safe to leave — this continues in the background.
+        </p>
+       </>
       ) : null}
       {state === 'Failed' ? (
-       <p className="mt-1.5 text-[11px] leading-relaxed text-ink-muted">
-        Our collection failed. Nothing about this channel is implied.
+       <p className="mt-1 text-[11px] leading-relaxed text-ink-muted">
+        Nothing about this channel is implied.
        </p>
       ) : null}
      </PanelSection>
 
-     <PanelSection title="Actions">
+     <PanelSection>
       <ReportActions
        channelId={params.id}
        campaigns={campaigns}
@@ -102,7 +105,7 @@ export default async function ReportPage({params,searchParams}:{params:{id:strin
      </PanelSection>
 
      {overview && report ? (
-      <PanelSection title="View">
+      <PanelSection>
        <form className="space-y-1.5">
         {searchParams.brand ? <input type="hidden" name="brand" value={searchParams.brand} /> : null}
         <label className="block text-[12px] font-medium text-ink" htmlFor="format">
@@ -131,7 +134,13 @@ export default async function ReportPage({params,searchParams}:{params:{id:strin
    {overview ? (
     report ? (
      <div className="mt-5">
-      <ChannelReport report={report} format={['short', 'long'].includes(searchParams.format ?? '') ? searchParams.format : 'all'} />
+      {/* The rail already names the channel; the report's own header would be
+          the same avatar, name and handle a second time. It still prints. */}
+      <ChannelReport
+       report={report}
+       identity={false}
+       format={['short', 'long'].includes(searchParams.format ?? '') ? searchParams.format : 'all'}
+      />
      </div>
     ) : (
      /* FIVE STATES, and the one that used to be missing is `expired`. A row

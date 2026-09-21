@@ -7,9 +7,6 @@ import { Search } from 'lucide-react';
 import { saveSearchAsBrandDefaults } from '@/app/actions/brand';
 import { startDiscovery, type DiscoveryState } from '@/app/actions/discovery';
 import { COUNTRIES, LANGUAGES } from '@/lib/locale/vocabulary';
-import { SUBSCRIBER_BANDS, VIEW_BANDS, selectedBands } from '@/lib/discovery/ranges';
-import { TokenSelect } from '@/components/ui/TokenSelect';
-import { CAMPAIGN_CATEGORIES } from '@/types';
 import { PROVENANCE_LABEL, type SearchContext } from '@/lib/discovery/context';
 import { INITIAL_DISCOVERY } from '@/app/actions/state';
 import { LOCALE_PARAMETER_DISCLOSURE } from '@/lib/youtube/search-contract';
@@ -214,36 +211,6 @@ function Footer({ state }: { state: DiscoveryState }) {
   );
 }
 
-/** Visible, independent ranges. Nothing checked means no size restriction. */
-function BandSelect({
-  id, name, label: text, bands, defaultValue, hint,
-}: {
-  id: string;
-  name: string;
-  label: string;
-  bands: typeof SUBSCRIBER_BANDS;
-  defaultValue?: string;
-  hint: string;
-}) {
-  const selected = selectedBands(bands, defaultValue);
-  return (
-    <fieldset aria-describedby={`${id}-hint`}>
-      <legend className={label}>{text}</legend>
-      <div className="mt-1.5 grid grid-cols-2 gap-1.5">
-        {bands.filter((option) => option.id !== 'any').map((option) => (
-          <label key={option.id} className="flex min-h-10 cursor-pointer items-center gap-2 rounded-lg border border-line px-2 text-[11px] text-ink hover:bg-paper has-[:checked]:border-indigo has-[:checked]:bg-indigo-wash">
-            <input type="checkbox" name={name} value={option.id}
-              defaultChecked={selected.some((item) => item.id === option.id)}
-              className="h-4 w-4 shrink-0 accent-indigo" />
-            {option.label}
-          </label>
-        ))}
-      </div>
-      <p id={`${id}-hint`} className={help}>{hint}</p>
-    </fieldset>
-  );
-}
-
 /**
  * Mode 1, filter-driven.
  *
@@ -265,10 +232,7 @@ export function CriteriaForm({
 }) {
   const [state, action] = useFormState(startDiscovery, INITIAL_DISCOVERY);
   const hasOptional = Boolean(
-    defaults.market ||
-      defaults.formats?.length ||
-      defaults.publishedWithinDays ||
-      defaults.excludeTopics,
+    defaults.language || defaults.formats?.length || defaults.publishedWithinDays,
   );
 
   return (
@@ -278,69 +242,35 @@ export function CriteriaForm({
       {context?.brand ? <input type="hidden" name="brandId" value={context.brand.id} /> : null}
 
       <div className={scroll}>
-        <div>
-          <TokenSelect
-            name="categories"
-            label="Topics (optional)"
-            hint="Leave empty to browse all topics."
-            options={[...CAMPAIGN_CATEGORIES].map((c) => ({ code: c, name: humanise(c) }))}
-            selected={defaults.categories ?? []}
-            placeholder="Search or type a category"
-            allowCustom
-            max={8}
-          />
-          {context?.provenance?.categories === 'brand' ? (
-            <p className="mt-1 text-[11px] text-ink-faint">From your brand.</p>
-          ) : null}
-          {state.fieldErrors?.categories ? (
-            <p role="alert" className="mt-1 text-[12px] text-rose">
-              {state.fieldErrors.categories}
-            </p>
-          ) : null}
-        </div>
-
-        <BandSelect
-          id="subscribers"
-          name="subscribers"
-          label="Subscribers"
-          bands={SUBSCRIBER_BANDS}
-          defaultValue={defaults.subscribers}
-          hint="None selected = any size."
-        />
-
-        <BandSelect
-          id="views"
-          name="views"
-          label="Typical views"
-          bands={VIEW_BANDS}
-          defaultValue={defaults.views}
-          hint="None selected = any views. Median of retrieved videos."
-        />
-
+        {/* The topic field is gone. Discovery is filter-driven: Location, then
+            the optional narrowing below, and the query planner already browses
+            without a topic when none is given. A brand's saved categories are
+            not applied silently in its place — a filter nobody can see is
+            worse than no filter. */}
         <LocalePicker
-          id="language"
-          name="language"
-          label="Content language"
-          options={LANGUAGES}
-          preferred={context?.brand?.contentLanguages ?? []}
-          defaultValue={defaults.language}
+          id="market"
+          name="market"
+          label="Location"
+          options={COUNTRIES}
+          preferred={context?.brand?.markets ?? []}
+          defaultValue={defaults.market}
           context={context}
-          field="language"
-          anyLabel="Any language"
+          field="market"
+          anyLabel="Anywhere"
         />
-        <p className={help}>Ranges filter retrieved results. {LOCALE_PARAMETER_DISCLOSURE}</p>
+        <p className={help}>{LOCALE_PARAMETER_DISCLOSURE}</p>
 
         <MoreFilters open={hasOptional}>
           <LocalePicker
-            id="market"
-            name="market"
-            label="Market"
-            options={COUNTRIES}
-            preferred={context?.brand?.markets ?? []}
-            defaultValue={defaults.market}
+            id="language"
+            name="language"
+            label="Content language"
+            options={LANGUAGES}
+            preferred={context?.brand?.contentLanguages ?? []}
+            defaultValue={defaults.language}
             context={context}
-            field="market"
-            anyLabel="Any market"
+            field="language"
+            anyLabel="Any language"
           />
 
           <fieldset>
@@ -383,22 +313,6 @@ export function CriteriaForm({
             </select>
           </div>
 
-          <div>
-            <label className={label} htmlFor="excludeTopics">
-              Exclude topics
-              <From context={context} field="excludeTopics" />
-            </label>
-            <input
-              id="excludeTopics"
-              name="excludeTopics"
-              defaultValue={defaults.excludeTopics ?? ''}
-              className={`${field} mt-1.5`}
-              placeholder="gambling, crypto"
-              maxLength={400}
-              title="A candidate is dropped if the term appears in its channel name, description or a retrieved video title."
-            />
-          </div>
-
           {context?.brand ? <SaveAsBrandDefaults /> : null}
         </MoreFilters>
       </div>
@@ -408,9 +322,6 @@ export function CriteriaForm({
   );
 }
 
-function humanise(value: string): string {
-  return value.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
-}
 
 export function SimilarForm({
   campaignId,

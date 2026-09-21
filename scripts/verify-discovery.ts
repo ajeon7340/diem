@@ -973,7 +973,11 @@ void (async () => {
 
   const list = readFileSync('src/components/discovery/ResultList.tsx', 'utf8');
   check('the results column cannot be pushed sideways by a long name', list.includes('min-w-0 flex-1'), true);
-  check('the result count leads the results header', list.includes('creator{candidates.length === 1'), true);
+  check(
+    'the result count leads the results header',
+    /\{candidates\.length\} creator|of \$\{candidates\.length\} creators/.test(list),
+    true,
+  );
   // Only the sort control's own options, not the campaign picker's.
   const sortOptions = list
     .slice(list.indexOf('value={order}'), list.indexOf('</select>', list.indexOf('value={order}')))
@@ -1091,14 +1095,48 @@ void (async () => {
   const criteriaForm = readFileSync('src/components/discovery/SearchForms.tsx', 'utf8');
   check('the criteria form no longer asks for free-text topics', criteriaForm.includes('id="keywords"'), false);
   check('nor for a product description', criteriaForm.includes('id="product"'), false);
-  check('it asks for categories instead', criteriaForm.includes('name="categories"'), true);
-  check('with a subscriber band', criteriaForm.includes('name="subscribers"'), true);
-  check('and a view band', criteriaForm.includes('name="views"'), true);
+  // No topic control at all now: discovery is filter-driven, and the query
+  // planner browses on the filters alone when no term is given. A brand's
+  // saved categories are deliberately NOT applied in its place — a filter
+  // nobody can see or edit is worse than no filter.
+  check('there is no topic control', criteriaForm.includes('name="categories"'), false);
+  // The JSX usage, not the component definition — which sits near the top of
+  // the file and made the first version of this read the order backwards.
   check(
-    'the view band says whose median it is',
-    criteriaForm.includes('Median of retrieved videos'),
+    'and Location sits above the optional filters',
+    criteriaForm.indexOf('label="Location"') < criteriaForm.indexOf('<MoreFilters'),
     true,
   );
+  // The two size bands moved OUT of the search form and into the results
+  // header. Neither ever reached `search.list` — they narrow rows that came
+  // back — so changing one in the form meant spending another of the day's
+  // hundred searches to re-filter what was already on screen. They now narrow
+  // the page live, which is what a post-retrieval filter should always have
+  // done. What is asserted is that they still exist and still say what they
+  // measure, not where they sit.
+  check('the form no longer spends a search on a size filter', criteriaForm.includes('name="subscribers"'), false);
+  check('subscribers narrow the results live', list.includes('SUBSCRIBER_BANDS'), true);
+  check('and so do views', list.includes('VIEW_BANDS'), true);
+  check('neither runs a new search', list.includes('No new search runs.'), true);
+  check(
+    'an unmeasured figure is kept rather than filtered out',
+    list.includes('inBand(candidate.subscribers, subBand)') && list.includes('=== false'),
+    true,
+  );
+  check(
+    'the view band still says whose median it is',
+    list.includes('Median views of the videos this search retrieved'),
+    true,
+  );
+  check(
+    'and the form now offers Location where topics used to be',
+    criteriaForm.includes('label="Location"'),
+    true,
+  );
+  check('content language is optional, under More filters', /MoreFilters[\s\S]{0,800}id="language"/.test(criteriaForm), true);
+  // The CONTROL is gone. The field stays on `FilterDefaults` because searches
+  // already run carry it and their stored parameters still have to parse.
+  check('and the exclude-topics control is gone', criteriaForm.includes('name="excludeTopics"'), false);
   check(
     'and language is never called an audience measure',
     criteriaForm.includes('{LOCALE_PARAMETER_DISCLOSURE}'),

@@ -17,7 +17,6 @@ import { getSavedCandidates, getSearches, getSearchJobs } from '@/lib/data/disco
 import { nextStep } from '@/lib/channel/state';
 import { searchState, SEARCH_STATE_LABEL } from '@/lib/discovery/state';
 import { DISCOVERY_MODES, type DiscoveryMode } from '@/lib/discovery/types';
-import { DISCOVERY_COVERAGE_DISCLAIMER } from '@/lib/report/policy';
 
 export const metadata: Metadata = { title: 'Discover creators' };
 export const dynamic = 'force-dynamic';
@@ -71,10 +70,11 @@ export default async function DiscoverPage({
       <SiteHeader />
       <main className="flex-1 bg-paper">
         <div className="mx-auto w-full max-w-[1440px] px-4 py-6 sm:px-6 lg:px-8">
-          <div className="mb-4 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-            <h1 className="text-xl font-semibold tracking-tight text-ink">Discover creators</h1>
-            <p className="text-[12px] text-ink-muted">{DISCOVERY_COVERAGE_DISCLAIMER}</p>
-          </div>
+          {/* No visible page heading: the navigation already says which part of
+              the product this is, and repeating it costs a row on every visit.
+              The h1 stays for screen readers, which have no highlighted menu
+              item to go on. */}
+          <h1 className="sr-only">Discover creators</h1>
 
           {campaign ? (
             <p className="mb-4 rounded-lg border border-indigo/25 bg-indigo-wash px-3 py-2 text-[12px] text-indigo">
@@ -110,10 +110,7 @@ export default async function DiscoverPage({
               <section>
                 <h2 className="rail">Recent searches</h2>
                 {searches.length === 0 ? (
-                  <p className="mt-2 text-[12px] text-ink-muted">
-                    A search you run is kept here with what it reached, so you can read it again without
-                    spending the budget twice.
-                  </p>
+                  <p className="mt-2 text-[12px] text-ink-muted">Nothing yet.</p>
                 ) : (
                   <ul className="mt-2 divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
                     {searches.map((search) => {
@@ -149,9 +146,7 @@ export default async function DiscoverPage({
               <section>
                 <h2 className="rail">Saved candidates</h2>
                 {saved.length === 0 ? (
-                  <p className="mt-2 text-[12px] text-ink-muted">
-                    Saving costs nothing and starts no analysis. Candidates you keep from a search appear here.
-                  </p>
+                  <p className="mt-2 text-[12px] text-ink-muted">Nothing saved yet.</p>
                 ) : (
                   <ul className="mt-2 divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
                     {saved.map((candidate) => (

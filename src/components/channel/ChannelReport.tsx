@@ -57,6 +57,7 @@ export function ChannelReport({
   format = 'all',
   campaign = null,
   appendix = true,
+  identity = true,
 }: {
   report: ChannelReportView;
   sample?: boolean;
@@ -65,6 +66,15 @@ export function ChannelReport({
   campaign?: CampaignContext | null;
   /** Print toggles this off; the web report keeps it expandable. */
   appendix?: boolean;
+  /**
+   * Whether the report prints its own identity block.
+   *
+   * False on `/channels/[id]`, where the rail already names the channel two
+   * inches to the left — the same avatar, name and handle twice on one screen.
+   * It stays in the PRINT output either way: a PDF has no rail, and a report
+   * that does not say whose it is would be useless on paper.
+   */
+  identity?: boolean;
 }) {
   const now = Date.parse(report.fetchedAt);
   const depth = reportDepth(report);
@@ -83,7 +93,11 @@ export function ChannelReport({
         </p>
       ) : null}
 
-      <header className="report-identity avoid-break flex flex-wrap items-center gap-4 border-b border-line pb-4">
+      <header
+        className={`report-identity avoid-break flex-wrap items-center gap-4 border-b border-line pb-4 ${
+          identity ? 'flex' : 'hidden print:flex'
+        }`}
+      >
         {report.avatar ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={report.avatar} alt="" width={56} height={56} className="h-14 w-14 rounded-full" />

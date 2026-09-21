@@ -194,15 +194,27 @@ const CHANNEL_DETAIL = 'src/app/channels/[id]/page.tsx';
 const detail = code(CHANNEL_DETAIL);
 check('the report page uses the shared shell', detail.includes('<WorkspaceLayout'), true);
 check('and pins its rail, like the campaign decision page', /<WorkspaceLayout[\s\S]{0,120}sticky/.test(detail), true);
-// Compared on the section titles, not the words: the first version matched the
-// `ReportActions` import at the top of the file and reported the rail backwards.
+// Compared on the rendered elements, not the words: an earlier version matched
+// the `ReportActions` import at the top of the file and reported the rail
+// backwards, and a later one matched section headings that no longer exist —
+// status is one line now, and a line does not need a heading above it.
 check(
-  'status leads the rail',
-  detail.indexOf('title="Status"') < detail.indexOf('title="Actions"'),
+  'status leads the rail, above the actions',
+  detail.indexOf('<Badge tone={stateTone}>') < detail.indexOf('<ReportActions'),
   true,
+);
+check(
+  'and it is one line rather than a titled block',
+  detail.includes('title="Status"'),
+  false,
 );
 check('add-to-campaign and share live in the rail', /panel=\{[\s\S]*?<ReportActions/.test(detail), true);
 check('so does the format control', /panel=\{[\s\S]*?htmlFor="format"/.test(detail), true);
+check(
+  'the report does not repeat the identity the rail already shows',
+  detail.includes('identity={false}'),
+  true,
+);
 check('the tabs stay with the report, not in the rail', detail.indexOf('<ReportTabs') > detail.indexOf('</aside>') || !detail.includes('</aside>'), true);
 check('the old tinted status bar is gone', detail.includes('bg-indigo-wash p-4 text-sm'), false);
 
