@@ -72,8 +72,8 @@ export function CandidateForm({
             value={preview.channel.channelId}
           />
           <div className="flex items-center gap-3">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
             {preview.channel.thumbnail && (
+              // eslint-disable-next-line @next/next/no-img-element
               <img
                 alt=""
                 src={preview.channel.thumbnail}
