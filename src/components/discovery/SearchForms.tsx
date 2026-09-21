@@ -1,12 +1,14 @@
 'use client';
 
-import { useRef } from 'react';
 import { useFormState, useFormStatus } from 'react-dom';
 import { Search } from 'lucide-react';
 
 import { saveSearchAsBrandDefaults } from '@/app/actions/brand';
 import { startDiscovery, type DiscoveryState } from '@/app/actions/discovery';
 import { COUNTRIES, LANGUAGES } from '@/lib/locale/vocabulary';
+import { SUBSCRIBER_BANDS, VIEW_BANDS } from '@/lib/discovery/ranges';
+import { TokenSelect } from '@/components/ui/TokenSelect';
+import { CAMPAIGN_CATEGORIES } from '@/types';
 import { PROVENANCE_LABEL, type SearchContext } from '@/lib/discovery/context';
 import { INITIAL_DISCOVERY } from '@/app/actions/state';
 import { LOCALE_PARAMETER_DISCLOSURE } from '@/lib/youtube/search-contract';
@@ -37,6 +39,9 @@ import { SIMILARITY_DIMENSION_LABEL, SIMILARITY_LIMIT, type DiscoveryMode } from
  */
 
 export interface FilterDefaults {
+  categories?: string[];
+  views?: string;
+  subscribers?: string;
   keywords?: string;
   customerNeed?: string;
   product?: string;
@@ -134,40 +139,6 @@ function LocalePicker({
 }
 
 /**
- * Topic chips built from what the customer already wrote on the brand and the
- * campaign. Clicking one APPENDS it to the topics field, which stays editable —
- * topics describe what this search is exploring, not a permanent attribute of
- * the company.
- */
-function TopicSuggestions({
-  suggestions,
-  onPick,
-}: {
-  suggestions: string[];
-  onPick: (term: string) => void;
-}) {
-  if (suggestions.length === 0) return null;
-  return (
-    <div>
-      <p className="text-[11px] text-ink-muted">From your brand and campaign — click to add:</p>
-      <ul className="mt-1.5 flex flex-wrap gap-1.5">
-        {suggestions.map((term) => (
-          <li key={term}>
-            <button
-              type="button"
-              onClick={() => onPick(term)}
-              className="rounded-md border border-line bg-paper px-2 py-1 text-[11px] text-ink-muted hover:border-line-strong hover:text-ink"
-            >
-              + {term}
-            </button>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-/**
  * Write the current market, language and product line back to the brand.
  *
  * A NAMED BUTTON, never a side effect of searching. `formAction` sends this one
@@ -227,6 +198,50 @@ function Footer({ state }: { state: DiscoveryState }) {
   );
 }
 
+/** A size band picker. Same control for subscribers and for views, because
+ *  they are the same question asked of two figures. */
+function BandSelect({
+  id,
+  name,
+  label: text,
+  bands,
+  defaultValue,
+  hint,
+}: {
+  id: string;
+  name: string;
+  label: string;
+  bands: typeof SUBSCRIBER_BANDS;
+  defaultValue?: string;
+  hint: string;
+}) {
+  return (
+    <div>
+      <label className={label} htmlFor={id}>
+        {text}
+      </label>
+      <select id={id} name={name} defaultValue={defaultValue ?? 'any'} className={`${field} mt-1.5`}>
+        {bands.map((option) => (
+          <option key={option.id} value={option.id}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+      <p className={help}>{hint}</p>
+    </div>
+  );
+}
+
+/**
+ * Mode 1, filter-driven.
+ *
+ * IT USED TO ASK FOR PROSE. A free-text topic field and a product description,
+ * both of which the customer had already written on their brand, and both
+ * retyped on every search. Discovery does not need either: a category is a
+ * search term, and everything else here narrows what comes back. What you sell
+ * still shapes the search — it just comes from the brand profile instead of
+ * from the customer's fingers.
+ */
 export function CriteriaForm({
   campaignId,
   defaults = {},
@@ -237,21 +252,13 @@ export function CriteriaForm({
   context?: SearchContext;
 }) {
   const [state, action] = useFormState(startDiscovery, INITIAL_DISCOVERY);
-  const topics = useRef<HTMLInputElement>(null);
   const hasOptional = Boolean(
-    defaults.language || defaults.market || defaults.formats?.length || defaults.minSubscribers ||
-      defaults.maxSubscribers || defaults.publishedWithinDays || defaults.excludeTopics,
+    defaults.language ||
+      defaults.market ||
+      defaults.formats?.length ||
+      defaults.publishedWithinDays ||
+      defaults.excludeTopics,
   );
-
-  /** Append, never replace: a suggestion adds to what is already typed. */
-  function addTopic(term: string) {
-    const input = topics.current;
-    if (!input) return;
-    const current = input.value.trim();
-    if (current.toLowerCase().split(/\s*,\s*/).includes(term.toLowerCase())) return;
-    input.value = current ? `${current}, ${term}` : term;
-    input.focus();
-  }
 
   return (
     <form action={action} className="flex min-h-0 flex-1 flex-col">
@@ -261,53 +268,60 @@ export function CriteriaForm({
 
       <div className={scroll}>
         <div>
-          <label className={label} htmlFor="keywords">
-            Topics
-          </label>
-          <input
-            id="keywords"
-            name="keywords"
-            ref={topics}
-            defaultValue={defaults.keywords ?? ''}
-            className={`${field} mt-1.5`}
-            placeholder="home espresso, coffee gear"
-            maxLength={400}
-            title="One search per term, sent to YouTube exactly as you type it. Separate terms with commas."
+          <TokenSelect
+            name="categories"
+            label="Categories"
+            hint="One search per category. Type your own if none fit."
+            options={[...CAMPAIGN_CATEGORIES].map((c) => ({ code: c, name: humanise(c) }))}
+            selected={defaults.categories ?? []}
+            placeholder="Search or type a category"
+            allowCustom
+            max={8}
           />
-          <p className={help}>What this search is exploring — not saved to the brand.</p>
+          {context?.provenance?.categories === 'brand' ? (
+            <p className="mt-1 text-[11px] text-ink-faint">Prefilled from your brand — editable per search.</p>
+          ) : null}
+          {state.fieldErrors?.categories ? (
+            <p role="alert" className="mt-1 text-[12px] text-rose">
+              {state.fieldErrors.categories}
+            </p>
+          ) : null}
         </div>
 
-        <TopicSuggestions suggestions={context?.topicSuggestions ?? []} onPick={addTopic} />
+        <BandSelect
+          id="subscribers"
+          name="subscribers"
+          label="Subscribers"
+          bands={SUBSCRIBER_BANDS}
+          defaultValue={defaults.subscribers}
+          hint="Applied to what the search returned, and counted."
+        />
 
-        <div>
-          <label className={label} htmlFor="product">
-            What you sell
-            <From context={context} field="product" />
-          </label>
-          <textarea
-            id="product"
-            name="product"
-            rows={3}
-            defaultValue={defaults.product ?? ''}
-            maxLength={2000}
-            className="mt-1.5 w-full rounded-lg border border-line bg-surface p-2.5 text-[13px] text-ink placeholder:text-ink-faint"
-            placeholder="A £180 hand grinder for home espresso."
-          />
-          <p className={help}>Helps pick out matches in what we retrieve.</p>
-        </div>
+        <BandSelect
+          id="views"
+          name="views"
+          label="Typical views"
+          bands={VIEW_BANDS}
+          defaultValue={defaults.views}
+          hint="Median of the videos this search retrieves — not the channel’s own figure."
+        />
+
+        <LocalePicker
+          id="language"
+          name="language"
+          label="Content language"
+          options={LANGUAGES}
+          preferred={context?.brand?.contentLanguages ?? []}
+          defaultValue={defaults.language}
+          context={context}
+          field="language"
+          anyLabel="Any language"
+        />
+        <p className={help}>
+          The language of the content. It is a search preference, not a measure of who watches.
+        </p>
 
         <MoreFilters open={hasOptional}>
-          <LocalePicker
-            id="language"
-            name="language"
-            label="Creator content language"
-            options={LANGUAGES}
-            preferred={context?.brand?.contentLanguages ?? []}
-            defaultValue={defaults.language}
-            context={context}
-            field="language"
-            anyLabel="Any language"
-          />
           <LocalePicker
             id="market"
             name="market"
@@ -319,9 +333,6 @@ export function CriteriaForm({
             field="market"
             anyLabel="Any market"
           />
-          <p className={help}>
-            Search preferences sent to YouTube. They are not a measure of who watches.
-          </p>
 
           <fieldset>
             <legend className={label}>Video length</legend>
@@ -347,41 +358,6 @@ export function CriteriaForm({
               One at a time narrows the search.
             </p>
           </fieldset>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={label} htmlFor="minSubscribers">
-                Subs from
-              </label>
-              <input
-                id="minSubscribers"
-                name="minSubscribers"
-                defaultValue={defaults.minSubscribers ?? ''}
-                inputMode="numeric"
-                className={`${field} tnum mt-1.5`}
-                placeholder="any"
-              />
-            </div>
-            <div>
-              <label className={label} htmlFor="maxSubscribers">
-                Subs to
-              </label>
-              <input
-                id="maxSubscribers"
-                name="maxSubscribers"
-                defaultValue={defaults.maxSubscribers ?? ''}
-                inputMode="numeric"
-                className={`${field} tnum mt-1.5`}
-                placeholder="any"
-              />
-            </div>
-          </div>
-          <p
-            className={help}
-            title="Applied to what the search returned, not across YouTube. The results panel reports how many rows it removed."
-          >
-            Applied after retrieval, and counted.
-          </p>
 
           <div>
             <label className={label} htmlFor="publishedWithinDays">
@@ -423,6 +399,10 @@ export function CriteriaForm({
       <Footer state={state} />
     </form>
   );
+}
+
+function humanise(value: string): string {
+  return value.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
 }
 
 export function SimilarForm({

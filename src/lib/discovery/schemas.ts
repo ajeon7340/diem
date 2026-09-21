@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { SUBSCRIBER_BANDS, VIEW_BANDS, isBand } from './ranges';
 import type { SimilarityDimension } from './types';
 
 /**
@@ -83,10 +84,28 @@ const regionCode = z
 export const FORMATS = ['short', 'medium', 'long'] as const;
 export type Format = (typeof FORMATS)[number];
 
+const bandId = (bands: typeof SUBSCRIBER_BANDS) =>
+  z
+    .unknown()
+    .optional()
+    .nullable()
+    .transform((v) => (isBand(bands, v) ? (v as string) : 'any'));
+
 export const criteriaSchema = z.object({
-  /** What is being sold. Shapes the queries and, when approved, the reasons. */
+  /**
+   * CATEGORIES ARE THE SEARCH NOW.
+   *
+   * The form used to ask for free-text topics and a product description, and
+   * both were retyped on every search by people who had already written them
+   * on the brand. Discovery is filter-driven: a category is picked, and it is
+   * what the query is built from.
+   *
+   * `keywords` and `product` stay in the schema because SEARCHES ALREADY RUN
+   * carry them, and a stored result has to keep parsing. They are no longer
+   * collected by the form.
+   */
+  categories: termList(8, 60),
   product: text(2_000),
-  /** What the content should be about. The only genuinely required field. */
   keywords: termList(8),
   language: languageCode,
   market: regionCode,
@@ -98,6 +117,10 @@ export const criteriaSchema = z.object({
       const raw = Array.isArray(v) ? v : v ? [v] : [];
       return raw.filter((f): f is Format => (FORMATS as readonly string[]).includes(f));
     }),
+  /** Band ids. The two open number fields they replace stay parseable for
+   *  searches that were run with them. */
+  subscribers: bandId(SUBSCRIBER_BANDS),
+  views: bandId(VIEW_BANDS),
   minSubscribers: bound,
   maxSubscribers: bound,
   publishedWithinDays: z

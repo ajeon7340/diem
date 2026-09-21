@@ -39,6 +39,9 @@ export function filterDefaults(mode: DiscoveryMode, params: Record<string, unkno
   }
   return {
     ...common,
+    categories: list('categories'),
+    subscribers: text('subscribers') ?? undefined,
+    views: text('views') ?? undefined,
     keywords: joined('keywords'),
     language: text('language') ?? undefined,
     formats: list('formats'),
@@ -54,5 +57,5 @@ export function filterSummary(mode: DiscoveryMode, params: Record<string, unknow
   const defaults = filterDefaults(mode, params);
   if (mode === 'similar') return defaults.channel;
   if (mode === 'competitor') return defaults.knownCompetitors;
-  return defaults.keywords;
+  return defaults.categories?.join(', ') || defaults.keywords;
 }

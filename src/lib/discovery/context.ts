@@ -56,11 +56,15 @@ export function buildContext({
   const defaults: FilterDefaults = { ...fromSearch };
 
   const take = <K extends keyof FilterDefaults>(key: K, value: FilterDefaults[K], source: Provenance) => {
-    if (defaults[key] !== undefined && defaults[key] !== '' && defaults[key] !== null) {
+    const current = defaults[key];
+    // An empty array is absent, not set: a stored search with no categories
+    // must still take the brand's, or a saved run would come back blank.
+    if (Array.isArray(current) ? current.length > 0 : current !== undefined && current !== '' && current !== null) {
       provenance[key] ??= 'search';
       return;
     }
     if (value === undefined || value === null || value === '') return;
+    if (Array.isArray(value) && value.length === 0) return;
     defaults[key] = value;
     provenance[key] = source;
   };
@@ -73,6 +77,10 @@ export function buildContext({
   }
 
   if (brand) {
+    // The brand's categories are the search, so they prefill it. Editable per
+    // search: what somebody is exploring today is not a permanent attribute of
+    // the company, and saving it back needs the named button.
+    take('categories', brand.categories.length ? brand.categories : undefined, 'brand');
     take('product', brand.sells ?? undefined, 'brand');
     take('customerNeed', brand.customerNeeds ?? undefined, 'brand');
     // ONE market and ONE language reach YouTube per request — `regionCode` and

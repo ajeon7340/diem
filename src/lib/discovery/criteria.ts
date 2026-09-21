@@ -4,6 +4,7 @@ import { applyPostFilters } from './candidates';
 import { collectCandidates, type QueryPlanEntry } from './collect';
 import type { DiscoveryLimits } from './limits';
 import { depthSignal, rankCandidates, scoreSignals, termCoverageSignal, type Signal } from './rank';
+import { SUBSCRIBER_BANDS, VIEW_BANDS, band } from './ranges';
 import type { CriteriaInput, Format } from './schemas';
 import type { Retriever, RunControl } from './retriever';
 import type { DiscoveryCandidate, DiscoveryResult } from './types';
@@ -35,11 +36,14 @@ const DURATION: Record<Format, 'short' | 'medium' | 'long'> = {
  * was sent so a bad query reads as a bad query rather than as an empty market.
  */
 export function planCriteriaQueries(input: CriteriaInput, max: number): QueryPlanEntry[] {
-  const terms = input.keywords;
+  // CATEGORIES FIRST, then any keywords a stored search still carries. The form
+  // collects categories now: one search per category, in the customer's own
+  // words, and the results panel prints exactly what was sent.
+  const terms = [...new Set([...input.categories, ...input.keywords])];
   const plan: QueryPlanEntry[] = terms.map((term) => ({
     q: term,
     terms: [term, ...terms.filter((t) => t !== term)],
-    why: `You asked for “${term}”.`,
+    why: `You chose “${term}”.`,
   }));
 
   if (plan.length === 0 && input.product) {
@@ -75,6 +79,8 @@ export function criteriaTerms(input: CriteriaInput): string[] {
 
   return [
     ...new Set([
+      ...input.categories,
+      ...input.categories.flatMap((c) => (c.includes(' ') ? words(c) : [])),
       ...input.keywords,
       ...input.keywords.flatMap((keyword) => (keyword.includes(' ') ? words(keyword) : [])),
       ...words(input.product ?? '').slice(0, 6),
@@ -90,6 +96,9 @@ export async function runCriteria(
 ): Promise<DiscoveryResult> {
   const plan = planCriteriaQueries(input, limits.queries);
   const terms = criteriaTerms(input);
+
+  const subscriberBand = band(SUBSCRIBER_BANDS, input.subscribers);
+  const viewBand = band(VIEW_BANDS, input.views);
 
   if (plan.length === 0) {
     return {
@@ -108,7 +117,7 @@ export async function runCriteria(
       },
       appliedFilters: { api: [], post: [] },
       emptyReason: 'no_matches',
-      notes: ['No topic terms and no product description, so there was nothing to search for.'],
+      notes: ['No category chosen, so there was nothing to search for.'],
     };
   }
 
@@ -132,8 +141,11 @@ export async function runCriteria(
   });
 
   const filtered = applyPostFilters(collected.candidates, {
-    minSubscribers: input.minSubscribers,
-    maxSubscribers: input.maxSubscribers,
+    // The band wins where one was chosen; the open numbers stay live for
+    // searches that were run before bands existed.
+    minSubscribers: subscriberBand.min ?? input.minSubscribers,
+    maxSubscribers: subscriberBand.max ?? input.maxSubscribers,
+    viewBand,
     excludedTopics: input.excludeTopics,
   });
 
@@ -147,7 +159,7 @@ export async function runCriteria(
     : withReasons;
 
   const api: { name: string; value: string }[] = [
-    { name: 'Search terms', value: plan.map((p) => p.q).join(' · ') },
+    { name: 'Categories searched', value: plan.map((p) => p.q).join(' · ') },
   ];
   if (input.language) api.push({ name: 'Content language preference', value: input.language });
   if (input.market) api.push({ name: 'Market preference', value: input.market });
@@ -155,10 +167,18 @@ export async function runCriteria(
   if (publishedAfter) api.push({ name: 'Published after', value: publishedAfter.slice(0, 10) });
 
   const post: { name: string; value: string }[] = [];
-  if (input.minSubscribers != null || input.maxSubscribers != null) {
+  if (subscriberBand.id !== 'any') {
+    post.push({ name: 'Subscribers', value: subscriberBand.label });
+  } else if (input.minSubscribers != null || input.maxSubscribers != null) {
     post.push({
       name: 'Subscriber range',
       value: `${input.minSubscribers?.toLocaleString('en-US') ?? 'any'} – ${input.maxSubscribers?.toLocaleString('en-US') ?? 'any'}`,
+    });
+  }
+  if (viewBand.id !== 'any') {
+    post.push({
+      name: 'Typical views',
+      value: `${viewBand.label} — median of the videos this search retrieved, not of the channel`,
     });
   }
   if (input.excludeTopics.length) post.push({ name: 'Excluded topics', value: input.excludeTopics.join(', ') });

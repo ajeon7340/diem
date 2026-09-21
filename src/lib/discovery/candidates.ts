@@ -1,4 +1,5 @@
 import type { ChannelFacts, SearchVideoHit, VideoFacts } from '@/lib/youtube/search';
+import { inBand, medianViews, type Band } from './ranges';
 import type { DiscoveryCandidate, EvidenceVideo } from './types';
 
 /**
@@ -190,6 +191,8 @@ export interface PostFilters {
   /** Inclusive. Either end may be null, which means unbounded, not zero. */
   minSubscribers?: number | null;
   maxSubscribers?: number | null;
+  /** Band for the typical views of the videos THIS SEARCH retrieved. */
+  viewBand?: Band | null;
   /** Terms that disqualify a candidate if they appear in its retrieved text. */
   excludedTopics?: string[];
   /** Drop channels whose subscriber count is hidden when a range was asked for. */
@@ -246,6 +249,37 @@ export function applyPostFilters(
         note: filters.requireVisibleSubscribers
           ? 'Subscriber count hidden by the creator, so the range could not be checked — excluded.'
           : 'Subscriber count hidden by the creator, so the range could not be checked — kept and marked.',
+      });
+    }
+  }
+
+  const viewBand = filters.viewBand;
+  if (viewBand && (viewBand.min !== null || viewBand.max !== null)) {
+    const before = kept.length;
+    let unmeasured = 0;
+    kept = kept.filter((candidate) => {
+      const verdict = inBand(medianViews(candidate.evidence.map((e) => e.views)), viewBand);
+      // Unmeasured is kept and counted, never dropped: a channel whose
+      // retrieved videos reported no view count has not failed the filter, and
+      // removing it would quietly narrow the field on missing data.
+      if (verdict === null) {
+        unmeasured += 1;
+        return true;
+      }
+      return verdict;
+    });
+    if (before !== kept.length) {
+      removed.push({
+        filter: 'recentViewRange',
+        count: before - kept.length,
+        note: 'Typical views of the videos this search retrieved fell outside the band you chose.',
+      });
+    }
+    if (unmeasured) {
+      removed.push({
+        filter: 'viewsUnmeasured',
+        count: unmeasured,
+        note: 'No view count came back for these — kept, because an unreported figure is not a small one.',
       });
     }
   }

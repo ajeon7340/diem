@@ -24,7 +24,8 @@ import {
 import { classifyEvidence, evidenceStrength, brandQueries } from '@/lib/discovery/evidence';
 import { identifyBrands } from '@/lib/discovery/competitors';
 import { runCollaborations } from '@/lib/discovery/competitors';
-import { runCriteria, criteriaReason, planCriteriaQueries } from '@/lib/discovery/criteria';
+import { runCriteria, criteriaReason, criteriaTerms, planCriteriaQueries } from '@/lib/discovery/criteria';
+import { SUBSCRIBER_BANDS, VIEW_BANDS, band as sizeBand, inBand, medianViews } from '@/lib/discovery/ranges';
 import { runSimilar, verbatimQueries, topicTerms, MIN_REFERENCE_UPLOADS } from '@/lib/discovery/similar';
 import { outcomeStatus } from '@/lib/discovery/run';
 import {
@@ -39,6 +40,7 @@ import {
 } from '@/lib/discovery/rank';
 import { searchState } from '@/lib/discovery/state';
 import { criteriaSchema, keepCitedOnly, similarSchema } from '@/lib/discovery/schemas';
+import type { EvidenceVideo } from '@/lib/discovery/types';
 import { discoveryLimits } from '@/lib/discovery/limits';
 import {
   AMENDMENT_ACCEPTED,
@@ -202,6 +204,14 @@ check('no reference removes nothing', excludeReference(withReference, null).leng
 // ---------------------------------------------------------------------------
 // Post-retrieval filtering, counted and explained
 // ---------------------------------------------------------------------------
+
+function ev(views: number | null): EvidenceVideo {
+  return {
+    videoId: `v${views ?? 'x'}`, channelId: 'UCx', title: 't', publishedAt: '', views,
+    paidPromotion: null, seconds: null, declaredLanguage: null, matchedTerms: [], matchedIn: null,
+    excerpt: null,
+  };
+}
 
 function candidate(id: string, subscribers: number | null, title = 'Channel'): DiscoveryCandidate {
   return {
@@ -933,7 +943,17 @@ void (async () => {
   // ---------------------------------------------------------------------------
 
   const panel = readFileSync('src/components/discovery/FilterPanel.tsx', 'utf8');
-  check('the filter rail is a fixed width at lg', panel.includes('lg:w-[300px]'), true);
+  // One width for every rail in the product. Discovery was 300px and the
+  // workspace pages 340px, so the menu shifted sideways when you moved between
+  // them; the number now has one definition and both import it.
+  check('the filter rail uses the shared rail width', panel.includes('RAIL_WIDTH'), true);
+  check(
+    'and that width is defined once',
+    readFileSync('src/components/shell/ContextWorkspace.tsx', 'utf8').includes(
+      "export const RAIL_WIDTH = 'lg:w-[340px]'",
+    ),
+    true,
+  );
   check('and is bounded by the viewport so it can scroll inside', panel.includes('lg:max-h-[calc(100vh-7rem)]'), true);
   check('below lg it is a drawer, not a squeezed column', panel.includes('lg:hidden') && panel.includes('aria-controls="discovery-filters"'), true);
   check('Escape closes it', panel.includes("event.key === 'Escape'"), true);
@@ -973,6 +993,95 @@ void (async () => {
   );
   check('long evidence stays collapsed in the list', card.includes('<details'), true);
   check('a hidden subscriber count is never printed as a number', card.includes("? 'hidden'"), true);
+
+  // ---------------------------------------------------------------------------
+  // Filter-driven criteria
+  //
+  // The form used to ask for free-text topics and a product description, both
+  // of which the customer had already written on their brand. A category is a
+  // search term; everything else narrows what comes back.
+  // ---------------------------------------------------------------------------
+
+  const byCategory = criteriaSchema.parse({ categories: ['coffee gear', 'beauty'] });
+  check(
+    'categories become the queries, in the order chosen',
+    planCriteriaQueries(byCategory, 5).map((p) => p.q),
+    ['coffee gear', 'beauty'],
+  );
+  check('and the reason names the choice, not a typed phrase',
+    planCriteriaQueries(byCategory, 5)[0].why, 'You chose “coffee gear”.');
+  check(
+    'a multi-word category is also matched word by word',
+    criteriaTerms(byCategory).includes('coffee'),
+    true,
+  );
+  check(
+    'a stored search that still carries keywords keeps working',
+    planCriteriaQueries(criteriaSchema.parse({ keywords: 'hand grinder' }), 5).map((p) => p.q),
+    ['hand grinder'],
+  );
+  check(
+    'no category and no keyword is an honest empty, not a crash',
+    (await runCriteria(fixtureRetriever(), criteriaSchema.parse({}), LIMITS)).emptyReason,
+    'no_matches',
+  );
+
+  check('an unknown band id falls back to Any', criteriaSchema.parse({ views: 'nonsense' }).views, 'any');
+  check('and a real one is kept', criteriaSchema.parse({ subscribers: '10k' }).subscribers, '10k');
+
+  const tenK = sizeBand(SUBSCRIBER_BANDS, '10k');
+  check('a value inside the band passes', inBand(50_000, tenK), true);
+  check('one below it does not', inBand(500, tenK), false);
+  check('one above it does not', inBand(500_000, tenK), false);
+  check('and an unmeasured one is neither', inBand(null, tenK), null);
+  check('the median of nothing is null, never zero', medianViews([]), null);
+  check('and nulls are skipped rather than counted as zero', medianViews([null, 100, 300]), 200);
+
+  const viewFiltered = applyPostFilters(
+    [
+      { ...candidate('UCsmall000000000000000a', 1), evidence: [ev(400), ev(600)] },
+      { ...candidate('UCbig00000000000000000b', 1), evidence: [ev(50_000)] },
+      { ...candidate('UCunknown0000000000000c', 1), evidence: [ev(null)] },
+    ],
+    { viewBand: sizeBand(VIEW_BANDS, 'u1k') },
+  );
+  check(
+    'a channel whose retrieved videos are in band is kept',
+    viewFiltered.kept.some((c) => c.channelId === 'UCsmall000000000000000a'),
+    true,
+  );
+  check(
+    'one outside it is removed',
+    viewFiltered.kept.some((c) => c.channelId === 'UCbig00000000000000000b'),
+    false,
+  );
+  check(
+    'and one with no view count is KEPT — unreported is not small',
+    viewFiltered.kept.some((c) => c.channelId === 'UCunknown0000000000000c'),
+    true,
+  );
+  check(
+    'the unmeasured ones are reported rather than silently kept',
+    viewFiltered.removed.some((r) => r.filter === 'viewsUnmeasured'),
+    true,
+  );
+
+  const criteriaForm = readFileSync('src/components/discovery/SearchForms.tsx', 'utf8');
+  check('the criteria form no longer asks for free-text topics', criteriaForm.includes('id="keywords"'), false);
+  check('nor for a product description', criteriaForm.includes('id="product"'), false);
+  check('it asks for categories instead', criteriaForm.includes('name="categories"'), true);
+  check('with a subscriber band', criteriaForm.includes('name="subscribers"'), true);
+  check('and a view band', criteriaForm.includes('name="views"'), true);
+  check(
+    'the view band says whose median it is',
+    criteriaForm.includes('not the channel’s own figure'),
+    true,
+  );
+  check(
+    'and language is never called an audience measure',
+    criteriaForm.includes('not a measure of who watches'),
+    true,
+  );
 
   console.log(`\n  ${pass} passed, ${fail} failed`);
   console.log('  All checks ran against fixtures. No live API call was made.');

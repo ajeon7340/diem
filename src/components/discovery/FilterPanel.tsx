@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { SlidersHorizontal, X } from 'lucide-react';
 
+import { RAIL_WIDTH } from '@/components/shell/ContextWorkspace';
+
 /**
  * The left column: a fixed-width panel on desktop, a drawer below it.
  *
@@ -89,9 +91,9 @@ export function FilterPanel({
           open
             ? 'fixed inset-x-3 bottom-3 top-16 z-50 max-h-[calc(100vh-5rem)]'
             : 'hidden',
-          // Column at lg and up: a fixed 300px rail, pinned under the header,
-          // never taller than the viewport it sits in.
-          'lg:static lg:z-auto lg:flex lg:max-h-[calc(100vh-7rem)] lg:w-[300px] lg:shrink-0 lg:self-start',
+          // Column at lg and up: the same rail width every other workspace page
+          // uses, pinned under the header and never taller than the viewport.
+          `lg:static lg:z-auto lg:flex lg:max-h-[calc(100vh-7rem)] ${RAIL_WIDTH} lg:shrink-0 lg:self-start`,
           'lg:sticky lg:top-24',
         ].join(' ')}
       >
