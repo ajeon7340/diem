@@ -98,17 +98,47 @@ export interface ChannelReport {
   engagementRate: number | null;
   /** Quota units spent. Worth logging: this is a shared, exhaustible budget. */
   units: number;
-  evidence: { videos: VideoEvidence[]; windowDays: number; start: string; end: string; unreadable: number; truncated: boolean };
+  evidence: {
+    videos: VideoEvidence[]; windowDays: number;
+    /** The window ASKED FOR. */ start: string; end: string;
+    /** The window FOUND. Null when nothing was collected. */
+    firstPublishedAt: string | null; lastPublishedAt: string | null;
+    unreadable: number; truncated: boolean;
+  };
   corpus: CorpusComment[];
 }
 
+/**
+ * One sampled upload, as the public metadata reported it.
+ *
+ * `seconds` IS NULLABLE AND `state` EXISTS because both used to be forced into
+ * a single "unknown" format. A live stream reports `P0D`, which parsed to 0,
+ * which was indistinguishable from a video whose duration the API did not
+ * return — and both landed in the same bucket as a genuine upload with missing
+ * metadata. A stream that is running now has a view count that means something
+ * different from a finished upload's, and an upcoming premiere has no
+ * performance at all. Both are now identified and both are excluded from every
+ * performance figure, which is what kept a premiere at 0 views in the sample
+ * range as though it had been watched zero times.
+ *
+ * BOTH FIELDS ARE OPTIONAL so that evidence collected before they existed still
+ * parses. An absent `state` is read as `published`, which is what every row
+ * written before this change was assumed to be; an absent `description` simply
+ * gives the classifier less to work with. Neither is inferred.
+ */
 export interface VideoEvidence {
-  id: string; title: string; publishedAt: string; views: number | null; seconds: number;
+  id: string; title: string; publishedAt: string; views: number | null;
+  /** Null when the metadata reported no duration. Never 0 standing for absent. */
+  seconds: number | null;
   format: 'short' | 'long' | 'unknown';
+  /** Live and upcoming uploads are not comparable performance rows. */
+  state?: 'published' | 'live' | 'upcoming';
+  /** Bounded public description, kept for metadata classification only. */
+  description?: string;
 }
 interface RawVideo {
   id: string;
-  snippet?: { title?: string; publishedAt?: string; description?: string };
+  snippet?: { title?: string; publishedAt?: string; description?: string; liveBroadcastContent?: string };
   statistics?: { viewCount?: string; likeCount?: string; commentCount?: string };
   contentDetails?: { duration?: string };
   paidProductPlacementDetails?: { hasPaidProductPlacement?: boolean };
@@ -133,6 +163,25 @@ function classifyDisclosure(video: RawVideo): PromotionDisclosure | null {
 }
 
 const num = (v: string | undefined) => (v === undefined ? null : Number(v));
+
+/**
+ * The publication dates actually present in the sample.
+ *
+ * Separate from the requested window because they are different facts and the
+ * report was printing the first as though it were the second: "50 uploads
+ * published between 22 Jun and 20 Sept" when the earliest upload read was from
+ * 4 Jul. The request is a bound we chose; this is what came back inside it.
+ */
+function observedRange(videos: RawVideo[]): { firstPublishedAt: string | null; lastPublishedAt: string | null } {
+  const times = videos
+    .map((v) => (v.snippet?.publishedAt ? Date.parse(v.snippet.publishedAt) : NaN))
+    .filter((t) => Number.isFinite(t));
+  if (times.length === 0) return { firstPublishedAt: null, lastPublishedAt: null };
+  return {
+    firstPublishedAt: new Date(Math.min(...times)).toISOString(),
+    lastPublishedAt: new Date(Math.max(...times)).toISOString(),
+  };
+}
 
 function median(values: number[]): number {
   if (values.length === 0) return 0;
@@ -503,12 +552,36 @@ export async function analyzeChannel(
     units,
     corpus: comments,
     evidence: {
-      videos: videos.map(v => { const seconds = parseDuration(v.contentDetails?.duration ?? ''); return {
-        id: v.id, title: v.snippet?.title ?? '', publishedAt: v.snippet?.publishedAt ?? '',
-        views: num(v.statistics?.viewCount), seconds, format: seconds === 0 ? 'unknown' : seconds <= 180 ? 'short' : 'long',
-      }; }),
-      windowDays, start: new Date(now - windowMs).toISOString(), end: new Date(now).toISOString(),
-      unreadable, truncated,
+      videos: videos.map((v) => {
+        const raw = v.contentDetails?.duration ? parseDuration(v.contentDetails.duration) : 0;
+        // Zero is what a live broadcast and a missing duration both parse to,
+        // so it is read as "not reported" and never as a zero-second video.
+        const seconds = raw > 0 ? raw : null;
+        const broadcast = v.snippet?.liveBroadcastContent;
+        const state: VideoEvidence['state'] =
+          broadcast === 'live' ? 'live' : broadcast === 'upcoming' ? 'upcoming' : 'published';
+        return {
+          id: v.id,
+          title: v.snippet?.title ?? '',
+          publishedAt: v.snippet?.publishedAt ?? '',
+          views: num(v.statistics?.viewCount),
+          seconds,
+          format: seconds === null ? 'unknown' : seconds <= 180 ? 'short' : 'long',
+          state,
+          // Bounded: enough for a metadata classifier to read the recurring
+          // shape of a description, not a copy of the creator's page.
+          description: (v.snippet?.description ?? '').slice(0, 600),
+        } satisfies VideoEvidence;
+      }),
+      windowDays,
+      // THE REQUESTED WINDOW. What was asked for, which is not what was found —
+      // `firstPublishedAt`/`lastPublishedAt` carry that, and the report labels
+      // the two separately rather than printing the request as the sample.
+      start: new Date(now - windowMs).toISOString(),
+      end: new Date(now).toISOString(),
+      ...observedRange(videos),
+      unreadable,
+      truncated,
     },
   };
 }

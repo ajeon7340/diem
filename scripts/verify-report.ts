@@ -17,13 +17,17 @@ import {
   disclosedPromotions,
   exact,
   factualSummary,
+  limitations,
   observations,
   openQuestions,
+  percent,
   representativeVideos,
   reportDepth,
   thumbnailUrl,
   videoUrl,
 } from '@/lib/channel/highlights';
+import { classifyFormat, composition } from '@/lib/channel/composition';
+import { comparable, performance, publicReport } from '@/lib/channel/report';
 import type { ChannelReportView } from '@/lib/channel/report';
 import type { VideoEvidence } from '@/lib/ingest/analyze';
 import type { Promotion } from '@/types';
@@ -56,6 +60,7 @@ function video(over: Partial<VideoEvidence> = {}): VideoEvidence {
     views: 10_000,
     seconds: 600,
     format: 'long',
+    state: 'published',
     ...over,
   };
 }
@@ -77,8 +82,10 @@ function report(over: Partial<ChannelReportView> = {}): ChannelReportView {
     description: 'We are the BEST coffee channel and brands love us!',
     subscribers: 125_000,
     fetchedAt: FETCHED,
-    start: '2026-06-12T00:00:00.000Z',
-    end: '2026-09-10T00:00:00.000Z',
+    requestedStart: '2026-06-12T00:00:00.000Z',
+    requestedEnd: '2026-09-10T00:00:00.000Z',
+    sampledStart: '2026-09-01T00:00:00.000Z',
+    sampledEnd: '2026-09-01T00:00:00.000Z',
     windowDays: 90,
     videos: [video({ id: 'a1' }), video({ id: 'b2', views: 40_000 }), video({ id: 'c3', views: 4_000 })],
     comments: 600,
@@ -156,22 +163,92 @@ check(
 const noticed = observations(report());
 check('at most three observations', noticed.length <= 3, true);
 check('each one is a sentence', noticed.every((o) => o.text.trim().length > 20), true);
+
+// ---------------------------------------------------------------------------
+// A. THE FOUR CLAIMS IN THE REFERENCE EXPORT THAT DID NOT FOLLOW
+// ---------------------------------------------------------------------------
+
+// A1. "the top upload is about 4.7x the median, so one video carries much of
+//      the reach". A ratio to the median is not a share of the total, and views
+//      are not reach.
+const spread = report({
+  videos: [video({ id: 'a1', views: 1_000 }), video({ id: 'b2', views: 1_200 }), video({ id: 'c3', views: 90_000 })],
+});
+const spreadText = observations(spread).map((o) => o.text).join(' ');
+check('the ratio-to-median claim is gone', /× the median, so one video carries/.test(spreadText), false);
 check(
-  'a wide spread names the outlier and links it',
-  observations(report({
-    videos: [video({ id: 'a1', views: 1_000 }), video({ id: 'b2', views: 1_200 }), video({ id: 'c3', views: 90_000 })],
-  })).some((o) => o.text.includes('× the median') && o.supporting.includes('c3')),
+  'the concentration claim is a share of the total, computed',
+  spreadText.includes('accounts for 98% of the 92.2K views'),
+  true,
+);
+check('and it cites the upload it is about', observations(spread).some((o) => o.supporting.includes('c3')), true);
+check('the word reach is not used of a view count', /\breach\b/i.test(spreadText), false);
+check('and views are named as plays rather than people', spreadText.includes('Views are plays, not people'), true);
+// An even sample must NOT produce a concentration claim.
+const even = report({
+  videos: [video({ id: 'a1', views: 10_000 }), video({ id: 'b2', views: 11_000 }), video({ id: 'c3', views: 12_000 })],
+});
+check(
+  'an even sample says no upload dominates',
+  observations(even).some((o) => o.text.startsWith('No single upload dominates')),
+  true,
+);
+
+// A2. "both formats appear, so a brief can ask for either" — publishing is not
+//     availability.
+const mixed = report({
+  videos: [
+    video({ id: 'l1' }), video({ id: 'l2' }), video({ id: 'l3' }),
+    video({ id: 's1', format: 'short', seconds: 40 }),
+  ],
+});
+const mixedText = observations(mixed).map((o) => o.text).join(' ');
+check('publishing a format is no longer read as offering it', mixedText.includes('so a brief can ask for either'), false);
+check(
+  'and the report says outright that a history is not availability',
+  mixedText.includes('What the creator would agree to produce is not visible in a publishing history'),
   true,
 );
 check(
-  'a capped collection reports cadence as a lower bound',
-  observations(report({ truncated: true })).some((o) => o.text.startsWith('At least')),
+  'availability is asked instead of assumed',
+  openQuestions(mixed).some((q) => q.includes('publishing a format is not agreeing to produce one')),
   true,
 );
+
+// A3. Capped collection must not become homework for the creator.
+const capped = report({ truncated: true });
 check(
-  'and an uncapped one does not',
-  observations(report()).some((o) => o.text.startsWith('At least')),
+  'a cap is no longer an outreach question',
+  openQuestions(capped).some((q) => q.includes('Ask what else was published')),
   false,
+);
+check(
+  'it is a stated limitation of this collection',
+  limitations(capped).some((l) => l.includes('stopped at its upload limit')),
+  true,
+);
+check(
+  'and it names the fix as ours to run',
+  limitations(capped).some((l) => l.includes('Re-collect with a larger bound')),
+  true,
+);
+check(
+  'cadence is measured over the span the sample covers',
+  observations(report({
+    truncated: true,
+    sampledStart: '2026-08-01T00:00:00.000Z',
+    sampledEnd: '2026-09-01T00:00:00.000Z',
+  })).some((o) => o.text.includes('days this sample spans')),
+  true,
+);
+check(
+  'and a capped one refuses to describe the period before the sample',
+  observations(report({
+    truncated: true,
+    sampledStart: '2026-08-01T00:00:00.000Z',
+    sampledEnd: '2026-09-01T00:00:00.000Z',
+  })).some((o) => o.text.includes('nothing here describes the period before')),
+  true,
 );
 
 // ---------------------------------------------------------------------------
@@ -203,23 +280,63 @@ check(
 // ---------------------------------------------------------------------------
 
 const picks = representativeVideos(report());
-check('between three and five are chosen', picks.length >= 3 && picks.length <= 5, true);
+check('three or four are chosen', picks.length >= 1 && picks.length <= 4, true);
 check('every pick states why it is there', picks.every((p) => p.reason.length > 10), true);
-check('the most viewed is one of them', picks.some((p) => p.reason.startsWith('Most viewed')), true);
+check('no two picks serve the same purpose', new Set(picks.map((p) => p.purpose)).size, picks.length);
+
+// A4. "closest to the sample median, so it shows a typical upload" — two
+//     errors: a mixed-format median on a long-form channel, and a claim about
+//     content quality from a view count.
+const dominatedByLong = report({
+  videos: [
+    ...Array.from({ length: 6 }, (_, i) => video({ id: `l${i}`, views: 100_000 + i * 1_000, title: `Long review ${i}` })),
+    video({ id: 's1', format: 'short', seconds: 40, views: 101_000, title: 'Short poll' }),
+  ],
+});
+const typical = representativeVideos(dominatedByLong).find((p) => p.purpose === 'typical');
+check('the mid-range pick is drawn from the dominant format group', typical?.video.format, 'long');
 check(
-  'a video with no view count is never called the most viewed',
-  representativeVideos(report({
-    videos: [video({ id: 'a1', views: null }), video({ id: 'b2', views: 5 }), video({ id: 'c3', views: 9 })],
-  })).find((p) => p.reason.startsWith('Most viewed'))?.video.id,
-  'c3',
+  'and never claims the content is typical',
+  representativeVideos(dominatedByLong).some((p) => /typical upload/.test(p.reason)),
+  false,
 );
 check(
-  'a flagged upload is always represented',
-  representativeVideos(report({
-    videos: [video({ id: 'a1' }), video({ id: 'b2' }), video({ id: 'c3' }), video({ id: 'd4' }), video({ id: 'e5' }), video({ id: 'f6' })],
-    promotions: [promotion({ postId: 'f6' })],
-  })).some((p) => p.video.id === 'f6'),
+  'it says what it actually measured',
+  typical?.reason.includes('a position in a distribution, not a judgement about the content'),
   true,
+);
+check(
+  'a video with no view count is never the outlier pick',
+  representativeVideos(report({
+    videos: [
+      video({ id: 'a1', views: null }), video({ id: 'b2', views: 5 }),
+      video({ id: 'c3', views: 9 }), video({ id: 'd4', views: 400 }),
+    ],
+  })).find((p) => p.purpose === 'outlier')?.video.id,
+  'd4',
+);
+check(
+  'an even sample produces no outlier card at all',
+  representativeVideos(report({
+    videos: [
+      video({ id: 'a1', views: 1_000 }), video({ id: 'b2', views: 1_050 }),
+      video({ id: 'c3', views: 1_100 }), video({ id: 'd4', views: 1_150 }),
+    ],
+  })).some((p) => p.purpose === 'outlier'),
+  false,
+);
+const flagged = report({
+  videos: [video({ id: 'a1' }), video({ id: 'b2' }), video({ id: 'c3' }), video({ id: 'd4' }), video({ id: 'e5' }), video({ id: 'f6' })],
+  promotions: [promotion({ postId: 'f6' })],
+});
+check('a flagged upload is always represented', representativeVideos(flagged).some((p) => p.video.id === 'f6'), true);
+check('and the card carries the flag', representativeVideos(flagged).find((p) => p.video.id === 'f6')?.disclosed, true);
+// The sponsorship list must not reprint a card the evidence section already
+// showed — that duplication filled a page and a half of the reference export.
+check(
+  'the sponsorship list excludes what the cards already showed',
+  disclosedPromotions(flagged, 3, representativeVideos(flagged).map((p) => p.video.id)).length,
+  0,
 );
 
 // Two uploads, one title, two ids. A re-upload or a part two — not a duplicate.
@@ -298,7 +415,7 @@ check(
 // Gates, disclosures and the things public data cannot support
 // ---------------------------------------------------------------------------
 
-check('the Shorts proxy is still labelled a proxy', component.includes('proxy'), true);
+check('the Shorts proxy is still labelled a proxy', read('src/components/report/FormatPerformance.tsx').includes('duration <strong className="font-medium">proxy</strong>'), true);
 check('commenters are still not the audience', prose('src/components/channel/ChannelReport.tsx').includes('do not represent the audience'), true);
 check(
   'comment themes have four states, not two',
@@ -353,7 +470,15 @@ check('and restores the screen afterwards', actions.includes("root.classList.rem
 // ---------------------------------------------------------------------------
 
 const css = read('src/app/globals.css');
-check('page one ends with a break', css.includes('.report-page-1 { break-after: page; }'), true);
+check('page one ends with a break', css.includes('.report-page-break { break-after: page; }'), true);
+// CONDITIONALLY, though: a thin sample that cannot fill a sheet must not be
+// followed by half a blank page, which is most of what the reference export's
+// whitespace was.
+check(
+  'the break is withheld for a sample too small to fill the sheet',
+  component.includes("report.videos.length >= 12 ? 'report-page-break' : ''"),
+  true,
+);
 check('the old break-after-first-section rule is gone', css.includes('.report-section:first-of-type { break-after: page; }'), false);
 check('evidence cards never split across pages', css.includes('.channel-report .evidence-card'), true);
 check('headings keep their content', /\.channel-report h1, \.channel-report h2, \.channel-report h3 \{ break-after: avoid; \}/.test(css), true);
@@ -385,6 +510,288 @@ check(
   prose('src/components/campaign/CampaignExport.tsx').includes('Private notes, budget, fees and campaign assessments are excluded'),
   true,
 );
+
+
+// ---------------------------------------------------------------------------
+// A5. A REPORTED ZERO IS NOT MISSING DATA, AND NEITHER IS A LIVE STREAM
+// ---------------------------------------------------------------------------
+
+const withStates = report({
+  videos: [
+    video({ id: 'p1', views: 500_000 }),
+    video({ id: 'p2', views: 600_000 }),
+    video({ id: 'p3', views: 700_000 }),
+    // A premiere nobody can watch yet. Its 0 is a state, not a result.
+    video({ id: 'up', views: 0, state: 'upcoming', seconds: null, format: 'unknown' }),
+    // A stream still running. Its count is not comparable with a finished one.
+    video({ id: 'lv', views: 12, state: 'live', seconds: null, format: 'unknown' }),
+    // A genuine upload that reported no count at all.
+    video({ id: 'nr', views: null }),
+  ],
+});
+const withStatesPerf = performance(withStates.videos, Date.parse(FETCHED));
+check('a scheduled premiere is not a comparable upload', comparable(withStates.videos).some((v) => v.id === 'up'), false);
+check('nor is a live broadcast', comparable(withStates.videos).some((v) => v.id === 'lv'), false);
+check('so a premiere at zero never becomes the sample minimum', withStatesPerf.min, 500_000);
+check('and the live count never becomes it either', withStatesPerf.min === 12, false);
+check('the excluded ones are counted, not lost', [withStatesPerf.excludedLive, withStatesPerf.excludedUpcoming], [1, 1]);
+check('an upload reporting no count is comparable but unmeasured', withStatesPerf.unreported, 1);
+check('it is excluded from the median rather than counted as zero', withStatesPerf.n, 3);
+check('and from the total', withStatesPerf.total, 1_800_000);
+check(
+  'the summary names the excluded broadcasts rather than dropping them silently',
+  factualSummary(withStates).join(' ').includes('1 live broadcast and 1 scheduled premiere are in the sample and excluded'),
+  true,
+);
+check(
+  'and the limitations say the unreported one is unknown, not zero',
+  limitations(withStates).some((l) => l.includes('That is unknown, not zero')),
+  true,
+);
+// A genuine zero on a published upload IS a measurement and must survive.
+const realZero = performance(
+  [video({ id: 'z', views: 0 }), video({ id: 'a', views: 100 }), video({ id: 'b', views: 200 })],
+  Date.parse(FETCHED),
+);
+check('a published upload that really got zero views is measured', realZero.min, 0);
+check('and counts toward the denominator', realZero.n, 3);
+
+// ---------------------------------------------------------------------------
+// A6. REQUESTED WINDOW AND SAMPLED RANGE ARE DIFFERENT FACTS
+// ---------------------------------------------------------------------------
+
+const windows = report({
+  requestedStart: '2026-06-22T00:00:00.000Z',
+  requestedEnd: '2026-09-20T00:00:00.000Z',
+  sampledStart: '2026-07-04T00:00:00.000Z',
+  sampledEnd: '2026-09-18T00:00:00.000Z',
+  truncated: true,
+});
+const windowText = factualSummary(windows).join(' ');
+check(
+  'the summary states the dates actually sampled',
+  windowText.includes('published between 4 Jul 2026 and 18 Sept 2026'),
+  true,
+);
+check('and never prints the request in their place', windowText.includes('22 Jun 2026'), false);
+check(
+  'the gap between request and sample is stated when it is material',
+  windowText.includes('A 90-day window was requested; the sample begins 12 days inside it'),
+  true,
+);
+check('and names the cap as the reason', windowText.includes('reached its upload limit first'), true);
+check(
+  'a sample that fills its window does not print the note at all',
+  factualSummary(report({
+    requestedStart: '2026-06-12T00:00:00.000Z',
+    sampledStart: '2026-06-13T00:00:00.000Z',
+    sampledEnd: '2026-09-10T00:00:00.000Z',
+  })).join(' ').includes('window was requested'),
+  false,
+);
+// publicReport derives the sampled range for evidence collected before the
+// field existed, rather than falling back to the requested window.
+const derived = publicReport({
+  channel_id: 'UCx', title: 'T', handle: null, avatar_url: null, description: null,
+  subscribers: 1, data_fetched_at: new Date().toISOString(), comments_analyzed: 0,
+  promotions: [], top_comment_clusters: [],
+  evidence: {
+    videos: [
+      { id: 'a', title: 'a', publishedAt: '2026-07-04T00:00:00.000Z', views: 1, seconds: 600, format: 'long' },
+      { id: 'b', title: 'b', publishedAt: '2026-09-18T00:00:00.000Z', views: 2, seconds: 600, format: 'long' },
+    ],
+    start: '2026-06-22T00:00:00.000Z', end: '2026-09-20T00:00:00.000Z', windowDays: 90,
+  },
+});
+check('legacy evidence still reports a sampled range', derived?.sampledStart, '2026-07-04T00:00:00.000Z');
+check('and keeps the request separate', derived?.requestedStart, '2026-06-22T00:00:00.000Z');
+check(
+  'legacy uploads with no state are treated as published, not excluded',
+  comparable(derived!.videos).length,
+  2,
+);
+
+// ---------------------------------------------------------------------------
+// A7. THE NARRATIVE, THE TABLE AND THE CHART DESCRIBE THE SAME UPLOADS
+// ---------------------------------------------------------------------------
+
+const agreeing = report({
+  videos: [
+    video({ id: 'l1', views: 100 }), video({ id: 'l2', views: 200 }), video({ id: 'l3', views: 300 }),
+    video({ id: 's1', format: 'short', seconds: 30, views: 400 }),
+    video({ id: 'x1', state: 'upcoming', views: 0, seconds: null, format: 'unknown' }),
+  ],
+});
+const narrativeCounts = factualSummary(agreeing).join(' ');
+const tableTotal = performance(agreeing.videos, Date.parse(FETCHED)).sampled;
+check('the narrative splits 3 long-form and 1 short', narrativeCounts.includes('3 long-form') && narrativeCounts.includes('1 short'), true);
+check('and the table counts the same four comparable uploads', tableTotal, 4);
+check(
+  'observations are computed over comparable uploads too',
+  observations(agreeing).some((o) => o.text.includes('of 4 comparable uploads')),
+  true,
+);
+check(
+  'the scatter excludes the same uploads the table does',
+  read('src/components/report/PerformanceScatter.tsx').includes('comparable(videos)'),
+  true,
+);
+check(
+  'and performance() is the single place eligibility is decided',
+  read('src/lib/channel/report.ts').includes('const eligible=comparable(videos);'),
+  true,
+);
+
+// ---------------------------------------------------------------------------
+// B. CONTENT CLASSIFICATION: EXCLUSIVE FORMATS, OVERLAPPING SUBJECTS
+// ---------------------------------------------------------------------------
+
+check('a versus title is a comparison', classifyFormat(video({ title: 'iPhone 18 vs Galaxy S26' })), 'comparison');
+check('and so is the Korean form', classifyFormat(video({ title: '아이폰 18 프로 갤럭시 비교' })), 'comparison');
+check('a how-to is a tutorial', classifyFormat(video({ title: 'How to set up your new laptop' })), 'tutorial');
+check('and 하는 법 is too', classifyFormat(video({ title: '맥북 초기 설정 하는 법' })), 'tutorial');
+check('3개월 사용기 is long-term usage', classifyFormat(video({ title: '오우라링5 3개월 사용기' })), 'longterm');
+check('언박싱 is a first look, not a review', classifyFormat(video({ title: '아이폰 18 언박싱' })), 'firstlook');
+check('리뷰 is a review', classifyFormat(video({ title: '갤럭시 워치 리뷰' })), 'review');
+check('출시 is news', classifyFormat(video({ title: '새 아이패드 출시 소식' })), 'news');
+check(
+  'a comparison review is a comparison — the more specific rule wins',
+  classifyFormat(video({ title: '갤럭시 vs 아이폰 비교 리뷰' })),
+  'comparison',
+);
+check('and nothing matching is unclassified, not forced', classifyFormat(video({ title: '오늘의 브이로그' })), 'unclassified');
+check(
+  'a description is read only when the title says nothing',
+  classifyFormat(video({ title: '오늘의 브이로그', description: 'how to set it up' })),
+  'tutorial',
+);
+
+const comp = composition([
+  video({ id: 'a', title: '아이폰 18 리뷰' }),
+  video({ id: 'b', title: '아이폰 18 프로 언박싱' }),
+  video({ id: 'c', title: '아이폰 케이스 비교' }),
+  video({ id: 'd', title: '오늘의 일상' }),
+]);
+check('every upload lands in exactly one format bucket', comp.formats.reduce((n, g) => n + g.videoIds.length, 0), 4);
+check('and the buckets sum to the sample', comp.sampled, 4);
+check('unclassified is a real bucket with its count', comp.formats.find((g) => g.format === 'unclassified')?.videoIds.length, 1);
+check('unclassified sorts last, never leading the chart', comp.formats.at(-1)?.format, 'unclassified');
+check('a recurring subject needs three uploads', comp.subjects.map((s) => s.term), ['아이폰']);
+check('overlapping tags do not have to sum to the sample', comp.subjects[0].videoIds.length <= comp.sampled, true);
+check('a two-upload word is not called recurring', composition([
+  video({ id: 'a', title: '맥북 리뷰' }), video({ id: 'b', title: '맥북 비교' }),
+]).subjects.length, 0);
+check('the basis never claims a viewing', comp.basis.includes('Nothing was watched'), true);
+check(
+  'and neither does the report',
+  /\bwe watched\b|\bwatched the video\b|\btranscript(s)? (of|were) read\b/i.test(prose('src/components/channel/ChannelReport.tsx')),
+  false,
+);
+check(
+  'the report states outright that nothing was watched',
+  prose('src/components/channel/ChannelReport.tsx').includes('No upload was watched and no transcript was read'),
+  true,
+);
+check('a Korean particle is stripped so 아이폰이 and 아이폰 are one subject', composition([
+  video({ id: 'a', title: '아이폰이 좋다' }), video({ id: 'b', title: '아이폰 리뷰' }), video({ id: 'c', title: '아이폰 비교' }),
+]).subjects[0]?.term, '아이폰');
+check('an empty sample classifies nothing rather than throwing', composition([]).sampled, 0);
+
+// ---------------------------------------------------------------------------
+// C. SMALL SAMPLES, QUARTILES AND THE THINGS NOT TO SAY ABOUT THEM
+// ---------------------------------------------------------------------------
+
+const small = performance(Array.from({ length: 5 }, (_, i) => video({ id: `v${i}`, views: (i + 1) * 100 })), Date.parse(FETCHED));
+check('five uploads is too few for a middle 50%', [small.p25, small.p75], [null, null]);
+check('but the median still exists', small.median, 300);
+const big = performance(Array.from({ length: 12 }, (_, i) => video({ id: `v${i}`, views: (i + 1) * 100 })), Date.parse(FETCHED));
+check('twelve uploads supports one', big.p25 !== null && big.p75 !== null, true);
+check('and it is an inner range, not the extremes', big.p25! > big.min! && big.p75! < big.max!, true);
+check(
+  'performance is never characterised as strong, stable or predictable',
+  /\b(strong|weak|stable|consistent|predictable|reliable) (performance|views|channel)\b/i.test(
+    prose('src/components/report/FormatPerformance.tsx') + prose('src/components/channel/ChannelReport.tsx'),
+  ),
+  false,
+);
+check(
+  'the chart is never presented as growth',
+  prose('src/components/report/PerformanceScatter.tsx').includes('not a history'),
+  true,
+);
+check(
+  'and no first-week figure is invented from one snapshot',
+  prose('src/components/report/PerformanceScatter.tsx').includes('nothing here is a first-week figure'),
+  true,
+);
+check('age bands carry their sample sizes', read('src/components/report/PerformanceScatter.tsx').includes('(${band.n})'), true);
+check('percent rounds to whole numbers', percent(1, 3), '33%');
+check('and refuses to divide by nothing', percent(1, 0), '—');
+
+// ---------------------------------------------------------------------------
+// G. THE EXPORT IS AN EDITED DOCUMENT
+// ---------------------------------------------------------------------------
+
+check('evidence cards print as rows, not tiles', css.includes('.channel-report .evidence-card,'), true);
+check('with a bounded thumbnail', css.includes('.channel-report .evidence-thumb,'), true);
+check('raw urls no longer interrupt prose', css.includes('.channel-report a[href^="http"]::after {'), false);
+check('they survive in the appendix reference list', css.includes('.channel-report .report-appendix a[href^="http"]::after'), true);
+check('each printed sheet carries the report identity', css.includes('.channel-report .report-page-foot'), true);
+check('and the component prints a page number', component.includes('page {page} of 2'), true);
+check('the relevance footer says the brief is inside it', read('src/components/report/RelevanceReport.tsx').includes('contains your brief — internal'), true);
+check('the metric row stays a row in print', css.includes('.channel-report .report-metrics .grid { display: grid;'), true);
+check('the print background is white', css.includes('background: #fff !important;'), true);
+check(
+  'an unavailable comment pass is a note, not an empty section',
+  component.includes('Comment themes are not available on this deployment. Nothing above depends on them.'),
+  true,
+);
+check('and it no longer has its own heading block', markup.includes('<Block title="Comment response">'), false);
+check(
+  'the four comment states are still distinguished',
+  ['derivedAllowed', 'analysedAt', 'clusters.length === 0'].every((t) => component.includes(t)),
+  true,
+);
+
+// ---------------------------------------------------------------------------
+// I. AWKWARD INPUTS
+// ---------------------------------------------------------------------------
+
+const koreanTitle = '600만원짜리 게이밍 노트북은 대체 뭘까?ㄷㄷ 웬만한 데스크탑보다 더 빠른 컴퓨터;; 가성비 최강 제품 총정리';
+check(
+  'a very long Korean title is never truncated in the data',
+  representativeVideos(report({ videos: [video({ id: 'k1', title: koreanTitle })] }))[0]?.video.title,
+  koreanTitle,
+);
+check(
+  'a missing thumbnail still produces a url rather than a broken card',
+  thumbnailUrl('missing-id'),
+  'https://i.ytimg.com/vi/missing-id/mqdefault.jpg',
+);
+check(
+  'and the card tints the tile so an absent image reads as absent',
+  read('src/components/report/EvidenceCard.tsx').includes('bg-line/40 object-contain'),
+  true,
+);
+check('an empty sample produces no representative uploads', representativeVideos(report({ videos: [] })).length, 0);
+check('and no observations', observations(report({ videos: [] })).length, 0);
+check(
+  'a sample of only live broadcasts has nothing comparable and says so',
+  factualSummary(report({
+    videos: [video({ id: 'l', state: 'live', views: 3, seconds: null, format: 'unknown' })],
+  })).join(' ').includes('excluded from every view figure'),
+  true,
+);
+check(
+  'limitations always end with the metadata-only statement',
+  limitations(report()).at(-1)?.includes('No upload was watched'),
+  true,
+);
+check('and there are never more than five', limitations(report({
+  truncated: true, unreadable: 3,
+  videos: [video({ id: 'a', views: null }), video({ id: 'b', format: 'unknown', seconds: null }), video({ id: 'c', state: 'live' })],
+})).length <= 5, true);
+
 
 console.log(`\n  ${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);

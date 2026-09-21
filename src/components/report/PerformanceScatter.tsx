@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 
 import { compact, exact, shortDate, thumbnailUrl, videoUrl } from '@/lib/channel/highlights';
+import { comparable, performance, setAside } from '@/lib/channel/report';
 import type { VideoEvidence } from '@/lib/ingest/analyze';
 
 /**
@@ -53,16 +54,22 @@ export function PerformanceScatter({
   videos: VideoEvidence[];
   collectedAt: string;
 }) {
+  const eligible = useMemo(() => comparable(videos), [videos]);
   const plotted = useMemo(
     () =>
-      videos
+      eligible
         .filter((v) => v.views !== null && Number.isFinite(Date.parse(v.publishedAt)))
         .sort((a, b) => Date.parse(a.publishedAt) - Date.parse(b.publishedAt)),
-    [videos],
+    [eligible],
   );
   // Kept out of the plot and named underneath rather than drawn at zero: an
   // upload whose view count was not reported has not been watched zero times.
-  const unreported = videos.filter((v) => v.views === null);
+  const unreported = eligible.filter((v) => v.views === null);
+  // A live broadcast is still accumulating and a premiere has not been watched
+  // at all. Plotting either one at its current count draws a point that means
+  // something different from every other point on the chart.
+  const aside = useMemo(() => setAside(videos), [videos]);
+  const bands = useMemo(() => performance(videos, Date.parse(collectedAt)).ageBands, [videos, collectedAt]);
   const [selected, setSelected] = useState<string | null>(null);
 
   if (plotted.length === 0) {
@@ -86,6 +93,15 @@ export function PerformanceScatter({
 
   const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => Math.round(maxV * f));
   const active = plotted.find((v) => v.id === selected) ?? null;
+
+  const byViews = [...plotted].sort((a, b) => (b.views ?? 0) - (a.views ?? 0));
+  const annotations: { video: VideoEvidence; anchor: 'high' | 'low' }[] =
+    byViews.length >= 4 && byViews[0].id !== byViews.at(-1)!.id
+      ? [
+          { video: byViews[0], anchor: 'high' },
+          { video: byViews.at(-1)!, anchor: 'low' },
+        ]
+      : [];
 
   function move(direction: 1 | -1) {
     const index = plotted.findIndex((v) => v.id === selected);
@@ -121,6 +137,29 @@ export function PerformanceScatter({
           <text x={(W - PAD.left) / 2 + PAD.left} y={H - 4} textAnchor="middle" className="fill-ink-faint text-[9px]">
             Publication date
           </text>
+
+          {/* TWO ANNOTATIONS, NOT TWENTY. The extremes are the points a reader
+              is trying to identify, and labelling only those keeps the chart
+              readable where labelling every point would not. Both are also in
+              the table underneath, which is the accessible route to the same
+              fact. */}
+          {annotations.map(({ video, anchor }) => {
+            const cx = x(Date.parse(video.publishedAt));
+            const cy = y(video.views ?? 0);
+            const flip = cx > W * 0.62;
+            return (
+              <text
+                key={`note-${video.id}`}
+                x={flip ? cx - 9 : cx + 9}
+                y={cy + (anchor === 'high' ? -8 : 13)}
+                textAnchor={flip ? 'end' : 'start'}
+                className="fill-ink-faint text-[8.5px]"
+              >
+                {anchor === 'high' ? 'highest ' : 'lowest '}
+                {compact(video.views)}
+              </text>
+            );
+          })}
 
           {plotted.map((video) => {
             const cx = x(Date.parse(video.publishedAt));
@@ -179,9 +218,31 @@ export function PerformanceScatter({
           time to accumulate, so the left of the chart is not growth. Nothing here shows subscribers.
           Highest in the sample: {compact(maxV)}.
           {unreported.length
-            ? ` ${unreported.length} upload${unreported.length === 1 ? '' : 's'} report no view count and are not plotted — that is unknown, not zero.`
+            ? ` ${unreported.length} upload${unreported.length === 1 ? '' : 's'} report${unreported.length === 1 ? 's' : ''} no view count and ${unreported.length === 1 ? 'is' : 'are'} not plotted — that is unknown, not zero.`
+            : ''}
+          {aside.live || aside.upcoming
+            ? ` ${[
+                aside.live ? `${aside.live} live broadcast${aside.live === 1 ? '' : 's'}` : null,
+                aside.upcoming ? `${aside.upcoming} scheduled premiere${aside.upcoming === 1 ? '' : 's'}` : null,
+              ]
+                .filter(Boolean)
+                .join(' and ')} ${aside.live + aside.upcoming === 1 ? 'is' : 'are'} excluded — neither is a comparable result.`
             : ''}
         </p>
+        {/* AGE GROUPS, BECAUSE THE SLOPE IS MOSTLY AGE. A month-old upload has
+            had a month to accumulate; grouping the medians by age says that
+            with numbers instead of asking the reader to infer it. These are
+            medians of one snapshot — nothing here is a first-week figure, which
+            would need repeat collections this product does not make. */}
+        {bands.some((band) => band.n > 0) ? (
+          <p className="tnum text-[11px] leading-relaxed text-ink-muted">
+            Median by upload age:{' '}
+            {bands
+              .filter((band) => band.n > 0)
+              .map((band) => `${band.label} ${compact(band.median)} (${band.n})`)
+              .join(' · ')}
+          </p>
+        ) : null}
       </figcaption>
 
       {active ? (
@@ -207,7 +268,7 @@ export function PerformanceScatter({
 
       <details className="mt-3 report-chart-table">
         <summary className="cursor-pointer text-[12px] text-ink-muted underline-offset-4 hover:text-ink hover:underline">
-          Chart data as a table ({plotted.length + unreported.length} uploads)
+          Chart data as a table ({videos.length} uploads)
         </summary>
         <div className="mt-2 overflow-x-auto">
           <table className="w-full text-left text-[12px]">
@@ -224,7 +285,7 @@ export function PerformanceScatter({
               </tr>
             </thead>
             <tbody>
-              {[...plotted, ...unreported].map((video) => (
+              {[...plotted, ...unreported, ...videos.filter((v) => v.state && v.state !== 'published')].map((video) => (
                 <tr key={video.id} className="avoid-break border-t border-line">
                   <td className="py-1 pr-2">
                     <a href={videoUrl(video.id)} target="_blank" rel="noopener noreferrer" className="text-indigo underline-offset-4 hover:underline">
@@ -232,7 +293,12 @@ export function PerformanceScatter({
                     </a>
                   </td>
                   <td className="tnum py-1 pr-2 text-ink-muted">{shortDate(video.publishedAt)}</td>
-                  <td className="py-1 pr-2 text-ink-muted">{FORMAT_LABEL[video.format]}</td>
+                  <td className="py-1 pr-2 text-ink-muted">
+                    {FORMAT_LABEL[video.format]}
+                    {video.state && video.state !== 'published'
+                      ? ` · ${video.state === 'live' ? 'live now' : 'scheduled'}`
+                      : ''}
+                  </td>
                   <td className="tnum py-1 text-ink" title={exact(video.views)}>{compact(video.views)}</td>
                 </tr>
               ))}

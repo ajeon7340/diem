@@ -35,21 +35,37 @@ export const dynamic = 'force-dynamic';
 const NOW = Date.parse('2026-09-18T00:00:00.000Z');
 const DAY = 86_400_000;
 
+/**
+ * A fixture that exercises the states a real collection produces.
+ *
+ * DELIBERATELY AWKWARD IN FIVE PLACES, because a sample of nine tidy rows
+ * demonstrates a renderer and not a report: one upload reports no view count,
+ * one reports no duration, one is a broadcast that is still running, one is a
+ * premiere nobody can watch yet, and two share a subject so the composition
+ * chart has something to group. Every figure is invented.
+ */
 const VIDEOS: ChannelReportView['videos'] = [
-  { id: 'sample-aeropress', title: 'Aeropress vs pour-over: which grinder setting actually matters', publishedAt: new Date(NOW - 6 * DAY).toISOString(), views: 31_400, seconds: 780, format: 'long' },
-  { id: 'sample-grinder', title: 'I ground 40 shots with a hand grinder so you do not have to', publishedAt: new Date(NOW - 19 * DAY).toISOString(), views: 18_200, seconds: 640, format: 'long' },
-  { id: 'sample-travel', title: '집에서 에스프레소 내리기: 여행용 그라인더로 어디까지 되나', publishedAt: new Date(NOW - 33 * DAY).toISOString(), views: 12_050, seconds: 520, format: 'long' },
-  { id: 'sample-short1', title: 'Grind size in 40 seconds', publishedAt: new Date(NOW - 41 * DAY).toISOString(), views: 96_800, seconds: 44, format: 'short' },
-  { id: 'sample-kettle', title: 'The kettle nobody needs (but I bought anyway)', publishedAt: new Date(NOW - 58 * DAY).toISOString(), views: 9_400, seconds: 410, format: 'long' },
+  { id: 'sample-aeropress', title: 'Aeropress vs pour-over: which grinder setting actually matters', publishedAt: new Date(NOW - 6 * DAY).toISOString(), views: 31_400, seconds: 780, format: 'long', state: 'published', description: 'Side by side on the same beans.' },
+  { id: 'sample-grinder', title: 'Hand grinder review: 40 shots so you do not have to', publishedAt: new Date(NOW - 19 * DAY).toISOString(), views: 18_200, seconds: 640, format: 'long', state: 'published', description: 'Paid promotion. Full review of the grinder.' },
+  { id: 'sample-travel', title: '여행용 그라인더 3개월 사용기: 집에서 에스프레소 내리기', publishedAt: new Date(NOW - 33 * DAY).toISOString(), views: 12_050, seconds: 520, format: 'long', state: 'published', description: '3개월 동안 써본 기록.' },
+  { id: 'sample-short1', title: 'Grind size in 40 seconds', publishedAt: new Date(NOW - 41 * DAY).toISOString(), views: 96_800, seconds: 44, format: 'short', state: 'published', description: '' },
+  { id: 'sample-kettle', title: 'Kettle review: the one nobody needs (but I bought anyway)', publishedAt: new Date(NOW - 58 * DAY).toISOString(), views: 9_400, seconds: 410, format: 'long', state: 'published', description: '' },
   // Supports the brand's category outright.
-  { id: 'sample-kit', title: 'Coffee equipment I actually kept after two years', publishedAt: new Date(NOW - 47 * DAY).toISOString(), views: 22_700, seconds: 900, format: 'long' },
+  { id: 'sample-kit', title: 'Coffee equipment I actually kept after two years of use', publishedAt: new Date(NOW - 47 * DAY).toISOString(), views: 22_700, seconds: 900, format: 'long', state: 'published', description: 'Long-term notes on the whole setup.' },
   // Names an avoided topic in order to REFUSE it — which is exactly why a
   // conflicting row tells a buyer to read the video rather than decide.
-  { id: 'sample-crypto', title: 'Why I turn down crypto sponsorships', publishedAt: new Date(NOW - 64 * DAY).toISOString(), views: 7_300, seconds: 300, format: 'long' },
+  { id: 'sample-crypto', title: 'Why I turn down crypto sponsorships', publishedAt: new Date(NOW - 64 * DAY).toISOString(), views: 7_300, seconds: 300, format: 'long', state: 'published', description: '' },
   // Reports no view count. Kept out of the plot and named as unknown, never 0.
-  { id: 'sample-nocount', title: 'Workshop tour, unlisted re-upload', publishedAt: new Date(NOW - 71 * DAY).toISOString(), views: null, seconds: 300, format: 'long' },
-  { id: 'sample-nodur', title: 'Livestream: answering your brewing questions', publishedAt: new Date(NOW - 80 * DAY).toISOString(), views: 4_120, seconds: 0, format: 'unknown' },
+  { id: 'sample-nocount', title: 'Workshop tour, unlisted re-upload', publishedAt: new Date(NOW - 71 * DAY).toISOString(), views: null, seconds: 300, format: 'long', state: 'published', description: '' },
+  // No duration in the metadata: outside the format comparison, not a Short.
+  { id: 'sample-nodur', title: 'Answering your brewing questions', publishedAt: new Date(NOW - 80 * DAY).toISOString(), views: 4_120, seconds: null, format: 'unknown', state: 'published', description: '' },
+  // Still running. Its count is not comparable with a finished upload's.
+  { id: 'sample-live', title: 'Live: Sunday morning brew along', publishedAt: new Date(NOW - 1 * DAY).toISOString(), views: 612, seconds: null, format: 'unknown', state: 'live', description: '' },
+  // Nobody has watched it yet. Its 0 is a state, not a result.
+  { id: 'sample-upcoming', title: 'Premiere: the espresso machine comparison', publishedAt: new Date(NOW + 2 * DAY).toISOString(), views: 0, seconds: null, format: 'unknown', state: 'upcoming', description: '' },
 ];
+
+const SAMPLED = VIDEOS.map((v) => Date.parse(v.publishedAt));
 
 const PROMOTIONS: Promotion[] = [
   {
@@ -100,8 +116,10 @@ const REPORT: ChannelReportView = {
   description: 'A fictional channel about home coffee equipment and weekend projects.',
   subscribers: 42_000,
   fetchedAt: new Date(NOW).toISOString(),
-  start: new Date(NOW - 90 * DAY).toISOString(),
-  end: new Date(NOW).toISOString(),
+  requestedStart: new Date(NOW - 90 * DAY).toISOString(),
+  requestedEnd: new Date(NOW).toISOString(),
+  sampledStart: new Date(Math.min(...SAMPLED)).toISOString(),
+  sampledEnd: new Date(Math.max(...SAMPLED)).toISOString(),
   windowDays: 90,
   videos: VIDEOS,
   // The corpus exists either way; whether it can be CLASSIFIED is the gate.
@@ -150,7 +168,7 @@ export default function Sample() {
           <PrintReport />
         </div>
 
-        <ChannelReport report={REPORT} sample />
+        <ChannelReport report={REPORT} />
 
         <div className="mt-10 border-t border-line pt-8">
           <p className="mb-4 text-[12px] leading-relaxed text-ink-muted">

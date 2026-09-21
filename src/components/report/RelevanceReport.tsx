@@ -5,11 +5,13 @@ import type { ChannelReportView } from '@/lib/channel/report';
 import { shortDate } from '@/lib/channel/highlights';
 import { FRESHNESS_LABEL, type Freshness } from '@/lib/relevance/fingerprint';
 import {
+  proposals,
   relevantVideos,
   statusCounts,
   type RelevanceContext,
   type RequirementRow,
 } from '@/lib/relevance/requirements';
+import { videoUrl } from '@/lib/channel/highlights';
 import type { CandidateFit } from '@/lib/report/candidate-fit';
 
 /**
@@ -61,6 +63,9 @@ export function RelevanceReport({
 }) {
   const counts = statusCounts(rows);
   const cards = relevantVideos(report, rows);
+  // Deterministic, and only where a requirement is actually cited. The gated
+  // narrative may add its own angles below; these stand without it.
+  const shapes = proposals(report, rows, context);
   const stale = freshness === 'evidence_changed' || freshness === 'brief_changed';
 
   return (
@@ -137,6 +142,67 @@ export function RelevanceReport({
         </div>
       </section>
 
+      {shapes.length ? (
+        <section className="report-section avoid-break rounded-lg border border-line bg-surface p-4">
+          <h2 className="text-[14px] font-semibold text-ink">
+            Possible collaboration shapes
+            <span className="ml-1.5 text-[11px] font-normal text-ink-faint">
+              proposals built from what they have published — not offers, not findings
+            </span>
+          </h2>
+          <ul className="mt-2.5 space-y-3">
+            {shapes.map((shape) => (
+              <li key={shape.format} className="avoid-break rounded-lg border border-line bg-paper p-3">
+                <dl className="space-y-1.5">
+                  <div className="flex gap-2">
+                    <dt className="w-[6.5rem] shrink-0 text-[10px] uppercase tracking-[0.09em] text-ink-faint">Format</dt>
+                    <dd className="text-[12px] text-ink">{shape.format}</dd>
+                  </div>
+                  <div className="flex gap-2">
+                    <dt className="w-[6.5rem] shrink-0 text-[10px] uppercase tracking-[0.09em] text-ink-faint">Use case</dt>
+                    <dd className="text-[12px] leading-relaxed text-ink">{shape.useCase}</dd>
+                  </div>
+                  <div className="flex gap-2">
+                    <dt className="w-[6.5rem] shrink-0 text-[10px] uppercase tracking-[0.09em] text-ink-faint">Supported by</dt>
+                    <dd className="text-[12px] leading-relaxed text-ink">
+                      {shape.support.map((id, i) => {
+                        const video = report.videos.find((v) => v.id === id);
+                        return (
+                          <a
+                            key={id}
+                            href={videoUrl(id)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="source-link text-indigo underline-offset-4 hover:underline"
+                          >
+                            {i > 0 ? ' · ' : ''}
+                            {video ? video.title.slice(0, 42) : id}
+                          </a>
+                        );
+                      })}
+                    </dd>
+                  </div>
+                  <div className="flex gap-2">
+                    <dt className="w-[6.5rem] shrink-0 text-[10px] uppercase tracking-[0.09em] text-ink-faint">Confirm</dt>
+                    <dd className="text-[12px] leading-relaxed text-ink-muted">
+                      <ul className="list-disc space-y-0.5 pl-3.5">
+                        {shape.confirm.map((line) => (
+                          <li key={line}>{line}</li>
+                        ))}
+                      </ul>
+                    </dd>
+                  </div>
+                </dl>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-[11px] leading-relaxed text-ink-faint">
+            Having published a format is not an offer to produce one. Nothing here states
+            availability, price, rights, or what a collaboration would achieve.
+          </p>
+        </section>
+      ) : null}
+
       {narrative ? (
         <section className="report-section avoid-break rounded-lg border border-line bg-surface p-4">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -211,6 +277,12 @@ export function RelevanceReport({
         This is an interpretation of public evidence for {context.brand.name}. It states nothing
         about who watches this channel, what they bought, what the creator has used, who has
         sponsored them, or what a collaboration would achieve.
+      </p>
+
+      <p className="report-page-foot tnum hidden">
+        Brand relevance · {report.title} for {context.brand.name}
+        {context.campaign ? ` · ${context.campaign.name}` : ''} · written against evidence collected{' '}
+        {shortDate(writtenAgainst ?? report.fetchedAt)} · contains your brief — internal
       </p>
     </article>
   );

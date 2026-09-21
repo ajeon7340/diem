@@ -1,22 +1,29 @@
 import type { ReactNode } from 'react';
 
+import type { EvidencePurpose } from '@/lib/channel/highlights';
+
 import { DERIVED_DISCLOSURE } from '@/lib/report/policy';
 import type { ChannelReportView } from '@/lib/channel/report';
-import { performance } from '@/lib/channel/report';
+import { comparable, performance } from '@/lib/channel/report';
+import { composition } from '@/lib/channel/composition';
 import {
   compact,
+  disclosedCount,
   disclosedPromotions,
   exact,
   factualSummary,
+  limitations,
   observations,
   openQuestions,
   representativeVideos,
   reportDepth,
   shortDate,
-  thumbnailUrl,
   videoUrl,
 } from '@/lib/channel/highlights';
 import { matchedTerms } from '@/lib/discovery/candidates';
+import { CompositionBars } from '@/components/report/CompositionBars';
+import { EvidenceCard } from '@/components/report/EvidenceCard';
+import { FormatPerformance } from '@/components/report/FormatPerformance';
 import { PerformanceScatter } from '@/components/report/PerformanceScatter';
 import { safeExternalUrl } from '@/lib/format';
 
@@ -79,11 +86,20 @@ export function ChannelReport({
   const now = Date.parse(report.fetchedAt);
   const depth = reportDepth(report);
   const selected = report.videos.filter((v) => format === 'all' || v.format === format);
+  const eligible = comparable(report.videos);
+  const profile = composition(eligible);
+  const overall = performance(report.videos, now);
   const summary = factualSummary(report);
   const noticed = observations(report);
   const questions = openQuestions(report);
+  const limits = limitations(report);
   const evidence = representativeVideos(report);
-  const disclosed = disclosedPromotions(report);
+  // The sponsorship list shows what the evidence cards have NOT already shown.
+  // Three cards on one page and the same three videos listed again on the next
+  // is how the reference export spent a page and a half saying one thing.
+  const shownIds = evidence.map((item) => item.video.id);
+  const disclosed = disclosedPromotions(report, 3, shownIds);
+  const disclosedTotal = disclosedCount(report);
 
   return (
     <article className="channel-report space-y-5">
@@ -126,37 +142,100 @@ export function ChannelReport({
       </header>
 
       {/* ---------------------------------------------------------------- */}
-      {/* Page 1 — what was found, and what to settle                       */}
+      {/* Page 1 — what they publish, and how this sample performed          */}
       {/* ---------------------------------------------------------------- */}
-      <div className="report-page-1 space-y-5">
+      {/* THE BREAK IS CONDITIONAL. Forcing one after a thin sample produces the
+          half-empty sheet the reference export was full of; a report with
+          twelve uploads or more has enough to fill page one. */}
+      <div
+        className={`report-page-1 space-y-4 ${report.videos.length >= 12 ? 'report-page-break' : ''}`}
+      >
         {campaign ? <CampaignBlock campaign={campaign} report={report} /> : null}
 
-        <Block title="What this collection found">
-          {summary.map((line) => (
-            <p key={line} className="mt-1.5 text-[13px] leading-relaxed text-ink">
-              {line}
-            </p>
-          ))}
-        </Block>
-
-        {depth === 'empty' ? null : (
-          <Block
-            title="Recent performance"
-            note="Observations of one sample, not forecasts."
-          >
-            {/* The chart first, the figures under it. The table alone hid the
-                shape of the sample: a channel carried by one upload and one with
-                an even spread produce the same median. */}
-            <PerformanceScatter videos={report.videos} collectedAt={report.fetchedAt} />
-            <div className="mt-4 border-t border-line pt-3">
-              <PerformanceTable report={report} format={format} now={now} />
-            </div>
+        {depth === 'empty' ? (
+          <Block title="What this collection found">
+            {summary.map((line) => (
+              <p key={line} className="text-[13px] leading-relaxed text-ink">{line}</p>
+            ))}
           </Block>
-        )}
+        ) : (
+          <>
+            {/* THE FIGURES A BUYER SCANS FOR, ONCE, IN A ROW. They were spread
+                across four paragraphs of prose, which is where a number goes
+                to be skipped. */}
+            <section className="report-section report-metrics avoid-break rounded-lg border border-line bg-surface p-4">
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-4">
+                <Metric
+                  label="Subscribers"
+                  value={report.subscribers === null ? 'Hidden' : compact(report.subscribers)}
+                  exactValue={exact(report.subscribers)}
+                  note={report.subscribers === null ? 'not reported by the channel' : 'as reported by YouTube'}
+                />
+                <Metric
+                  label="Uploads sampled"
+                  value={String(report.videos.length)}
+                  note={
+                    report.sampledStart && report.sampledEnd
+                      ? `${shortDate(report.sampledStart)} – ${shortDate(report.sampledEnd)}`
+                      : 'no publication dates recorded'
+                  }
+                />
+                <Metric
+                  label="Median views"
+                  value={overall.median === null ? 'Not reported' : compact(overall.median)}
+                  exactValue={exact(overall.median)}
+                  note={`over the ${overall.n} of ${overall.sampled} comparable uploads reporting one`}
+                />
+                <Metric
+                  label="Paid-promotion flag"
+                  value={`${disclosedTotal} of ${report.videos.length}`}
+                  note={disclosedTotal ? 'sponsor not named by the flag' : 'none in this sample'}
+                />
+              </dl>
+              {/* THE SAMPLE CONTEXT, UNDER THE FIGURES IT QUALIFIES. It used to
+                  be a section of its own called "What this collection found",
+                  four paragraphs above a table that repeated them. Here it is
+                  the small print on the numbers, which is what it is. */}
+              <div className="mt-3 border-t border-line pt-2.5">
+                {summary.map((line) => (
+                  <p key={line} className="text-[11px] leading-relaxed text-ink-muted">
+                    {line}
+                  </p>
+                ))}
+              </div>
+            </section>
 
+            {/* WHAT THEY PUBLISH, BEFORE HOW IT PERFORMED. The report used to
+                open with view counts, which answers the second question a
+                buyer has and never the first. */}
+            <Block
+              title="What this creator publishes"
+              note="Classified from retrieved titles and descriptions. No upload was watched and no transcript was read, so nothing here describes what happens inside a video."
+            >
+              <CompositionBars composition={profile} videos={eligible} sampled={report.videos.length} />
+            </Block>
+
+            <Block
+              title="How this sample performed"
+              note="One bounded sample, measured once. Not a forecast and not a history."
+            >
+              <FormatPerformance videos={eligible} collectedAt={report.fetchedAt} only={format} />
+              <div className="mt-4 border-t border-line pt-3">
+                <PerformanceScatter videos={report.videos} collectedAt={report.fetchedAt} />
+              </div>
+            </Block>
+          </>
+        )}
+        {report.videos.length >= 12 ? <PageFoot report={report} page={1} campaign={campaign} /> : null}
+      </div>
+
+      {/* ---------------------------------------------------------------- */}
+      {/* Page 2 — the evidence, and what it does not establish              */}
+      {/* ---------------------------------------------------------------- */}
+      <div className="report-page-2 space-y-4">
         {noticed.length ? (
           <Block title="What stood out">
-            <ul className="space-y-2.5">
+            <ul className="space-y-2">
               {noticed.map((item) => (
                 <li key={item.text} className="avoid-break text-[13px] leading-relaxed text-ink">
                   {item.text}
@@ -170,7 +249,7 @@ export function ChannelReport({
                             href={videoUrl(id)}
                             rel="noopener noreferrer"
                             target="_blank"
-                            className="text-[12px] text-indigo underline-offset-4 hover:underline"
+                            className="source-link text-[12px] text-indigo underline-offset-4 hover:underline"
                           >
                             {i > 0 ? ' · ' : ''}
                             {video ? truncate(video.title, 40) : 'Supporting video'}
@@ -185,102 +264,100 @@ export function ChannelReport({
           </Block>
         ) : null}
 
-        <Block title="Confirm before you contact them">
-          <ul className="list-disc space-y-1.5 pl-4 text-[13px] leading-relaxed text-ink">
-            {questions.map((question) => (
-              <li key={question}>{question}</li>
-            ))}
-          </ul>
-          <p className="mt-3 border-t border-line pt-2.5 text-[12px] leading-relaxed text-ink-muted">
-            Also worth settling: product experience, format, existing exclusivity, and fee,
-            deliverables, usage rights and approval terms.
-          </p>
-        </Block>
-      </div>
-
-      {/* ---------------------------------------------------------------- */}
-      {/* Page 2 — the evidence                                             */}
-      {/* ---------------------------------------------------------------- */}
-      <div className="report-page-2 space-y-5">
         {evidence.length ? (
           <Block
             title="Representative uploads"
-            note="Most viewed, most recent, nearest the median, and anything flagged as paid promotion. A title is not evidence a product was used or endorsed."
+            note="One upload per reason: the commonest subject, the commonest shape, where the middle of the distribution sits, a genuine outlier, and a disclosed promotion. Each is chosen from the collected sample on a stated rule."
           >
-            <ul className="grid gap-3 sm:grid-cols-2">
-              {evidence.map(({ video, reason, titleRepeats }) => (
-                <li key={video.id} className="evidence-card avoid-break rounded-lg border border-line bg-paper p-2.5">
-                  <a href={videoUrl(video.id)} rel="noopener noreferrer" target="_blank" className="block">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={thumbnailUrl(video.id)}
-                      alt=""
-                      width={320}
-                      height={180}
-                      loading="lazy"
-                      // A tinted tile behind it, so a thumbnail YouTube does not
-                      // serve for this id reads as an image that is missing
-                      // rather than as a broken page. `object-contain` because
-                      // the terms cover how the image is presented: it is never
-                      // cropped or overlaid.
-                      className="mb-2 aspect-video w-full rounded bg-line/40 object-contain"
-                    />
-                    <span className="block break-words text-[12px] font-medium leading-snug text-ink">
-                      {video.title}
-                    </span>
-                  </a>
-                  <p className="tnum mt-1 text-[11px] text-ink-muted">
-                    {shortDate(video.publishedAt)} ·{' '}
-                    <span title={exact(video.views)}>{compact(video.views)} views</span> ·{' '}
-                    {video.format === 'short'
-                      ? '≤3 min (proxy)'
-                      : video.format === 'long'
-                        ? 'Long-form'
-                        : 'Duration not reported'}
-                  </p>
-                  <p className="mt-1 text-[11px] leading-relaxed text-ink-faint">{reason}.</p>
-                  {titleRepeats ? (
-                    <p className="mt-1 text-[11px] leading-relaxed text-amber">
-                      Another sampled upload shares this title. They are different videos, not a duplicate.
-                    </p>
-                  ) : null}
-                </li>
+            <ul className="space-y-2">
+              {evidence.map(({ video, reason, purpose, titleRepeats, disclosed: flagged }) => (
+                <EvidenceCard
+                  key={video.id}
+                  video={video}
+                  reason={reason}
+                  label={PURPOSE_LABEL[purpose]}
+                  disclosed={flagged && purpose !== 'sponsored'}
+                  titleRepeats={titleRepeats}
+                />
               ))}
             </ul>
+            {/* The sponsorship evidence lives HERE, on the cards, and the list
+                below carries only what is not already above it. */}
+            {disclosedTotal > 0 && disclosed.length > 0 ? (
+              <div className="mt-3 border-t border-line pt-2.5">
+                <h3 className="text-[12px] font-semibold text-ink">
+                  Other disclosed paid promotions
+                  <span className="ml-1.5 font-normal text-ink-faint">
+                    {disclosedTotal} flagged in this sample · the flag does not name the advertiser
+                  </span>
+                </h3>
+                {(
+                  <>
+                    <ul className="mt-1.5 space-y-1">
+                      {disclosed.map((promotion) => (
+                        <li key={promotion.postId} className="avoid-break text-[12px] leading-relaxed">
+                          <a
+                            href={videoUrl(promotion.postId)}
+                            rel="noopener noreferrer"
+                            target="_blank"
+                            className="source-link text-indigo underline-offset-4 hover:underline"
+                          >
+                            {promotion.title}
+                          </a>
+                          <span className="tnum ml-1.5 text-ink-muted">
+                            {shortDate(promotion.publishedAt)} · sponsor not identified by the flag
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                    {disclosedTotal > disclosed.length + shownIds.filter((id) => report.promotions.some((p) => p.postId === id && p.disclosure === 'explicit')).length ? (
+                      <p className="mt-1 text-[11px] text-ink-faint">
+                        The rest are listed in the appendix.
+                      </p>
+                    ) : null}
+                  </>
+                )}
+              </div>
+            ) : disclosedTotal === 0 ? (
+              <p className="mt-3 border-t border-line pt-2.5 text-[12px] text-ink-muted">
+                No sampled upload carries YouTube’s paid-promotion flag. That is not a record of the
+                channel never having run one.
+              </p>
+            ) : null}
           </Block>
         ) : null}
 
-        <Block
-          title="Disclosed paid promotion"
-          note="YouTube’s own flag. It does not name the advertiser."
-        >
-          {disclosed.length === 0 ? (
-            <p className="text-[13px] text-ink-muted">
-              None in this sample. That isn’t a record of the channel never running one.
-            </p>
-          ) : (
-            <ul className="space-y-2">
-              {disclosed.map((promotion) => (
-                <li key={promotion.postId} className="avoid-break text-[13px]">
-                  <a
-                    href={videoUrl(promotion.postId)}
-                    rel="noopener noreferrer"
-                    target="_blank"
-                    className="text-indigo underline-offset-4 hover:underline"
-                  >
-                    {promotion.title}
-                  </a>
-                  <p className="mt-0.5 text-[11px] text-ink-muted">
-                    {shortDate(promotion.publishedAt)} · flagged as containing paid promotion ·{' '}
-                    <strong className="font-medium">sponsor not identified by the flag</strong>
-                  </p>
-                </li>
-              ))}
-            </ul>
-          )}
+        {/* LIMITATIONS AND QUESTIONS, SIDE BY SIDE AND NOT THE SAME LIST. The
+            left column is what this report cannot tell you because of how we
+            collected; the right is what only the creator can answer. Mixing
+            them is how "our collection was capped" became a question asking the
+            creator to make up the difference. */}
+        <Block title="What this does not establish">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <h3 className="text-[12px] font-semibold text-ink">Limits of this collection</h3>
+              <ul className="mt-1.5 list-disc space-y-1 pl-4 text-[12px] leading-relaxed text-ink-muted">
+                {limits.map((line) => (
+                  <li key={line} className="avoid-break">{line}</li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <h3 className="text-[12px] font-semibold text-ink">Ask the creator</h3>
+              <ul className="mt-1.5 list-disc space-y-1 pl-4 text-[12px] leading-relaxed text-ink">
+                {questions.map((question) => (
+                  <li key={question} className="avoid-break">{question}</li>
+                ))}
+              </ul>
+              <p className="mt-2 text-[11px] leading-relaxed text-ink-faint">
+                Also worth settling: product experience, format, existing exclusivity, and fee,
+                deliverables, usage rights and approval terms.
+              </p>
+            </div>
+          </div>
+          <CommentScope report={report} />
         </Block>
-
-        <CommentBlock report={report} />
+        <PageFoot report={report} page={report.videos.length >= 12 ? 2 : 1} campaign={campaign} />
       </div>
 
       {appendix ? <Appendix report={report} selected={selected} now={now} /> : null}
@@ -303,149 +380,149 @@ function Block({ title, note, children }: { title: string; note?: string; childr
   );
 }
 
-function PerformanceTable({
+/**
+ * The running identity on a printed sheet.
+ *
+ * Chrome does not implement `@page` margin boxes, so there is no CSS page
+ * counter to call. The report forces its own breaks, so each page block prints
+ * its own footer: whose report this is, when it was collected, and which sheet
+ * of how many. Hidden on screen, where the page already says all three.
+ */
+function PageFoot({
   report,
-  format,
-  now,
+  page,
+  campaign,
 }: {
   report: ChannelReportView;
-  format: string;
-  now: number;
+  page: number;
+  campaign: CampaignContext | null;
 }) {
-  const groups = (['long', 'short'] as const).filter((f) => format === 'all' || format === f);
-  const unknown = report.videos.filter((v) => v.format === 'unknown');
-
   return (
-    <>
-      <div className="overflow-x-auto">
-        <table className="w-full text-left text-[12px]">
-          <caption className="sr-only">Sampled upload performance by format and age</caption>
-          <thead className="text-[10px] uppercase tracking-[0.08em] text-ink-faint">
-            <tr>
-              <th scope="col" className="py-1.5 font-medium">Format</th>
-              <th scope="col" className="py-1.5 font-medium">Sampled</th>
-              <th scope="col" className="py-1.5 font-medium">Median views</th>
-              <th scope="col" className="py-1.5 font-medium">Range</th>
-            </tr>
-          </thead>
-          <tbody>
-            {groups.map((f) => {
-              const videos = report.videos.filter((v) => v.format === f);
-              const p = performance(videos, now);
-              return (
-                <tr key={f} className="avoid-break border-t border-line">
-                  <td className="py-1.5 text-ink">
-                    {f === 'short' ? 'Short, ≤3 min (proxy)' : 'Long-form'}
-                  </td>
-                  <td className="tnum py-1.5 text-ink-muted">{videos.length}</td>
-                  <td className="tnum py-1.5 text-ink" title={exact(p.median)}>
-                    {p.median === null ? 'Not reported' : compact(p.median)}
-                    {p.n !== videos.length ? (
-                      <span className="text-ink-faint"> (of {p.n} reporting)</span>
-                    ) : null}
-                  </td>
-                  <td className="tnum py-1.5 text-ink-muted">
-                    {p.min === null ? '—' : `${compact(p.min)} – ${compact(p.max)}`}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-      <p className="mt-2 text-[11px] leading-relaxed text-ink-muted">
-        Public metadata does not identify Shorts. Uploads of three minutes or less are a duration
-        <strong className="font-medium"> proxy</strong> and can include non-Shorts.
-        {unknown.length
-          ? ` ${unknown.length} upload${unknown.length === 1 ? '' : 's'} report no duration and are excluded from this comparison.`
-          : ''}
-      </p>
-    </>
+    <p className="report-page-foot hidden tnum">
+      {campaign ? 'Campaign report' : 'Channel report'} · {report.title}
+      {report.handle ? ` (${report.handle})` : ''} · collected {shortDate(report.fetchedAt)} ·
+      page {page} of 2
+      {campaign ? ' · contains campaign context — internal' : ''}
+    </p>
   );
 }
 
+/** One figure, its label, and what it is a figure OVER. Never a bare number. */
+function Metric({
+  label,
+  value,
+  note,
+  exactValue,
+}: {
+  label: string;
+  value: string;
+  note: string;
+  exactValue?: string;
+}) {
+  return (
+    <div className="avoid-break">
+      <dt className="text-[10px] uppercase tracking-[0.09em] text-ink-faint">{label}</dt>
+      <dd className="tnum mt-0.5 text-[17px] font-medium leading-none text-ink" title={exactValue}>
+        {value}
+      </dd>
+      <p className="mt-1 text-[10px] leading-snug text-ink-faint">{note}</p>
+    </div>
+  );
+}
+
+/** Short tags for why an upload was chosen. The full reason sits on the card. */
+const PURPOSE_LABEL: Record<EvidencePurpose, string> = {
+  sponsored: 'Disclosed',
+  subject: 'Subject',
+  format: 'Format',
+  typical: 'Mid-range',
+  outlier: 'Outlier',
+  recent: 'Most recent',
+};
+
 /**
- * Comment observations, which exist only where the approval does.
+ * Comment themes, in one line when there are none to show.
  *
- * Four states and not one: restricted, not yet run, ran and found nothing, and
- * ran and found themes. The third is the one that gets collapsed into the
- * second, and they are opposite — a channel with comments disabled is not a
- * channel whose analysis is pending.
+ * IT USED TO BE A WHOLE SECTION SAYING NOTHING. A heading, a border, a box and
+ * a sentence reading "Comment themes aren't available here" — an empty section
+ * the size of a real one, which on the printed report took a quarter of a page
+ * to report an absence. Four states still exist and are still distinguished;
+ * three of them are now a sentence, and only the state with actual themes in it
+ * gets the room a finding deserves.
  */
-function CommentBlock({ report }: { report: ChannelReportView }) {
+function CommentScope({ report }: { report: ChannelReportView }) {
   if (!report.derivedAllowed) {
     return (
-      <Block title="Comment response">
-        <p className="text-[13px] text-ink-muted">
-          Comment themes aren’t available here. Nothing above depends on them.
-        </p>
-      </Block>
+      <p className="mt-3 border-t border-line pt-2.5 text-[11px] leading-relaxed text-ink-faint">
+        Comment themes are not available on this deployment. Nothing above depends on them.
+      </p>
     );
   }
   if (!report.analysedAt) {
     return (
-      <Block title="Comment response">
-        <p className="text-[13px] text-ink-muted">
-          The comment pass hasn’t finished. No conclusion about the response is available yet — which
-          is not the same as having found nothing.
-        </p>
-      </Block>
+      <p className="mt-3 border-t border-line pt-2.5 text-[11px] leading-relaxed text-ink-faint">
+        The comment pass has not finished. No conclusion about the response is available yet, which
+        is not the same as having found nothing.
+      </p>
+    );
+  }
+  if (report.clusters.length === 0) {
+    return (
+      <p className="mt-3 border-t border-line pt-2.5 text-[11px] leading-relaxed text-ink-faint">
+        The comment pass ran over {exact(report.comments)} comments and produced no supported theme.
+        Missing or disabled comments do not indicate a negative response.
+      </p>
     );
   }
   return (
-    <Block
-      title="Comment response"
-      note="Commenters are a self-selected slice and do not represent the audience. Product questions do not establish purchases."
-    >
-      {report.clusters.length === 0 ? (
-        <p className="text-[13px] text-ink-muted">
-          The pass ran over {exact(report.comments)} comments and produced no supported theme. Missing
-          or disabled comments do not indicate a negative response.
-        </p>
-      ) : (
-        <>
-          <p className="tnum mb-2 text-[11px] text-ink-muted">
-            {exact(report.comments)} comments classified · analysed {shortDate(report.analysedAt)}
-          </p>
-          {report.unreadable > 0 ? (
-            <p className="mb-2 text-[11px] leading-relaxed text-ink-muted">
-              {`Comments could not be read on ${report.unreadable} sampled upload${report.unreadable === 1 ? '' : 's'}.`}{' '}
-              That limits the evidence and says nothing negative about the audience.
+    <div className="mt-3 border-t border-line pt-2.5">
+      <h3 className="text-[12px] font-semibold text-ink">
+        Comment response
+        <span className="tnum ml-1.5 font-normal text-ink-faint">
+          {exact(report.comments)} classified · analysed {shortDate(report.analysedAt)}
+        </span>
+      </h3>
+      <p className="mt-1 text-[11px] leading-relaxed text-ink-muted">
+        Commenters are a self-selected slice and do not represent the audience. Product questions do
+        not establish purchases.
+        {report.unreadable > 0
+          ? ` Comments could not be read on ${report.unreadable} sampled upload${report.unreadable === 1 ? '' : 's'}, which limits the evidence and says nothing negative about the audience.`
+          : ''}
+      </p>
+      <ul className="mt-2 space-y-2">
+        {report.clusters.slice(0, 3).map((cluster) => (
+          <li key={cluster.id} className="avoid-break">
+            <p className="text-[12px] font-medium text-ink">
+              {cluster.label}
+              <span className="tnum ml-1.5 font-normal text-ink-muted">
+                {cluster.commentCount ?? 'count not recorded'} of {exact(report.comments)}
+              </span>
             </p>
-          ) : null}
-          <ul className="space-y-2.5">
-            {report.clusters.slice(0, 4).map((cluster) => (
-              <li key={cluster.id} className="avoid-break">
-                <p className="text-[13px] font-medium text-ink">
-                  {cluster.label}
-                  <span className="tnum ml-1.5 font-normal text-ink-muted">
-                    {cluster.commentCount ?? 'count not recorded'} of {exact(report.comments)}
-                  </span>
-                </p>
-                {cluster.comments.slice(0, 1).map((comment, i) => {
-                  const url = safeExternalUrl(comment.url);
-                  return (
-                    <blockquote key={i} className="mt-1 border-l-2 border-line pl-2.5 text-[12px] leading-relaxed text-ink-muted">
-                      {comment.text ?? 'Quote past its 30-day retention deadline. The source remains linked.'}
-                      {url ? (
-                        <a
-                          href={url}
-                          rel="noopener noreferrer"
-                          target="_blank"
-                          className="ml-1.5 text-indigo underline-offset-4 hover:underline"
-                        >
-                          source
-                        </a>
-                      ) : null}
-                    </blockquote>
-                  );
-                })}
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
-    </Block>
+            {cluster.comments.slice(0, 1).map((comment, i) => {
+              const url = safeExternalUrl(comment.url);
+              return (
+                <blockquote
+                  key={i}
+                  className="mt-1 border-l-2 border-line pl-2.5 text-[11px] leading-relaxed text-ink-muted"
+                >
+                  {comment.text ?? 'Quote past its 30-day retention deadline. The source remains linked.'}
+                  {url ? (
+                    <a
+                      href={url}
+                      rel="noopener noreferrer"
+                      target="_blank"
+                      className="source-link ml-1.5 text-indigo underline-offset-4 hover:underline"
+                    >
+                      source
+                    </a>
+                  ) : null}
+                </blockquote>
+              );
+            })}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -554,6 +631,7 @@ function Appendix({
   now: number;
 }) {
   const p = performance(report.videos, now);
+  const overall = p;
   return (
     <details className="report-appendix rounded-lg border border-line bg-surface">
       <summary className="cursor-pointer px-4 py-3 text-[13px] font-medium text-ink">
@@ -607,6 +685,34 @@ function Appendix({
           </ul>
         </div>
 
+        {report.promotions.some((p) => p.disclosure === 'explicit') ? (
+          <div>
+            <h3 className="text-[12px] font-semibold text-ink">
+              Every disclosed paid promotion in the sample (
+              {report.promotions.filter((p) => p.disclosure === 'explicit').length})
+            </h3>
+            <ul className="mt-1.5 space-y-1">
+              {report.promotions
+                .filter((p) => p.disclosure === 'explicit')
+                .map((promotion) => (
+                  <li key={promotion.postId} className="avoid-break text-[12px] leading-relaxed">
+                    <a
+                      href={videoUrl(promotion.postId)}
+                      rel="noopener noreferrer"
+                      target="_blank"
+                      className="source-link text-indigo underline-offset-4 hover:underline"
+                    >
+                      {promotion.title}
+                    </a>
+                    <span className="tnum ml-1.5 text-ink-muted">
+                      {shortDate(promotion.publishedAt)} · sponsor not identified by the flag
+                    </span>
+                  </li>
+                ))}
+            </ul>
+          </div>
+        ) : null}
+
         <div>
           <h3 className="text-[12px] font-semibold text-ink">Method and sources</h3>
           <p className="mt-1.5 text-[11px] leading-relaxed text-ink-muted">
@@ -614,12 +720,41 @@ function Appendix({
             {report.channelId === 'sample'
               ? 'illustrative fixture, not collected from YouTube'
               : 'the official YouTube Data API'}
-            . Collected {shortDate(report.fetchedAt)} over {report.windowDays} days
-            {report.start && report.end ? `, ${shortDate(report.start)} to ${shortDate(report.end)}` : ''}.
-            Sample: {report.videos.length} uploads and {exact(report.comments)} comments
-            {report.truncated ? ', capped by the collection bound so older uploads in the period may be missing' : ''}
-            . Figures are shown rounded and carry their exact value; medians name how many uploads
-            reported a view count. Nothing here estimates audience demographics, conversions, purchase
+            . Collected {shortDate(report.fetchedAt)}.
+          </p>
+          {/* THE TWO WINDOWS, LABELLED APART. Printing the request in the
+              position where a reader expects the sample is how "50 uploads
+              published between 22 Jun and 20 Sept" appeared beside a chart
+              whose own axis began on 4 Jul. */}
+          <dl className="mt-2 grid gap-x-6 gap-y-1.5 sm:grid-cols-2">
+            <div>
+              <dt className="text-[10px] uppercase tracking-[0.09em] text-ink-faint">Window requested</dt>
+              <dd className="tnum text-[11px] text-ink">
+                {report.windowDays} days
+                {report.requestedStart && report.requestedEnd
+                  ? `, ${shortDate(report.requestedStart)} to ${shortDate(report.requestedEnd)}`
+                  : ''}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-[10px] uppercase tracking-[0.09em] text-ink-faint">Publication dates sampled</dt>
+              <dd className="tnum text-[11px] text-ink">
+                {report.sampledStart && report.sampledEnd
+                  ? `${shortDate(report.sampledStart)} to ${shortDate(report.sampledEnd)}`
+                  : 'none recorded'}
+                {report.truncated ? ' — stopped at the collection limit' : ''}
+              </dd>
+            </div>
+          </dl>
+          <p className="mt-2 text-[11px] leading-relaxed text-ink-muted">
+            Sample: {report.videos.length} uploads
+            {overall.sampled !== report.videos.length
+              ? ` (${overall.sampled} comparable; live broadcasts and scheduled premieres excluded)`
+              : ''}{' '}
+            and {exact(report.comments)} comments. Figures are shown rounded and carry their exact
+            value; medians name how many uploads reported a view count. Content categories are
+            matched against retrieved titles and descriptions — adfit did not watch any upload or
+            read any transcript. Nothing here estimates audience demographics, conversions, purchase
             intent, sponsorship relationships or an overall fit score, and language or market
             preferences used in a search do not establish where an audience is.
           </p>

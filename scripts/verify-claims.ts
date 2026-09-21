@@ -28,7 +28,17 @@ const read = (p: string) => readFileSync(p, 'utf8');
 // surface contradicting the other while both looked authoritative.
 // ---------------------------------------------------------------------------
 {
-  const report = read('src/components/channel/ChannelReport.tsx');
+  // THE REPORT IS SEVERAL FILES NOW. The duration table moved to
+  // `FormatPerformance`, the cards to `EvidenceCard`; the guarantee is about
+  // what a reader SEES, so it is asserted over everything that renders into
+  // the report rather than over whichever file happened to hold it.
+  const report = [
+    'src/components/channel/ChannelReport.tsx',
+    'src/components/report/FormatPerformance.tsx',
+    'src/components/report/EvidenceCard.tsx',
+    'src/components/report/PerformanceScatter.tsx',
+    'src/components/report/CompositionBars.tsx',
+  ].map(read).join('\n');
   check('the format split is labelled a proxy', /\(proxy\)/.test(report), true);
   // Matched on meaning rather than on one sentence: the report was rewritten
   // and the guarantee has to survive a rewrite, which is the whole point of
@@ -70,7 +80,10 @@ const read = (p: string) => readFileSync(p, 'utf8');
 // report is built to avoid.
 // ---------------------------------------------------------------------------
 {
-  const report = read('src/components/channel/ChannelReport.tsx');
+  const report = [
+    'src/components/channel/ChannelReport.tsx',
+    'src/components/report/FormatPerformance.tsx',
+  ].map(read).join('\n');
   const reportProse = report.replace(/\s+/g, ' ');
   check(
     'unreadable comments are stated not to reflect on the audience',

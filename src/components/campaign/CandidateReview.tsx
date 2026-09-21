@@ -231,8 +231,8 @@ export function CandidateReview({
                   collected.
                 </p>
                 <p>
-                  Sample period: {shortDate(report.start)}–
-                  {shortDate(report.end)}.
+                  Uploads sampled: {shortDate(report.sampledStart)}–
+                  {shortDate(report.sampledEnd)} (asked for {report.windowDays} days).
                   {report.truncated &&
                     ' Collection reached its limit; older uploads may be missing.'}{' '}
                   Comments were unavailable on {report.unreadable} videos.

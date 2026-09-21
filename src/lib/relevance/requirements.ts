@@ -1,4 +1,6 @@
 import { matchedTerms } from '@/lib/discovery/candidates';
+import { comparable } from '@/lib/channel/report';
+import { composition, FORMAT_LABEL } from '@/lib/channel/composition';
 import type { ChannelReportView } from '@/lib/channel/report';
 import type { VideoEvidence } from '@/lib/ingest/analyze';
 
@@ -88,21 +90,58 @@ export function terms(text: string | null | undefined, max = 8): string[] {
   ].slice(0, max);
 }
 
-function searchable(report: ChannelReportView): { video: VideoEvidence; text: string }[] {
-  return report.videos.map((video) => ({ video, text: video.title }));
+/**
+ * The text a requirement is matched against.
+ *
+ * COMPARABLE UPLOADS ONLY, so the matrix and the channel report describe the
+ * same sample. Title AND the retrieved description: a brief's product name
+ * often appears in a description and not in a title, and ignoring it under-reports
+ * coverage — but the finding always says which it matched, because a description
+ * is a link dump as often as it is prose.
+ */
+function searchable(report: ChannelReportView): { video: VideoEvidence; title: string; description: string }[] {
+  return comparable(report.videos).map((video) => ({
+    video,
+    title: video.title,
+    description: (video.description ?? '').slice(0, 300),
+  }));
 }
 
-/** Videos whose retrieved text contains any of these terms. */
-function hits(report: ChannelReportView, wanted: string[]): { ids: string[]; matched: string[] } {
+/**
+ * Videos whose retrieved text contains any of these terms, and WHERE.
+ *
+ * The field matters to the claim. A brief's product name in a title is the
+ * creator saying the upload is about it; the same word in a description is
+ * frequently an affiliate link in a block pasted onto every upload. Reporting
+ * both as "the title names it" would be a false statement about our own
+ * evidence, so the finding names the field it matched.
+ */
+function hits(
+  report: ChannelReportView,
+  wanted: string[],
+): { ids: string[]; matched: string[]; inTitle: number; inDescription: number } {
   const ids: string[] = [];
   const matched = new Set<string>();
-  for (const { video, text } of searchable(report)) {
-    const found = matchedTerms(wanted, text);
-    if (found.length === 0) continue;
+  let inTitle = 0;
+  let inDescription = 0;
+  for (const { video, title, description } of searchable(report)) {
+    const t = matchedTerms(wanted, title);
+    const d = t.length ? [] : matchedTerms(wanted, description);
+    if (t.length === 0 && d.length === 0) continue;
     ids.push(video.id);
-    for (const term of found) matched.add(term);
+    if (t.length) inTitle += 1;
+    else inDescription += 1;
+    for (const term of [...t, ...d]) matched.add(term);
   }
-  return { ids, matched: [...matched] };
+  return { ids, matched: [...matched], inTitle, inDescription };
+}
+
+/** "3 uploads (2 in a title, 1 in a description)" — never just "3 titles". */
+function where(inTitle: number, inDescription: number): string {
+  const parts: string[] = [];
+  if (inTitle) parts.push(`${inTitle} in a title`);
+  if (inDescription) parts.push(`${inDescription} in a description only`);
+  return parts.join(', ');
 }
 
 /**
@@ -123,7 +162,7 @@ export function requirementMatrix(
 
   // --- What the creator publishes about ------------------------------------
   for (const category of brand.categories.slice(0, 3)) {
-    const { ids } = hits(report, [category, ...terms(category, 3)]);
+    const { ids, inTitle, inDescription } = hits(report, [category, ...terms(category, 3)]);
     rows.push({
       id: `category:${category}`,
       requirement: `Publishes about ${category}`,
@@ -131,8 +170,8 @@ export function requirementMatrix(
       status: ids.length >= 2 ? 'supported' : ids.length === 1 ? 'partial' : 'unverified',
       finding:
         ids.length === 0
-          ? `No upload title in ${bounded} names this category.`
-          : `${ids.length} upload title${ids.length === 1 ? '' : 's'} in ${bounded} name${ids.length === 1 ? 's' : ''} it.`,
+          ? `Nothing in ${bounded} names this category.`
+          : `${ids.length} upload${ids.length === 1 ? '' : 's'} in ${bounded} name${ids.length === 1 ? 's' : ''} it — ${where(inTitle, inDescription)}.`,
       evidence: ids.slice(0, 4),
       confirm:
         ids.length === 0
@@ -145,7 +184,7 @@ export function requirementMatrix(
   const productText = campaign?.product ?? brand.sells;
   if (productText) {
     const wanted = terms(productText);
-    const { ids, matched } = hits(report, wanted);
+    const { ids, matched, inTitle, inDescription } = hits(report, wanted);
     rows.push({
       id: 'product',
       requirement: `Covers the product: ${truncate(productText, 70)}`,
@@ -153,8 +192,8 @@ export function requirementMatrix(
       status: ids.length >= 2 ? 'supported' : ids.length === 1 ? 'partial' : 'unverified',
       finding:
         ids.length === 0
-          ? `No title in ${bounded} names a word from the product description.`
-          : `${ids.length} title${ids.length === 1 ? '' : 's'} name ${matched.slice(0, 3).map((t) => `“${t}”`).join(', ')}.`,
+          ? `Nothing in ${bounded} names a word from the product description.`
+          : `${ids.length} upload${ids.length === 1 ? '' : 's'} name ${matched.slice(0, 3).map((t) => `“${t}”`).join(', ')} — ${where(inTitle, inDescription)}.`,
       evidence: ids.slice(0, 4),
       // The line that must never be lost: a title is metadata, not a viewing.
       confirm:
@@ -165,7 +204,7 @@ export function requirementMatrix(
   const needText = campaign?.useCase ?? brand.customerNeeds;
   if (needText) {
     const wanted = terms(needText);
-    const { ids, matched } = hits(report, wanted);
+    const { ids, matched, inTitle, inDescription } = hits(report, wanted);
     rows.push({
       id: 'useCase',
       requirement: `Speaks to the use case: ${truncate(needText, 70)}`,
@@ -174,7 +213,7 @@ export function requirementMatrix(
       finding:
         ids.length === 0
           ? `Nothing in ${bounded} names a word from this use case.`
-          : `${ids.length} upload${ids.length === 1 ? '' : 's'} name ${matched.slice(0, 3).map((t) => `“${t}”`).join(', ')}.`,
+          : `${ids.length} upload${ids.length === 1 ? '' : 's'} name ${matched.slice(0, 3).map((t) => `“${t}”`).join(', ')} — ${where(inTitle, inDescription)}.`,
       evidence: ids.slice(0, 4),
       confirm: 'Confirm the audience they make this for is the one you are trying to reach.',
     });
@@ -183,7 +222,7 @@ export function requirementMatrix(
   // --- Things to stay away from --------------------------------------------
   if (campaign?.avoidTopics) {
     const wanted = terms(campaign.avoidTopics);
-    const { ids, matched } = hits(report, wanted);
+    const { ids, matched, inTitle, inDescription } = hits(report, wanted);
     rows.push({
       id: 'avoid',
       requirement: `Avoids: ${truncate(campaign.avoidTopics, 70)}`,
@@ -192,7 +231,7 @@ export function requirementMatrix(
       status: ids.length > 0 ? 'conflicting' : 'unverified',
       finding:
         ids.length > 0
-          ? `${ids.length} title${ids.length === 1 ? '' : 's'} in ${bounded} name${ids.length === 1 ? 's' : ''} ${matched.slice(0, 3).map((t) => `“${t}”`).join(', ')}.`
+          ? `${ids.length} upload${ids.length === 1 ? '' : 's'} in ${bounded} name${ids.length === 1 ? 's' : ''} ${matched.slice(0, 3).map((t) => `“${t}”`).join(', ')} — ${where(inTitle, inDescription)}.`
           : `Nothing in ${bounded} names these topics — but the sample is bounded and titles are not the whole video.`,
       evidence: ids.slice(0, 4),
       confirm:
@@ -302,7 +341,7 @@ export function relevantVideos(
         out.push({
           video,
           requirement: row.requirement,
-          because: `Its title matches this requirement. Metadata only — adfit has not watched it.`,
+          because: `${row.finding} Matched in retrieved metadata — adfit has not watched it`,
         });
       }
     }
@@ -312,4 +351,71 @@ export function relevantVideos(
 
 function truncate(value: string, max: number): string {
   return value.length <= max ? value : `${value.slice(0, max - 1)}…`;
+}
+
+/**
+ * One or two ways a collaboration could be shaped, built from what the creator
+ * has actually published.
+ *
+ * THESE ARE PROPOSALS AND THE TYPE SAYS SO. Nothing here is a finding, a
+ * forecast or a quote. A proposal names a format the creator has published
+ * before, the use case it would carry from the brief, the uploads that show the
+ * format exists, and what has to be confirmed before any of it is real.
+ *
+ * NOTHING IS PROPOSED WITHOUT EVIDENCE. If no requirement is supported or
+ * partly supported by a cited upload, this returns nothing — a proposal built
+ * on an unverified row is a pitch, not an analysis.
+ *
+ * WHAT A PROPOSAL MAY NEVER IMPLY: that the creator is available, would accept,
+ * would price it at any figure, or that it would convert. Publishing a
+ * comparison once is not an offer to make another.
+ */
+export interface Proposal {
+  /** A format this creator has published, named as such. */
+  format: string;
+  /** What it would carry, in the brief's own words. */
+  useCase: string;
+  /** Uploads showing the format exists on this channel. */
+  support: string[];
+  /** What must be settled before this is anything. Never empty. */
+  confirm: string[];
+}
+
+export function proposals(
+  report: ChannelReportView,
+  rows: RequirementRow[],
+  context: RelevanceContext,
+  limit = 2,
+): Proposal[] {
+  const evidenced = rows.filter(
+    (row) => (row.status === 'supported' || row.status === 'partial') && row.evidence.length > 0,
+  );
+  if (evidenced.length === 0) return [];
+
+  const profile = composition(comparable(report.videos));
+  const shapes = profile.formats.filter((group) => group.format !== 'unclassified' && group.videoIds.length >= 2);
+  if (shapes.length === 0) return [];
+
+  const useCase =
+    context.campaign?.useCase ??
+    context.campaign?.product ??
+    context.brand.customerNeeds ??
+    context.brand.sells;
+  if (!useCase) return [];
+
+  const disclosed = report.promotions.some((p) => p.disclosure === 'explicit');
+
+  return shapes.slice(0, limit).map((shape) => ({
+    format: `${FORMAT_LABEL[shape.format]} — ${shape.videoIds.length} in the sample`,
+    useCase: truncate(useCase, 140),
+    // The evidence is the format's own uploads, plus whatever the matrix cited.
+    support: [...new Set([...shape.videoIds.slice(0, 2), ...evidenced[0].evidence.slice(0, 1)])].slice(0, 3),
+    confirm: [
+      'Whether they take on sponsored work in this format at all, and on what terms.',
+      disclosed
+        ? 'Which brands the disclosed promotions were for, and whether any exclusivity still applies.'
+        : 'Whether they have run sponsored work before — nothing in this sample carries the flag.',
+      'Whether they have used the product, and what they are willing to say about it.',
+    ],
+  }));
 }

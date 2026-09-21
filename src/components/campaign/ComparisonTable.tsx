@@ -92,7 +92,7 @@ export function ComparisonTable({
                     {shortDate(report.fetchedAt)}
                   </p>
                   <p className="mt-1 text-ink-muted">
-                    {shortDate(report.start)}–{shortDate(report.end)}
+                    {shortDate(report.sampledStart)}–{shortDate(report.sampledEnd)}
                   </p>
                   {notice && <p className="mt-1 text-ink-muted">{notice}</p>}
                 </>

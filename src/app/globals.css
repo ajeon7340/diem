@@ -228,8 +228,13 @@ body {
   .channel-report details > * { display: block !important; }
   .channel-report table { width: 100%; table-layout: fixed; }
   .channel-report th, .channel-report td { overflow-wrap: anywhere; }
+  /* Stack most grids for a narrow sheet, but NOT the metric row: four short
+     figures across the top is exactly what that row is for, and stacking it
+     spends four lines saying what one says. */
   .channel-report .grid { display: block; }
   .channel-report .grid > div { margin-bottom: 4mm; }
+  .channel-report .report-metrics .grid { display: grid; grid-template-columns: repeat(4, 1fr); }
+  .channel-report .report-metrics .grid > div { margin-bottom: 0; }
   .channel-report a { color: inherit; overflow-wrap: anywhere; }
   button, nav, form { display: none !important; }
 }
@@ -260,35 +265,74 @@ body {
  * `widows` stop a paragraph leaving one line behind on the previous page.
  */
 @media print {
-  .channel-report { font-size: 9.5pt; orphans: 3; widows: 3; }
-  .channel-report .report-page-1 { break-after: page; }
+  .channel-report { font-size: 9pt; orphans: 3; widows: 3; }
+  .channel-report .report-section { margin-top: 3.5mm; padding: 3.5mm; }
+  .channel-report .report-metrics { padding: 3mm 3.5mm; }
+  .channel-report .report-page-break { break-after: page; }
   .channel-report .report-identity { break-after: avoid; }
   .channel-report .avoid-break,
   .channel-report .evidence-card,
   .channel-report .report-section { break-inside: avoid; page-break-inside: avoid; }
   .channel-report h1, .channel-report h2, .channel-report h3 { break-after: avoid; }
 
-  /* Evidence cards print two-up. A thumbnail is never cropped — object-contain
-     in the markup, and no forced aspect here — because YouTube's terms cover
-     how its images are presented, not only where they come from. */
-  .channel-report .evidence-card img { max-height: 34mm; width: auto; }
+  /* Evidence cards are ROWS, not tiles. Four tiles at 320x180 filled a page and
+     a half of the reference export with thumbnails; four rows fit on a third of
+     one and put the reason beside the title. A thumbnail is never cropped —
+     object-contain in the markup, and no forced aspect here — because YouTube's
+     terms cover how its images are presented, not only where they come from. */
+  .channel-report .evidence-card,
+  .relevance-report .evidence-card { display: flex; gap: 3mm; }
+  .channel-report .evidence-thumb,
+  .relevance-report .evidence-thumb { width: 26mm; height: 15mm; flex: none; }
+
+  /* Composition bars and their supporting lists: the bar is decoration, the
+     count beside it is the number, so a printer that drops backgrounds still
+     produces a readable chart. */
+  .channel-report details.group > div { padding-left: 3mm; }
 
   /* Collapsed detail is still evidence. Everything opens for the printer, and
      the summary row disappears because "click to expand" is meaningless on
-     paper. */
+     paper — EXCEPT where the summary is itself the content. The composition
+     bars are drawn in the summary row and its expansion is the supporting
+     list, so hiding it printed a chart with no bars in it. */
   .channel-report details > * { display: block !important; }
   .channel-report details > summary { display: none !important; }
+  .channel-report details.print-keep-summary > summary { display: flex !important; }
 
-  /* Links must stay resolvable off-screen, so the href is printed after the
-     text for anything pointing off-site. Internal anchors are left alone. */
-  .channel-report a[href^="http"]::after {
+  /*
+   * URLS BELONG IN THE REFERENCE LIST, NOT IN THE SENTENCE.
+   *
+   * Every off-site link used to print its address inline, so a paragraph naming
+   * three uploads carried three copies of
+   * "(https://www.youtube.com/watch?v=sL-TxOwboNw)" through the middle of it and
+   * the prose became unreadable. Links stay clickable in the PDF either way;
+   * only the appendix's reference list, which exists to be copied off paper,
+   * still prints them.
+   */
+  .channel-report .report-appendix a[href^="http"]::after {
     content: " (" attr(href) ")";
     font-size: 7pt;
     color: #555;
     overflow-wrap: anywhere;
   }
-  .channel-report .evidence-card a[href^="http"]::after,
-  .channel-report .report-identity a[href^="http"]::after { content: ""; }
+  .channel-report .report-appendix .source-link[href^="http"]::after { content: ""; }
+
+  /*
+   * A running identity on each sheet.
+   *
+   * Chrome does not implement `@page` margin boxes, so a CSS page counter is not
+   * available; the report forces its own breaks, so each page block carries its
+   * own footer with the channel, the collection date and which sheet it is.
+   */
+  .channel-report .report-page-foot {
+    display: block !important;
+    margin-top: 5mm;
+    padding-top: 2mm;
+    border-top: 0.3pt solid #d4d4d8;
+    font-size: 7.5pt;
+    color: #71717a;
+    break-inside: avoid;
+  }
 
   .channel-report table { width: 100%; table-layout: fixed; }
   .channel-report th, .channel-report td { overflow-wrap: anywhere; }
@@ -317,13 +361,23 @@ body {
   .relevance-report h1, .relevance-report h2, .relevance-report h3 { break-after: avoid; }
   .relevance-report details > * { display: block !important; }
   .relevance-report details > summary { display: none !important; }
-  .relevance-report a[href^="http"]::after {
+  .relevance-report details.print-keep-summary > summary { display: flex !important; }
+  /* Same rule as the channel report: the sentence keeps its prose, the link
+     keeps its click, and the address is not dragged through the middle. */
+  .relevance-report .report-appendix a[href^="http"]::after {
     content: " (" attr(href) ")";
     font-size: 7pt;
     color: #555;
     overflow-wrap: anywhere;
   }
-  .relevance-report .evidence-card a[href^="http"]::after { content: ""; }
+  .relevance-report .report-page-foot {
+    display: block !important;
+    margin-top: 5mm;
+    padding-top: 2mm;
+    border-top: 0.3pt solid #d4d4d8;
+    font-size: 7.5pt;
+    color: #71717a;
+  }
   .relevance-report table { width: 100%; table-layout: fixed; }
   .relevance-report th, .relevance-report td { overflow-wrap: anywhere; }
   .relevance-report { break-before: page; }
