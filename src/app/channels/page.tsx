@@ -73,10 +73,7 @@ export default async function Channels({
             <h1 className="mt-1.5 text-[17px] font-semibold tracking-tight text-ink">
               New channel analysis
             </h1>
-            <p className="mt-1 text-[12px] leading-relaxed text-ink-muted">
-              Paste a channel URL or @handle. It is confirmed before anything is collected, and no
-              creator has to sign up.
-            </p>
+            <p className="mt-1 text-[12px] text-ink-muted">Paste a URL or @handle.</p>
             <div className="mt-3">
               <ChannelEntry initial={searchParams.channel} resolved={resolved} />
             </div>
@@ -99,9 +96,8 @@ export default async function Channels({
               />
             </form>
             <FilterLinks options={counts} active={active} hrefFor={href} legend="Filter reports" />
-            <p className="mt-3 text-[11px] leading-relaxed text-ink-faint">
-              {rows.length} saved {rows.length === 1 ? 'report' : 'reports'}. Public data expires 30
-              days after collection.
+            <p className="mt-3 text-[11px] text-ink-faint">
+              {rows.length} saved · reports expire 30 days after collection
             </p>
           </PanelSection>
         </div>
@@ -113,9 +109,8 @@ export default async function Channels({
           {shown.length} shown{query ? ` for “${query}”` : ''}
         </p>
       </div>
-      <p className="mt-1.5 max-w-[70ch] text-[12px] leading-relaxed text-ink-muted">
-        Public YouTube evidence you have collected. A saved report is reused when you add the
-        channel to a campaign — nothing is collected twice.
+      <p className="mt-1.5 text-[12px] text-ink-muted">
+        Reused when you add a channel to a campaign — nothing is collected twice.
       </p>
 
       <div className="surface-card mt-4 overflow-hidden">
@@ -126,7 +121,7 @@ export default async function Channels({
             </p>
             <p className="mx-auto mt-2 max-w-[48ch] text-[12px] leading-relaxed text-ink-muted">
               {rows.length === 0
-                ? 'Analyse a public YouTube channel to build a reusable report. No creator signup or account access is needed.'
+                ? 'Analyse a YouTube channel to build a reusable report. Creators don’t need to sign up.'
                 : 'Try another state, or clear the search.'}
             </p>
             {rows.length === 0 ? (

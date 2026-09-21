@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useFormState, useFormStatus } from 'react-dom';
 import { attachReport, shareReport, startChannel, retryChannel, type ChannelState } from '@/app/actions/channel';
@@ -8,7 +8,48 @@ function Submit({ text }: { text: string }) { const { pending }=useFormStatus();
 export function LiveReport({ active }: { active:boolean }) {
  const router=useRouter(); useEffect(()=> { if(!active)return; const timer=setInterval(()=>router.refresh(),5000);return()=>clearInterval(timer);},[active,router]); return null;
 }
-export function PrintReport() { return <button className="rounded border px-3 py-2 text-sm text-indigo print:hidden" onClick={()=>window.print()}>Export PDF</button>; }
+/**
+ * Export, with the appendix as a choice.
+ *
+ * The appendix is the full sampled list, the age tables and the method — worth
+ * having when somebody is checking the work, and three pages of noise when the
+ * report is being sent to a colleague to glance at. The class goes on <html>
+ * rather than on a wrapper so the print rule can reach it from anywhere the
+ * report is rendered, and it is removed afterwards so the screen view is never
+ * left altered by an export.
+ */
+export function PrintReport({ appendixToggle = true }: { appendixToggle?: boolean }) {
+  const [withAppendix, setWithAppendix] = useState(true);
+
+  function print() {
+    const root = document.documentElement;
+    root.classList.toggle('print-no-appendix', !withAppendix);
+    try {
+      window.print();
+    } finally {
+      root.classList.remove('print-no-appendix');
+    }
+  }
+
+  return (
+    <span className="inline-flex flex-wrap items-center gap-2.5 print:hidden">
+      <button type="button" onClick={print} className="rounded border px-3 py-2 text-sm text-indigo">
+        Export PDF
+      </button>
+      {appendixToggle ? (
+        <label className="flex items-center gap-1.5 text-[12px] text-ink-muted">
+          <input
+            type="checkbox"
+            checked={withAppendix}
+            onChange={(event) => setWithAppendix(event.target.checked)}
+            className="h-3.5 w-3.5"
+          />
+          Include appendix
+        </label>
+      ) : null}
+    </span>
+  );
+}
 export function ReportActions({ channelId, campaigns, days=90 }: { channelId:string; campaigns:{id:string;name:string}[];days?:number }) {
  const [added,add]=useFormState<ChannelState,FormData>(attachReport,{});
  const [shared,share]=useFormState<ChannelState,FormData>(shareReport,{});

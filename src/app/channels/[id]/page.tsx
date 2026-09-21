@@ -26,7 +26,19 @@ export default async function ReportPage({params,searchParams}:{params:{id:strin
  const state=reportState(jobs,!!report,(report?.derivedAllowed && !report.comments ? 0 : report?.videos.length)??0,(report?.unreadable??0)>0);
  return <><SiteHeader/><main className="report-page mx-auto max-w-5xl px-6 py-10"><Link className="text-sm text-indigo print:hidden" href="/channels">← Channel analysis</Link><LiveReport active={active}/><div className="my-5 rounded border bg-indigo-wash p-4 text-sm print:hidden"><strong>{state}</strong>{active&&<span className="ml-2 text-ink-muted">Safe to leave — this continues in the background.</span>}<AnalysisProgress jobs={jobs}/>{report&&active&&<p className="mt-2 text-[12px] text-ink-muted">Results from {new Date(report.fetchedAt).toLocaleString('en-US')} stay below until the new ones land.</p>}{state==='Failed'&&<p className="mt-2">Collection failed. Nothing negative about this channel is implied.</p>}</div>
  <ReportActions channelId={params.id} campaigns={campaigns} days={report?.windowDays}/>
- {report?<><form className="my-5 flex items-center gap-3 text-sm print:hidden"><label>Content format <select name="format" defaultValue={searchParams.format??'all'} className="rounded border p-2"><option value="all">All formats</option><option value="short">Shorts / short videos (proxy)</option><option value="long">Long-form</option></select></label><button className="text-indigo">Apply view</button></form><ChannelReport report={report} format={['short','long'].includes(searchParams.format??'')?searchParams.format:'all'}/></>:<p className="py-6">No current report is available. {active?'Waiting for collection to complete.':'Start or refresh analysis to collect current evidence.'}</p>}
+ {report?<><form className="my-5 flex items-center gap-3 text-sm print:hidden"><label>Content format <select name="format" defaultValue={searchParams.format??'all'} className="rounded border p-2"><option value="all">All formats</option><option value="short">Shorts / short videos (proxy)</option><option value="long">Long-form</option></select></label><button className="text-indigo">Apply view</button></form><ChannelReport report={report} format={['short','long'].includes(searchParams.format??'')?searchParams.format:'all'}/></>:
+ /* FIVE STATES, and the one that used to be missing is `expired`. A row that
+    exists but is past its 30-day deadline came back null from `publicReport`
+    and rendered as "no current report", which reads as never collected —
+    opposite events, identical sentence. Each of these says what actually
+    happened and what to do about it. */
+ <div className="py-6 text-sm"><p className="font-medium">{row?'This report has passed its retention deadline':active?'Collecting now':state==='Failed'?'Collection could not be completed':'Not collected yet'}</p><p className="mt-1.5 max-w-[60ch] leading-relaxed text-ink-muted">{row
+  ?`Public data is deleted 30 days after collection. Refresh to collect it again.`
+  :active
+   ?'Results appear when collection finishes.'
+   :state==='Failed'
+    ?'Our collection failed — this says nothing about the channel. Try again.'
+    :'Start analysis to collect this channel’s public evidence.'}</p></div>}
  <CollaborationRecords channelId={params.id} records={records??[]}/>
  </main></>;
 }

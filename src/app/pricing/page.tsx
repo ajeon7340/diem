@@ -45,7 +45,7 @@ const PLANS = [
       'A written fit read against your brief, with its own confidence',
       'Your brief, notes and quoted fees stay inside your workspace',
     ],
-    note: 'Analysis is metered on our side — a YouTube read plus thousands of comments through a model, per channel. Early access is free while we find out what a fair unit is.',
+    note: 'Free during early access, while we work out a fair unit.',
   },
   {
     name: 'Team',
@@ -60,7 +60,7 @@ const PLANS = [
       'Shared workspace so a colleague sees the same shortlist',
       'Exportable candidate reports for internal approval',
     ],
-    note: 'Payment is not integrated yet, so there is nothing to buy on this page. We would rather say that than print a number we have not committed to.',
+    note: 'Not purchasable yet — we’d rather say so than print a number we haven’t committed to.',
   },
 ];
 
@@ -82,7 +82,7 @@ const FAQ = [
   },
   {
     q: 'What am I paying for, once there is something to pay for?',
-    a: 'Analysis. Each channel is a YouTube read plus thousands of comments through a metered model, and that cost scales with how many candidates you compare and how deeply each is read. Not access to other people — the analysis of a public channel is shared between customers, so two agencies looking at the same creator do not pay for it twice.',
+    a: 'Analysis — how many channels you read and how deeply. Not access to creators: a public channel’s analysis is shared, so two agencies looking at the same creator don’t pay twice.',
   },
   {
     q: 'Is my shortlist visible to other customers?',
@@ -122,10 +122,8 @@ export default function PricingPage() {
             You pay for analysis, not for access to people.
           </h1>
           <p className="mt-3 max-w-[64ch] text-[13px] leading-relaxed text-ink-muted">
-            Analysing a channel costs us a YouTube read and thousands of comments through a metered
-            model, so that is what the tiers are about: how many candidates you compare, how deeply
-            each is read, and who on your team can see it. Nothing here can be bought yet —
-            checkout is not built.
+            Tiers are about how many channels you analyse, how deeply, and who on your team can see
+            it. Nothing here can be bought yet — checkout isn’t built.
           </p>
 
           <div className="mt-10 grid gap-4 lg:grid-cols-2">

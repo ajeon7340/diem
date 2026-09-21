@@ -215,8 +215,7 @@ export function CandidateReview({
                 </p>
               )}
               <p className="mt-2 text-[11px] leading-relaxed text-ink-muted">
-                YouTube disclosures do not identify the brand. This is not a
-                complete collaboration history.
+                Disclosures don’t name the brand, and this isn’t a full history.
               </p>
             </div>
             <details className="mt-4 text-xs">
@@ -239,9 +238,8 @@ export function CandidateReview({
                   Comments were unavailable on {report.unreadable} videos.
                 </p>
                 <p>
-                  Public data cannot establish audience demographics or sales.
-                  Campaign assessments, when available, are adfit’s
-                  interpretation of the evidence.
+                  Public data can’t show audience demographics or sales.
+                  Assessments are adfit’s reading of the evidence.
                 </p>
                 <p>
                   Refresh or delete exported evidence by{' '}
@@ -254,8 +252,8 @@ export function CandidateReview({
                 </p>
                 {!canEvaluate && (
                   <p>
-                    Automated campaign assessment is currently unavailable. You
-                    can still review public evidence and save your decision.
+                    Automated assessment is off here. You can still review the
+                    evidence and decide.
                   </p>
                 )}
               </div>
@@ -299,7 +297,7 @@ export function CandidateReview({
           currency={candidate.feeCurrency}
         />
         <p className="mt-3 text-[11px] text-ink-muted">
-          Notes and fees are excluded from PDF exports.
+          Notes and fees stay out of exports.
         </p>
       </section>
     </div>

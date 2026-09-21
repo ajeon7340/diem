@@ -43,8 +43,7 @@ export function BrandList({
     <section className="surface-card p-5">
       <h2 className="text-[15px] font-semibold text-ink">Competing brands</h2>
       <p className="mt-1 max-w-[68ch] text-[12px] leading-relaxed text-ink-muted">
-        Collaboration search runs against confirmed brands only. Suggestions are a starting point — adfit has no
-        source that lists a product’s competitors, and it does not read competitors’ websites.
+        Search runs on confirmed brands only. Suggestions are a starting point, not a verified list.
       </p>
 
       {suggestionsUnavailable ? (
@@ -84,7 +83,7 @@ export function BrandList({
 
       <BrandGroup
         title={`Confirmed (${confirmed.length})`}
-        empty="Nothing confirmed yet. A search cannot run without at least one."
+        empty="Confirm at least one to search."
         brands={confirmed}
         searchId={searchId}
       />

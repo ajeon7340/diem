@@ -10,17 +10,11 @@
 export type DiscoveryMode = 'criteria' | 'similar' | 'competitor';
 
 export const DISCOVERY_MODES: Record<DiscoveryMode, { label: string; blurb: string }> = {
-  criteria: {
-    label: 'Search by criteria',
-    blurb: 'Describe the product and what the content should be about.',
-  },
-  similar: {
-    label: 'Find similar channels',
-    blurb: 'Start from one channel and look for others making comparable content.',
-  },
+  criteria: { label: 'Search by criteria', blurb: 'Filter by category, size and language.' },
+  similar: { label: 'Find similar channels', blurb: 'Start from a channel you already like.' },
   competitor: {
     label: 'Explore competitor collaborations',
-    blurb: 'Confirm competing brands, then look for public evidence of who they have worked with.',
+    blurb: 'Confirm competing brands, then see who they’ve worked with.',
   },
 };
 
@@ -79,14 +73,12 @@ export const EVIDENCE_CLASS_LABEL: Record<EvidenceClass, string> = {
  */
 export const EVIDENCE_CLASS_LIMIT: Record<EvidenceClass, string> = {
   explicit_paid:
-    'YouTube’s flag says the video contains paid promotion. That this brand is the sponsor is read from the description, not from the flag.',
-  affiliate:
-    'An affiliate link pays on referral. It is not evidence of a separate sponsorship fee, a brief, or any agreement between the brand and the creator.',
-  gifted:
-    'A stated gift is not a fee and not a campaign. It may have been unsolicited.',
+    'YouTube flags the video as paid promotion. That this brand is the sponsor comes from the description, not the flag.',
+  affiliate: 'An affiliate link pays on referral — not evidence of a sponsorship fee or an agreement.',
+  gifted: 'A gift is not a fee or a campaign, and may have been unsolicited.',
   mention:
-    'A mention or review is not proof of a commercial relationship. Creators talk about products nobody paid them to talk about.',
-  customer_confirmed: 'Your own record. adfit has not verified it against any source.',
+    'A mention is not proof of a commercial relationship. Creators talk about products nobody paid them for.',
+  customer_confirmed: 'Your own record, unverified by adfit.',
 };
 
 export interface CollaborationRecord {
@@ -182,40 +174,42 @@ export type EmptyReason =
 
 export const EMPTY_REASON_COPY: Record<EmptyReason, { title: string; body: string }> = {
   no_matches: {
-    title: 'No channels matched this search',
-    body: 'The search ran and returned nothing usable. Widen the topic, drop a filter, or try the terms a viewer would type.',
+    title: 'No creators matched',
+    body: 'Try a broader category, or remove a filter.',
   },
   channel_unsupported: {
-    title: 'That channel cannot be used as a reference',
-    body: 'YouTube has no channel at that address, or it is one of the catalogue channels YouTube generates automatically rather than one somebody uploads to.',
+    title: 'Channel not found',
+    body: 'Check the URL or @handle. YouTube’s auto-generated topic channels can’t be used as a reference.',
   },
   insufficient_reference_data: {
-    title: 'Not enough public content to compare against',
-    body: 'This channel has too few recent public uploads to describe. Rather than invent a profile from one video, nothing is claimed.',
+    title: 'Not enough recent uploads',
+    body: 'This channel has too few public uploads to compare others against.',
   },
   competitor_unconfirmed: {
-    title: 'No confirmed brands yet',
-    body: 'Collaboration search runs against brands you confirm. Add or confirm at least one.',
+    title: 'Confirm a brand first',
+    body: 'Collaboration search runs on brands you’ve confirmed.',
   },
   no_collaboration_evidence: {
-    title: 'No public collaboration evidence found',
-    body: 'This search reached no videos tying these brands to a creator. That is not evidence that no collaboration happened — only that this search did not reach one.',
+    title: 'No collaboration evidence found',
+    body: 'This search reached none — which doesn’t mean none exists.',
   },
+  // Neither of the next two is anything the person reading it can fix, so
+  // neither tells them to try something that will not work.
   no_api_key: {
-    title: 'YouTube access is not configured',
-    body: 'This deployment has no YouTube API key, so no search can run. An operator configures it.',
-  },
-  quota_exhausted: {
-    title: 'The daily YouTube budget is used up',
-    body: 'Searches stopped at this deployment’s bound. Anything already collected is shown; the rest can be retrieved when the budget resets.',
+    title: 'Creator search isn’t set up yet',
+    body: 'Ask whoever administers this workspace to finish setup.',
   },
   approval_unavailable: {
-    title: 'This step needs approval that is not configured',
-    body: 'Retrieval works. The part of this mode that reads content into a profile is restricted until the operator establishes YouTube’s approval for it.',
+    title: 'This step isn’t available here',
+    body: 'Searching works. The deeper read of channel content is turned off.',
+  },
+  quota_exhausted: {
+    title: 'Daily search limit reached',
+    body: 'Anything already found is shown below. More can be searched for tomorrow.',
   },
   api_error: {
-    title: 'YouTube could not be reached',
-    body: 'The search failed. This says nothing about how many creators match — it says the request did not complete.',
+    title: 'YouTube didn’t respond',
+    body: 'Try again shortly. This says nothing about how many creators match.',
   },
 };
 
@@ -257,4 +251,4 @@ export const SIMILARITY_DIMENSION_LABEL: Record<SimilarityDimension, string> = {
  * creator's own grant.
  */
 export const SIMILARITY_LIMIT =
-  'Similarity here is between what the channels publish. It is not audience overlap, shared viewers, comparable demographics or comparable purchasing — none of which public data can show.';
+  'Similarity is between what the channels publish — not audience overlap, demographics or buying behaviour, none of which public data shows.';

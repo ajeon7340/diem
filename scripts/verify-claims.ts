@@ -30,9 +30,14 @@ const read = (p: string) => readFileSync(p, 'utf8');
 {
   const report = read('src/components/channel/ChannelReport.tsx');
   check('the format split is labelled a proxy', /\(proxy\)/.test(report), true);
+  // Matched on meaning rather than on one sentence: the report was rewritten
+  // and the guarantee has to survive a rewrite, which is the whole point of
+  // asserting it here instead of trusting a reviewer to notice.
   check(
     'and says outright that duration cannot identify a Short',
-    /cannot be identified reliably from duration alone/.test(report),
+    /cannot be identified reliably from duration alone|does not identify Shorts/.test(
+      report.replace(/\s+/g, ' '),
+    ),
     true,
   );
   check(
@@ -66,26 +71,33 @@ const read = (p: string) => readFileSync(p, 'utf8');
 // ---------------------------------------------------------------------------
 {
   const report = read('src/components/channel/ChannelReport.tsx');
+  const reportProse = report.replace(/\s+/g, ' ');
   check(
     'unreadable comments are stated not to reflect on the audience',
-    /says nothing negative about the audience/.test(report),
+    /says nothing negative about the audience/.test(reportProse),
     true,
   );
   check(
     'an empty theme set is not a negative signal',
-    /do not indicate negative response/.test(report),
+    /do not indicate (a )?negative response/.test(reportProse),
     true,
   );
   check(
     'an incomplete pass draws no conclusion',
-    /No audience conclusion is available/.test(report),
+    /No audience conclusion is available|No conclusion about the response is available/.test(reportProse),
     true,
   );
-  check(
-    'a null figure renders as Unavailable, never 0',
-    /value===null\?'Unavailable'/.test(report),
-    true,
-  );
+  // The formatter moved out of the component when the report was rebuilt. The
+  // rule did not: an absent figure says so, and never prints as a zero.
+  {
+    const format = read('src/lib/channel/highlights.ts');
+    // Both formatters, written differently — a ternary and an early return.
+    check(
+      'a null figure says it was not reported, never 0',
+      (format.match(/value === null[^\n]*'Not reported'/g) ?? []).length,
+      2,
+    );
+  }
 
   // The comparison table is the other place a dash can be misread as a zero.
   // Whitespace-normalised: JSX wraps its prose wherever the line runs long, so

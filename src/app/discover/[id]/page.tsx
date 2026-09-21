@@ -125,7 +125,7 @@ export default async function DiscoveryResults({ params }: { params: { id: strin
                 />
                 <ModeTabs mode={search.mode} />
                 <p className="text-[11px] leading-relaxed text-ink-muted">
-                  Showing the filters this search ran with. Change them and search again.
+                  Filters this search ran with. Change them to search again.
                 </p>
               </div>
               <ModeForm
@@ -152,8 +152,7 @@ export default async function DiscoveryResults({ params }: { params: { id: strin
                   job's generic line whenever it can be more specific. */}
               {!live && search.coverage?.stoppedBecause === 'api_error' && candidates.length > 0 ? (
                 <p className="rounded-xl border border-amber/30 bg-amber-wash px-4 py-2.5 text-[12px] leading-relaxed text-ink">
-                  Some requests to YouTube did not complete. These are the creators the requests that
-                  succeeded reached — not a smaller field.
+                  Some requests didn’t complete. These are the creators the rest reached.
                 </p>
               ) : !live && job && !(job.status === 'partial' && search.coverage) ? (
                 <p className="text-[12px] text-ink-muted">{describeJob(job)}</p>
@@ -190,8 +189,7 @@ export default async function DiscoveryResults({ params }: { params: { id: strin
               ) : live ? (
                 <div className="rounded-2xl border border-line bg-surface px-6 py-12 text-center">
                   <p className="text-[13px] text-ink-muted">
-                    Searching. Results appear when the run commits — nothing partial is shown, because a
-                    half-written result set describes no moment.
+                    Searching. Results appear when it finishes.
                   </p>
                 </div>
               ) : (
@@ -223,12 +221,12 @@ export default async function DiscoveryResults({ params }: { params: { id: strin
                       <div className="grid gap-5 sm:grid-cols-2">
                         <FilterColumn
                           title="Applied by YouTube"
-                          note="Narrowed the whole index before anything came back."
+                          note="Narrowed the search itself."
                           items={search.appliedFilters.api}
                         />
                         <FilterColumn
-                          title="Applied afterwards, by adfit"
-                          note="Narrowed only the results this search retrieved — not all of YouTube."
+                          title="Applied afterwards"
+                          note="Narrowed the results, not all of YouTube."
                           items={search.appliedFilters.post}
                         />
                       </div>
@@ -247,12 +245,12 @@ export default async function DiscoveryResults({ params }: { params: { id: strin
                 </details>
               ) : null}
 
-              <footer className="space-y-1.5 border-t border-line pt-4">
-                <p className="text-[11px] leading-relaxed text-ink-muted">{DISCOVERY_NOT_A_RECOMMENDATION}</p>
+              {/* One paragraph, three facts. Stacked as three they read as three
+                  warnings about the same thing and got skipped as a block. */}
+              <footer className="border-t border-line pt-4">
                 <p className="text-[11px] leading-relaxed text-ink-muted">
-                  {search.mode === 'competitor' ? COLLABORATION_COVERAGE_DISCLAIMER : DISCOVERY_COVERAGE_DISCLAIMER}
-                </p>
-                <p className="text-[11px] leading-relaxed text-ink-muted">
+                  {DISCOVERY_NOT_A_RECOMMENDATION}{' '}
+                  {search.mode === 'competitor' ? COLLABORATION_COVERAGE_DISCLAIMER : DISCOVERY_COVERAGE_DISCLAIMER}{' '}
                   {search.rankingEnabled ? DISCOVERY_DISCLOSURE : DISCOVERY_RANKING_WITHHELD}
                 </p>
               </footer>

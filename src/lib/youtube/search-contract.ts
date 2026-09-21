@@ -59,6 +59,6 @@ export const POST_FILTERS = [
  * result reads as an audience claim unless something says it is not one.
  */
 export const LOCALE_PARAMETER_DISCLOSURE =
-  'Language and market are search preferences sent to YouTube, not measurements of who watches. adfit cannot see a channel’s audience.';
+  'Search preferences, not audience data. adfit cannot see who watches a channel.';
 
 export const MAX_RESULTS_PER_PAGE = 50;

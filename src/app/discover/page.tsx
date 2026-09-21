@@ -73,15 +73,12 @@ export default async function DiscoverPage({
         <div className="mx-auto w-full max-w-[1440px] px-4 py-6 sm:px-6 lg:px-8">
           <div className="mb-4 flex flex-wrap items-baseline gap-x-3 gap-y-1">
             <h1 className="text-xl font-semibold tracking-tight text-ink">Discover creators</h1>
-            <p className="text-[12px] text-ink-muted">
-              Public YouTube data. No creator signs up. {DISCOVERY_COVERAGE_DISCLAIMER}
-            </p>
+            <p className="text-[12px] text-ink-muted">{DISCOVERY_COVERAGE_DISCLAIMER}</p>
           </div>
 
           {campaign ? (
             <p className="mb-4 rounded-lg border border-indigo/25 bg-indigo-wash px-3 py-2 text-[12px] text-indigo">
-              Searching for <strong className="font-semibold">{campaign.name}</strong> — picks can be added
-              straight to it.{' '}
+              Searching for <strong className="font-semibold">{campaign.name}</strong>.{' '}
               <Link href="/discover" className="underline underline-offset-4">
                 Clear
               </Link>

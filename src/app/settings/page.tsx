@@ -109,8 +109,8 @@ export default async function Settings({ searchParams }: { searchParams: { secti
 
           <PanelSection title="What stays private">
             <p className="text-[11px] leading-relaxed text-ink-faint">
-              Briefs, shortlists, notes, quoted fees and brand profiles never leave this workspace,
-              and are excluded from shared links and exports by default.
+              Briefs, notes, fees and brand profiles stay in this workspace and are excluded from
+              shares and exports by default.
             </p>
           </PanelSection>
         </div>
@@ -120,8 +120,7 @@ export default async function Settings({ searchParams }: { searchParams: { secti
         <section className="rounded-xl border border-line bg-surface p-5">
           <h2 className="text-[15px] font-semibold text-ink">Workspace</h2>
           <p className="mt-1 max-w-[62ch] text-[12px] leading-relaxed text-ink-muted">
-            An agency runs campaigns for several client brands from one workspace; a brand runs its
-            own. Briefs, notes, fees and decisions stay private to this workspace either way.
+            An agency runs campaigns for client brands; a brand runs its own.
           </p>
           <WorkspaceForm name={viewer.organization.name} customerType={viewer.organization.customerType} />
         </section>
@@ -132,14 +131,13 @@ export default async function Settings({ searchParams }: { searchParams: { secti
           <div className="rounded-xl border border-line bg-surface p-5">
             <h2 className="text-[15px] font-semibold text-ink">Brands</h2>
             <p className="mt-1 max-w-[62ch] text-[12px] leading-relaxed text-ink-muted">
-              The brand a campaign is for. Saved once and reused by discovery, so nobody retypes what
-              the product is. {viewer.organization.customerType === 'agency' ? 'Add one per client.' : 'Add one per product line.'}
+              Saved once and reused across searches and campaigns.{' '}
+              {viewer.organization.customerType === 'agency' ? 'One per client.' : 'One per product line.'}
             </p>
 
             {live.length === 0 ? (
               <p className="mt-4 rounded-lg border border-dashed border-line px-3 py-6 text-center text-[12px] text-ink-muted">
-                No brands yet. Discovery and channel analysis work without one — a brand just saves
-                you retyping the product on every search.
+                No brands yet. Searching works without one; a brand saves retyping.
               </p>
             ) : (
               <ul className="mt-4 divide-y divide-line rounded-lg border border-line">
@@ -228,7 +226,7 @@ export default async function Settings({ searchParams }: { searchParams: { secti
             <div className="rounded-xl border border-line bg-surface p-5">
               <h2 className="text-[15px] font-semibold text-ink">Archived</h2>
               <p className="mt-1 text-[12px] text-ink-muted">
-                Hidden from selectors. Their campaigns and history are untouched.
+                Hidden from pickers. Campaigns and history are untouched.
               </p>
               <ul className="mt-3 divide-y divide-line rounded-lg border border-line">
                 {archived.map((brand) => (
@@ -253,8 +251,8 @@ export default async function Settings({ searchParams }: { searchParams: { secti
         <section className="rounded-xl border border-line bg-surface p-5">
           <h2 className="text-[15px] font-semibold text-ink">Shared reports</h2>
           <p className="mt-1 max-w-[62ch] text-[12px] leading-relaxed text-ink-muted">
-            Revoking disables the link immediately. Copies already downloaded cannot be recalled — they
-            carry their own printed data deadline and must be deleted or refreshed by it.
+            Revoking disables a link immediately. Copies already downloaded can’t be recalled — each
+            carries its own printed deadline.
           </p>
           {shares.length === 0 ? (
             <p className="mt-4 rounded-lg border border-dashed border-line px-3 py-6 text-center text-[12px] text-ink-muted">

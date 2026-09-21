@@ -6,16 +6,16 @@ export function ChannelEntry({ initial = '', resolved = {} }: { initial?: string
  const [preview, resolve] = useFormState<ChannelState,FormData>(previewChannel,resolved);
  const [started,start] = useFormState<ChannelState,FormData>(startChannel,{});
  return <div className="space-y-5">
- <form action={resolve} className="flex flex-col gap-3 sm:flex-row"><label className="flex-1"><span className="sr-only">YouTube channel URL or @handle</span><input name="channel" defaultValue={initial} required maxLength={200} autoComplete="off" autoCapitalize="none" spellCheck={false} placeholder="YouTube channel URL or @handle" className="w-full rounded-md border p-3" /></label><Submit>Resolve channel</Submit></form>
+ <form action={resolve} className="flex flex-col gap-3 sm:flex-row"><label className="flex-1"><span className="sr-only">YouTube channel URL or @handle</span><input name="channel" defaultValue={initial} required maxLength={200} autoComplete="off" autoCapitalize="none" spellCheck={false} placeholder="YouTube channel URL or @handle" className="w-full rounded-md border p-3" /></label><Submit>Find channel</Submit></form>
  {preview.message && <p role="alert">{preview.message}</p>}
  {preview.channel && <div className="rounded-lg border bg-surface p-6"><div className="flex items-center gap-4">
  {/* eslint-disable-next-line @next/next/no-img-element */}
  {preview.channel.thumbnail && <img src={preview.channel.thumbnail} alt="" className="h-14 w-14 rounded-full" />}
  <div><h2 className="font-semibold">{preview.channel.title}</h2><p className="text-sm text-ink-muted">{preview.channel.handle}</p></div></div>
- <p className="my-4 text-sm">Confirm this is the channel you want to evaluate.</p>
+ <p className="my-4 text-sm">Is this the right channel?</p>
  <form action={start} className="space-y-4"><input name="channelId" type="hidden" value={preview.channel.channelId} /><input name="refresh" type="hidden" value={preview.exists ? 'true':'false'} />
- <details><summary className="cursor-pointer text-sm">Analysis options</summary><div className="mt-3 space-y-3 text-sm"><label>Analysis period <select name="days" defaultValue="90" className="ml-2 rounded border p-2"><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="365">Last year</option></select></label><label className="block">Content format <select name="format" defaultValue="all" className="ml-2 rounded border p-2"><option value="all">All formats</option><option value="short">Shorts / short videos (proxy)</option><option value="long">Long-form</option></select></label><p>Collect both formats, up to 50 recent uploads and 600 comments. Filter formats in the report without recollecting.</p></div></details>
- <div className="flex items-center gap-4"><Submit>{preview.exists ? 'Refresh analysis' : 'Confirm and analyze'}</Submit>{preview.exists && <button name="operation" value="view" className="text-indigo">View report</button>}</div>
+ <details><summary className="cursor-pointer text-sm">Analysis options</summary><div className="mt-3 space-y-3 text-sm"><label>Analysis period <select name="days" defaultValue="90" className="ml-2 rounded border p-2"><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="365">Last year</option></select></label><label className="block">Content format <select name="format" defaultValue="all" className="ml-2 rounded border p-2"><option value="all">All formats</option><option value="short">Shorts / short videos (proxy)</option><option value="long">Long-form</option></select></label><p className="text-ink-muted">Collects up to 50 recent uploads and 600 comments. You can filter formats in the report afterwards.</p></div></details>
+ <div className="flex items-center gap-4"><Submit>{preview.exists ? 'Refresh analysis' : 'Start analysis'}</Submit>{preview.exists && <button name="operation" value="view" className="text-indigo">View report</button>}</div>
  </form></div>}
  {started.message && <p role="status">{started.message}</p>}
  </div>;

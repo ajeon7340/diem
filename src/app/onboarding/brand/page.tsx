@@ -58,8 +58,8 @@ export default async function BrandOnboardingPage({
       title={agency ? 'Add your first client brand' : 'Tell us about your brand'}
       intro={
         agency
-          ? 'Discovery searches for the brand you pick, not for your agency. You can add more clients any time in Settings.'
-          : 'Saved once and reused on every search, so you do not retype it. You can add more brands later.'
+          ? 'Searches run for the client you pick, not for your agency. Add more later in Settings.'
+          : 'Saved once and reused on every search. Add more later.'
       }
       footer={null}
     >

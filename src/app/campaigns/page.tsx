@@ -84,10 +84,7 @@ export default async function CampaignsPage({
           <PanelSection>
             <p className="rail">{viewer.organization?.name ?? 'Campaigns'}</p>
             <h1 className="mt-1.5 text-[17px] font-semibold tracking-tight text-ink">Campaigns</h1>
-            <p className="mt-1 text-[12px] leading-relaxed text-ink-muted">
-              One brief, the channels you are weighing against it, and what you decided. All of it
-              private to this workspace.
-            </p>
+            <p className="mt-1 text-[12px] text-ink-muted">Briefs and shortlists, private to this workspace.</p>
             <Link href="/campaigns/new" className="primary-action mt-3 w-full">
               New campaign
             </Link>
@@ -130,12 +127,6 @@ export default async function CampaignsPage({
                   );
                 })}
               </ul>
-              {selectedBrand ? (
-                <p className="mt-2 text-[11px] leading-relaxed text-ink-faint">
-                  Showing {agency ? 'work for' : 'campaigns for'}{' '}
-                  <strong className="font-medium text-ink-muted">{selectedBrand.name}</strong>.
-                </p>
-              ) : null}
             </PanelSection>
           ) : null}
 
@@ -146,9 +137,7 @@ export default async function CampaignsPage({
               hrefFor={(id) => href({ state: id })}
               legend="Filter campaigns"
             />
-            <p className="mt-3 text-[11px] leading-relaxed text-ink-faint">
-              adfit stores no campaign status — these filter on what a campaign actually holds.
-            </p>
+            <p className="mt-3 text-[11px] text-ink-faint">Filters by what each campaign holds.</p>
           </PanelSection>
         </div>
       }
@@ -164,7 +153,7 @@ export default async function CampaignsPage({
 
       {!isSupabaseConfigured() ? (
         <p className="mt-3 rounded-lg border border-amber/30 bg-amber-wash px-3 py-2 text-[12px] text-ink-muted">
-          No database is configured on this deployment, so campaigns cannot be saved.
+          Campaigns can’t be saved yet. Ask whoever administers this workspace to finish setup.
         </p>
       ) : null}
 
@@ -176,7 +165,7 @@ export default async function CampaignsPage({
             </p>
             <p className="mx-auto mt-2 max-w-[52ch] text-[12px] leading-relaxed text-ink-muted">
               {campaigns.length === 0
-                ? 'A campaign holds one brief and the channels you are weighing against it. Paste any YouTube channel — nobody has to have signed up, approved you, or connected an account.'
+                ? 'A campaign holds one brief and the channels you’re weighing against it.'
                 : 'Try another filter, or clear the brand selection.'}
             </p>
             <Link

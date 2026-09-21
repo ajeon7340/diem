@@ -536,11 +536,10 @@ export const COMPETITOR_SUGGESTIONS = AMENDMENT_ACCEPTED;
 export const EVIDENCE_INFERENCE = AMENDMENT_ACCEPTED;
 
 export const DISCOVERY_DISCLOSURE =
-  'Relevance, similarity and evidence readings are adfit’s own, computed from public YouTube data. They are not YouTube figures and not a YouTube recommendation.';
+  'Relevance and evidence readings are adfit’s, computed from public YouTube data — not YouTube figures.';
 
 /** What the results panel says when ranking is off rather than empty. */
-export const DISCOVERY_RANKING_WITHHELD =
-  'Results are in the order YouTube returned them. adfit is not scoring or ranking them on this deployment.';
+export const DISCOVERY_RANKING_WITHHELD = 'In the order YouTube returned them. adfit is not ranking these.';
 
 /**
  * Discovery found a channel. That is all it found.
@@ -550,7 +549,7 @@ export const DISCOVERY_RANKING_WITHHELD =
  * brand's campaign. The second needs the brief, the report and a person.
  */
 export const DISCOVERY_NOT_A_RECOMMENDATION =
-  'Appearing here means a public search matched this channel. It is not a judgement that the channel suits your campaign — add it to a campaign for that read.';
+  'A search match, not a recommendation. Add a creator to a campaign to assess fit.';
 
 /**
  * No result set here is all of YouTube.
@@ -560,7 +559,7 @@ export const DISCOVERY_NOT_A_RECOMMENDATION =
  * count of what was read.
  */
 export const DISCOVERY_COVERAGE_DISCLAIMER =
-  'A bounded search, not a census. These are channels this search reached — not every creator on YouTube who fits.';
+  'Creators this search reached — not everyone on YouTube who fits.';
 
 export const COLLABORATION_COVERAGE_DISCLAIMER =
-  'Public evidence this search reached. Absence of a result is not evidence that a collaboration never happened.';
+  'Evidence this search reached. No result does not mean no collaboration happened.';

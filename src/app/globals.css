@@ -223,7 +223,6 @@ body {
   .report-page { max-width: none !important; padding: 0 !important; }
   .channel-report { font-size: 10pt; }
   .channel-report .report-section { margin-top: 5mm; border-radius: 0; padding: 5mm; }
-  .channel-report .report-section:first-of-type { break-after: page; }
   .channel-report h2, .channel-report h3, .channel-report summary { break-after: avoid; }
   .channel-report tr, .channel-report blockquote, .channel-report li { break-inside: avoid; }
   .channel-report details > * { display: block !important; }
@@ -247,13 +246,58 @@ body {
 @media print {
   .channel-report .report-section { break-inside: avoid; }
   .channel-report footer { break-inside: avoid; }
-  .channel-report .grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); }
 }
+
+/*
+ * The two-page report.
+ *
+ * `.report-page-1` ends with a break so the evidence starts on its own sheet —
+ * the old rule broke after the FIRST SECTION, which put one box on page one and
+ * everything else on page two whatever the content was.
+ *
+ * Nothing that reads as one thing may be split: a heading keeps its body, an
+ * evidence card keeps its thumbnail, a table row keeps its cells. `orphans` and
+ * `widows` stop a paragraph leaving one line behind on the previous page.
+ */
 @media print {
-  .channel-report .text-sm { font-size: 9pt; line-height: 1.4; }
-  .channel-report .text-xs { font-size: 7.5pt; line-height: 1.4; }
-  .channel-report .report-section { padding: 4mm; margin-top: 3mm; }
-  .channel-report .report-section > p:last-child { margin-top: 3mm; padding-top: 2mm; }
+  .channel-report { font-size: 9.5pt; orphans: 3; widows: 3; }
+  .channel-report .report-page-1 { break-after: page; }
+  .channel-report .report-identity { break-after: avoid; }
+  .channel-report .avoid-break,
+  .channel-report .evidence-card,
+  .channel-report .report-section { break-inside: avoid; page-break-inside: avoid; }
+  .channel-report h1, .channel-report h2, .channel-report h3 { break-after: avoid; }
+
+  /* Evidence cards print two-up. A thumbnail is never cropped — object-contain
+     in the markup, and no forced aspect here — because YouTube's terms cover
+     how its images are presented, not only where they come from. */
+  .channel-report .evidence-card img { max-height: 34mm; width: auto; }
+
+  /* Collapsed detail is still evidence. Everything opens for the printer, and
+     the summary row disappears because "click to expand" is meaningless on
+     paper. */
+  .channel-report details > * { display: block !important; }
+  .channel-report details > summary { display: none !important; }
+
+  /* Links must stay resolvable off-screen, so the href is printed after the
+     text for anything pointing off-site. Internal anchors are left alone. */
+  .channel-report a[href^="http"]::after {
+    content: " (" attr(href) ")";
+    font-size: 7pt;
+    color: #555;
+    overflow-wrap: anywhere;
+  }
+  .channel-report .evidence-card a[href^="http"]::after,
+  .channel-report .report-identity a[href^="http"]::after { content: ""; }
+
+  .channel-report table { width: 100%; table-layout: fixed; }
+  .channel-report th, .channel-report td { overflow-wrap: anywhere; }
+  .channel-report a { color: inherit; overflow-wrap: anywhere; }
+}
+
+/* Export without the appendix: the toggle sets this on <html>. */
+@media print {
+  .print-no-appendix .report-appendix { display: none !important; }
 }
 
 /* Shared workspace presentation; print reports retain their own layout. */
