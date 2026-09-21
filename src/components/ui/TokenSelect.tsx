@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 
 /**
@@ -53,6 +53,13 @@ export function TokenSelect({
   const inputId = useId();
   const listId = useId();
   const input = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const form = input.current?.form;
+    const reset = () => { setChosen(selected); setQuery(''); setOpen(false); };
+    form?.addEventListener('reset', reset);
+    return () => form?.removeEventListener('reset', reset);
+  }, [selected]);
 
   const byCode = useMemo(() => new Map(options.map((o) => [o.code, o.name])), [options]);
 

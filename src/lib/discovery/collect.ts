@@ -86,7 +86,7 @@ export async function collectCandidates(
         q: entry.q,
         ...(entry.paidOnly ? { videoPaidProductPlacement: true } : {}),
       });
-      queriesRun.push(entry.q);
+      queriesRun.push(entry.q || 'All topics');
       pagesRead += 1;
       for (const hit of page.items) hits.push({ hit, entry });
     } catch (error) {

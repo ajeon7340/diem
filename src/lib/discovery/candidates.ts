@@ -1,5 +1,5 @@
 import type { ChannelFacts, SearchVideoHit, VideoFacts } from '@/lib/youtube/search';
-import { inBand, medianViews, type Band } from './ranges';
+import { inBands, medianViews, type Band } from './ranges';
 import type { DiscoveryCandidate, EvidenceVideo } from './types';
 
 /**
@@ -193,6 +193,8 @@ export interface PostFilters {
   maxSubscribers?: number | null;
   /** Band for the typical views of the videos THIS SEARCH retrieved. */
   viewBand?: Band | null;
+  viewBands?: Band[];
+  subscriberBands?: Band[];
   /** Terms that disqualify a candidate if they appear in its retrieved text. */
   excludedTopics?: string[];
   /** Drop channels whose subscriber count is hidden when a range was asked for. */
@@ -225,12 +227,14 @@ export function applyPostFilters(
   const removed: FilterOutcome<DiscoveryCandidate>['removed'] = [];
   let kept = candidates;
 
-  const hasRange = filters.minSubscribers != null || filters.maxSubscribers != null;
+  const subscriberBands = filters.subscriberBands ?? [];
+  const hasRange = subscriberBands.length > 0 || filters.minSubscribers != null || filters.maxSubscribers != null;
   if (hasRange) {
     const before = kept.length;
     const hidden = kept.filter((c) => c.subscribers === null);
     kept = kept.filter((c) => {
       if (c.subscribers === null) return !filters.requireVisibleSubscribers;
+      if (subscriberBands.length) return inBands(c.subscribers, subscriberBands) === true;
       if (filters.minSubscribers != null && c.subscribers < filters.minSubscribers) return false;
       if (filters.maxSubscribers != null && c.subscribers > filters.maxSubscribers) return false;
       return true;
@@ -253,12 +257,12 @@ export function applyPostFilters(
     }
   }
 
-  const viewBand = filters.viewBand;
-  if (viewBand && (viewBand.min !== null || viewBand.max !== null)) {
+  const viewBands = filters.viewBands ?? (filters.viewBand ? [filters.viewBand] : []);
+  if (viewBands.some((item) => item.min !== null || item.max !== null)) {
     const before = kept.length;
     let unmeasured = 0;
     kept = kept.filter((candidate) => {
-      const verdict = inBand(medianViews(candidate.evidence.map((e) => e.views)), viewBand);
+      const verdict = inBands(medianViews(candidate.evidence.map((e) => e.views)), viewBands);
       // Unmeasured is kept and counted, never dropped: a channel whose
       // retrieved videos reported no view count has not failed the filter, and
       // removing it would quietly narrow the field on missing data.

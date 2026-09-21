@@ -99,14 +99,14 @@ function parseInput(mode: DiscoveryMode, form: FormData): Parsed {
   const raw = Object.fromEntries(form.entries());
 
   if (mode === 'criteria') {
-    const result = criteriaSchema.safeParse({ ...raw, formats: form.getAll('formats') });
+    const result = criteriaSchema.safeParse({
+      ...raw,
+      categories: form.getAll('categories'),
+      subscribers: form.getAll('subscribers'),
+      views: form.getAll('views'),
+      formats: form.getAll('formats'),
+    });
     if (!result.success) return { ok: false, state: { fieldErrors: flatten(result.error) } };
-    if (result.data.keywords.length === 0 && !result.data.product) {
-      return {
-        ok: false,
-        state: { fieldErrors: { keywords: 'Give at least one topic, or describe the product.' } },
-      };
-    }
     return { ok: true, params: result.data, campaignId: result.data.campaignId };
   }
 

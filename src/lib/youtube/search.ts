@@ -151,11 +151,11 @@ async function runSearch(
   const params: Record<string, string | number> = {
     part: 'snippet',
     type,
-    q: query.q,
     maxResults: Math.min(query.maxResults ?? MAX_RESULTS_PER_PAGE, MAX_RESULTS_PER_PAGE),
     order: query.order ?? 'relevance',
     safeSearch: 'none',
   };
+  if (query.q.trim()) params.q = query.q;
   if (query.relevanceLanguage) params.relevanceLanguage = query.relevanceLanguage;
   if (query.regionCode) params.regionCode = query.regionCode;
   if (query.publishedAfter) params.publishedAfter = query.publishedAfter;

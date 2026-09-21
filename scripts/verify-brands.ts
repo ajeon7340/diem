@@ -35,6 +35,12 @@ function check(label: string, actual: unknown, expected: unknown) {
   else { fail++; console.log(`  FAIL ${label}\n       got ${a}\n       want ${e}`); }
 }
 
+const cleared = buildContext({ mode: 'criteria', brand: brand(), campaign: null,
+  searchParams: { categories: [], language: null, market: null } });
+check('cleared topics stay empty when reopening a search', cleared.defaults.categories, []);
+check('Any language is not replaced by the brand language', cleared.defaults.language, undefined);
+check('Any market is not replaced by the brand market', cleared.defaults.market, undefined);
+
 const CH = 'https://www.youtube.com/@mkbhd';
 const ENC = encodeURIComponent(CH);
 

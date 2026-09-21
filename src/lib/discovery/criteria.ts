@@ -4,7 +4,7 @@ import { applyPostFilters } from './candidates';
 import { collectCandidates, type QueryPlanEntry } from './collect';
 import type { DiscoveryLimits } from './limits';
 import { depthSignal, rankCandidates, scoreSignals, termCoverageSignal, type Signal } from './rank';
-import { SUBSCRIBER_BANDS, VIEW_BANDS, band } from './ranges';
+import { SUBSCRIBER_BANDS, VIEW_BANDS, selectedBands } from './ranges';
 import type { CriteriaInput, Format } from './schemas';
 import type { Retriever, RunControl } from './retriever';
 import type { DiscoveryCandidate, DiscoveryResult } from './types';
@@ -57,6 +57,9 @@ export function planCriteriaQueries(input: CriteriaInput, max: number): QueryPla
     }
   }
 
+  if (plan.length === 0) {
+    plan.push({ q: '', terms: [], why: 'Browse without a topic using your selected filters.' });
+  }
   return plan.slice(0, max);
 }
 
@@ -97,8 +100,8 @@ export async function runCriteria(
   const plan = planCriteriaQueries(input, limits.queries);
   const terms = criteriaTerms(input);
 
-  const subscriberBand = band(SUBSCRIBER_BANDS, input.subscribers);
-  const viewBand = band(VIEW_BANDS, input.views);
+  const subscriberBands = selectedBands(SUBSCRIBER_BANDS, input.subscribers);
+  const viewBands = selectedBands(VIEW_BANDS, input.views);
 
   if (plan.length === 0) {
     return {
@@ -143,9 +146,10 @@ export async function runCriteria(
   const filtered = applyPostFilters(collected.candidates, {
     // The band wins where one was chosen; the open numbers stay live for
     // searches that were run before bands existed.
-    minSubscribers: subscriberBand.min ?? input.minSubscribers,
-    maxSubscribers: subscriberBand.max ?? input.maxSubscribers,
-    viewBand,
+    minSubscribers: input.minSubscribers,
+    maxSubscribers: input.maxSubscribers,
+    subscriberBands,
+    viewBands,
     excludedTopics: input.excludeTopics,
   });
 
@@ -159,7 +163,7 @@ export async function runCriteria(
     : withReasons;
 
   const api: { name: string; value: string }[] = [
-    { name: 'Categories searched', value: plan.map((p) => p.q).join(' · ') },
+    { name: 'Search', value: plan.map((p) => p.q || 'All topics').join(' · ') },
   ];
   if (input.language) api.push({ name: 'Content language preference', value: input.language });
   if (input.market) api.push({ name: 'Market preference', value: input.market });
@@ -167,18 +171,18 @@ export async function runCriteria(
   if (publishedAfter) api.push({ name: 'Published after', value: publishedAfter.slice(0, 10) });
 
   const post: { name: string; value: string }[] = [];
-  if (subscriberBand.id !== 'any') {
-    post.push({ name: 'Subscribers', value: subscriberBand.label });
+  if (subscriberBands.length) {
+    post.push({ name: 'Subscribers', value: subscriberBands.map((item) => item.label).join(' or ') });
   } else if (input.minSubscribers != null || input.maxSubscribers != null) {
     post.push({
       name: 'Subscriber range',
       value: `${input.minSubscribers?.toLocaleString('en-US') ?? 'any'} – ${input.maxSubscribers?.toLocaleString('en-US') ?? 'any'}`,
     });
   }
-  if (viewBand.id !== 'any') {
+  if (viewBands.length) {
     post.push({
       name: 'Typical views',
-      value: `${viewBand.label} — median of the videos this search retrieved, not of the channel`,
+      value: `${viewBands.map((item) => item.label).join(' or ')} — median of the videos this search retrieved, not of the channel`,
     });
   }
   if (input.excludeTopics.length) post.push({ name: 'Excluded topics', value: input.excludeTopics.join(', ') });
@@ -228,6 +232,7 @@ export function criteriaReason(candidate: DiscoveryCandidate, query: string | nu
   const where = query ? `the search “${query}”` : 'this search';
 
   if (!lead) return `Returned by ${where}.`;
+  if (!query) return `Found while browsing all topics — “${lead.title}”.`;
   if (matched.length === 0) {
     return `Returned by ${where}; none of your terms appear in the title or description of “${lead.title}”.`;
   }

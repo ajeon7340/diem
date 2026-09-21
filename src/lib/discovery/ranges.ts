@@ -68,3 +68,18 @@ export function inBand(value: number | null, { min, max }: Band): boolean | null
   if (max !== null && value > max) return false;
   return true;
 }
+
+/** Accept legacy single bands and checkbox selections without filling gaps. */
+export function selectedBands(bands: Band[], value: unknown): Band[] {
+  const ids = Array.isArray(value) ? value : typeof value === 'string' ? value.split(',') : [];
+  return bands.filter((item) => item.id !== 'any' && ids.includes(item.id));
+}
+
+export function normalizeBands(bands: Band[], value: unknown): string {
+  return selectedBands(bands, value).map((item) => item.id).join(',') || 'any';
+}
+
+export function inBands(value: number | null, bands: Band[]): boolean | null {
+  if (value === null) return null;
+  return bands.length === 0 || bands.some((item) => inBand(value, item));
+}

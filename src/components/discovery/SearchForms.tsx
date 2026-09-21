@@ -1,12 +1,13 @@
 'use client';
 
+import { useState } from 'react';
 import { useFormState, useFormStatus } from 'react-dom';
 import { Search } from 'lucide-react';
 
 import { saveSearchAsBrandDefaults } from '@/app/actions/brand';
 import { startDiscovery, type DiscoveryState } from '@/app/actions/discovery';
 import { COUNTRIES, LANGUAGES } from '@/lib/locale/vocabulary';
-import { SUBSCRIBER_BANDS, VIEW_BANDS } from '@/lib/discovery/ranges';
+import { SUBSCRIBER_BANDS, VIEW_BANDS, selectedBands } from '@/lib/discovery/ranges';
 import { TokenSelect } from '@/components/ui/TokenSelect';
 import { CAMPAIGN_CATEGORIES } from '@/types';
 import { PROVENANCE_LABEL, type SearchContext } from '@/lib/discovery/context';
@@ -107,8 +108,17 @@ function LocalePicker({
   field: keyof FilterDefaults;
   anyLabel: string;
 }) {
-  const saved = options.filter((option) => preferred.includes(option.code));
-  const rest = options.filter((option) => !preferred.includes(option.code));
+  const [showAll, setShowAll] = useState(false);
+  const initialCodes = name === 'language'
+    ? ['en', 'ko', 'ja', 'es', 'pt', 'fr', 'de', 'hi', 'id', 'ar']
+    : ['US', 'GB', 'CA', 'AU', 'KR', 'JP', 'DE', 'FR', 'ES', 'BR', 'IN', 'ID'];
+  const savedCodes = [...preferred, ...(defaultValue ? [defaultValue] : [])];
+  const saved = options.filter((option) => savedCodes.includes(option.code));
+  const common = initialCodes.flatMap((code) => {
+    const option = options.find((item) => item.code === code);
+    return option && !savedCodes.includes(code) ? [option] : [];
+  });
+  const rest = options.filter((option) => !savedCodes.includes(option.code) && !initialCodes.includes(option.code));
   return (
     <div>
       <label className={label} htmlFor={id}>
@@ -118,7 +128,7 @@ function LocalePicker({
       <select id={id} name={name} defaultValue={defaultValue ?? ''} className={`${field} mt-1.5`}>
         <option value="">{anyLabel}</option>
         {saved.length ? (
-          <optgroup label="Saved on this brand">
+          <optgroup label="Saved preferences">
             {saved.map((option) => (
               <option key={option.code} value={option.code}>
                 {option.name}
@@ -126,14 +136,20 @@ function LocalePicker({
             ))}
           </optgroup>
         ) : null}
-        <optgroup label="All">
-          {rest.map((option) => (
+        <optgroup label="Common choices">
+          {common.map((option) => (
             <option key={option.code} value={option.code}>
               {option.name}
             </option>
           ))}
         </optgroup>
+        {showAll ? <optgroup label="More choices">
+          {rest.map((option) => <option key={option.code} value={option.code}>{option.name}</option>)}
+        </optgroup> : null}
       </select>
+      {!showAll ? <button type="button" onClick={() => setShowAll(true)} className="mt-1 min-h-8 text-[11px] text-indigo hover:underline">
+        {name === 'language' ? 'Show all languages' : 'Show all markets'}
+      </button> : null}
     </div>
   );
 }
@@ -198,15 +214,9 @@ function Footer({ state }: { state: DiscoveryState }) {
   );
 }
 
-/** A size band picker. Same control for subscribers and for views, because
- *  they are the same question asked of two figures. */
+/** Visible, independent ranges. Nothing checked means no size restriction. */
 function BandSelect({
-  id,
-  name,
-  label: text,
-  bands,
-  defaultValue,
-  hint,
+  id, name, label: text, bands, defaultValue, hint,
 }: {
   id: string;
   name: string;
@@ -215,20 +225,22 @@ function BandSelect({
   defaultValue?: string;
   hint: string;
 }) {
+  const selected = selectedBands(bands, defaultValue);
   return (
-    <div>
-      <label className={label} htmlFor={id}>
-        {text}
-      </label>
-      <select id={id} name={name} defaultValue={defaultValue ?? 'any'} className={`${field} mt-1.5`}>
-        {bands.map((option) => (
-          <option key={option.id} value={option.id}>
+    <fieldset aria-describedby={`${id}-hint`}>
+      <legend className={label}>{text}</legend>
+      <div className="mt-1.5 grid grid-cols-2 gap-1.5">
+        {bands.filter((option) => option.id !== 'any').map((option) => (
+          <label key={option.id} className="flex min-h-10 cursor-pointer items-center gap-2 rounded-lg border border-line px-2 text-[11px] text-ink hover:bg-paper has-[:checked]:border-indigo has-[:checked]:bg-indigo-wash">
+            <input type="checkbox" name={name} value={option.id}
+              defaultChecked={selected.some((item) => item.id === option.id)}
+              className="h-4 w-4 shrink-0 accent-indigo" />
             {option.label}
-          </option>
+          </label>
         ))}
-      </select>
-      <p className={help}>{hint}</p>
-    </div>
+      </div>
+      <p id={`${id}-hint`} className={help}>{hint}</p>
+    </fieldset>
   );
 }
 
@@ -253,8 +265,7 @@ export function CriteriaForm({
 }) {
   const [state, action] = useFormState(startDiscovery, INITIAL_DISCOVERY);
   const hasOptional = Boolean(
-    defaults.language ||
-      defaults.market ||
+    defaults.market ||
       defaults.formats?.length ||
       defaults.publishedWithinDays ||
       defaults.excludeTopics,
@@ -270,8 +281,8 @@ export function CriteriaForm({
         <div>
           <TokenSelect
             name="categories"
-            label="Categories"
-            hint="One search per category. Type your own if none fit."
+            label="Topics (optional)"
+            hint="Leave empty to browse all topics."
             options={[...CAMPAIGN_CATEGORIES].map((c) => ({ code: c, name: humanise(c) }))}
             selected={defaults.categories ?? []}
             placeholder="Search or type a category"
@@ -279,7 +290,7 @@ export function CriteriaForm({
             max={8}
           />
           {context?.provenance?.categories === 'brand' ? (
-            <p className="mt-1 text-[11px] text-ink-faint">Prefilled from your brand — editable per search.</p>
+            <p className="mt-1 text-[11px] text-ink-faint">From your brand.</p>
           ) : null}
           {state.fieldErrors?.categories ? (
             <p role="alert" className="mt-1 text-[12px] text-rose">
@@ -294,7 +305,7 @@ export function CriteriaForm({
           label="Subscribers"
           bands={SUBSCRIBER_BANDS}
           defaultValue={defaults.subscribers}
-          hint="Applied to what the search returned, and counted."
+          hint="None selected = any size."
         />
 
         <BandSelect
@@ -303,7 +314,7 @@ export function CriteriaForm({
           label="Typical views"
           bands={VIEW_BANDS}
           defaultValue={defaults.views}
-          hint="Median of the videos this search retrieves — not the channel’s own figure."
+          hint="None selected = any views. Median of retrieved videos."
         />
 
         <LocalePicker
@@ -317,9 +328,7 @@ export function CriteriaForm({
           field="language"
           anyLabel="Any language"
         />
-        <p className={help}>
-          The language of the content. It is a search preference, not a measure of who watches.
-        </p>
+        <p className={help}>Ranges filter retrieved results. {LOCALE_PARAMETER_DISCLOSURE}</p>
 
         <MoreFilters open={hasOptional}>
           <LocalePicker
@@ -354,9 +363,7 @@ export function CriteriaForm({
                 </label>
               ))}
             </div>
-            <p className={help} title="YouTube accepts one videoDuration per request. With more than one ticked the search is not narrowed by length, and the results panel says so.">
-              One at a time narrows the search.
-            </p>
+            <p className={help}>One length narrows the search; several do not.</p>
           </fieldset>
 
           <div>
@@ -440,7 +447,7 @@ export function SimilarForm({
             className={`${field} mt-1.5`}
             placeholder="URL or @handle"
           />
-          <p className={help}>Shown back to you before anything is searched for.</p>
+          <p className={help}>URL or @handle.</p>
         </div>
 
         <MoreFilters open={Boolean(picked && picked.length !== SIMILARITY_DIMENSIONS.length)}>
@@ -460,13 +467,11 @@ export function SimilarForm({
                 </label>
               ))}
             </div>
-            <p className={help}>Anything we cannot evaluate is named, not scored.</p>
+            <p className={help}>Anything we can’t evaluate is named, not scored.</p>
           </fieldset>
         </MoreFilters>
 
-        <p className={`${help} rounded-lg border border-line bg-paper px-2.5 py-2`} title={SIMILARITY_LIMIT}>
-          Similar in what they publish — not in who watches.
-        </p>
+        <p className={`${help} rounded-lg border border-line bg-paper px-2.5 py-2`}>{SIMILARITY_LIMIT}</p>
       </div>
 
       <Footer state={state} />
@@ -508,7 +513,7 @@ export function CompetitorForm({
             maxLength={800}
             title="Brands you enter are confirmed straight away. Anything suggested has to be confirmed by you before it is searched for."
           />
-          <p className={help}>Yours are confirmed; suggestions need your confirmation.</p>
+          <p className={help}>Suggestions need your confirmation before they’re searched.</p>
         </div>
 
         <div>

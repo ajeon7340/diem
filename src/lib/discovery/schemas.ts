@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { SUBSCRIBER_BANDS, VIEW_BANDS, isBand } from './ranges';
+import { SUBSCRIBER_BANDS, VIEW_BANDS, normalizeBands } from './ranges';
 import type { SimilarityDimension } from './types';
 
 /**
@@ -68,7 +68,7 @@ const bound = z
 const languageCode = z
   .string()
   .trim()
-  .regex(/^[a-z]{2}$/i, 'Use a two-letter language code')
+  .regex(/^([a-z]{2})?$/i, 'Use a two-letter language code')
   .optional()
   .nullable()
   .transform((v) => (v ? v.toLowerCase() : null));
@@ -76,7 +76,7 @@ const languageCode = z
 const regionCode = z
   .string()
   .trim()
-  .regex(/^[A-Z]{2}$/i, 'Use a two-letter country code')
+  .regex(/^([A-Z]{2})?$/i, 'Use a two-letter country code')
   .optional()
   .nullable()
   .transform((v) => (v ? v.toUpperCase() : null));
@@ -89,7 +89,7 @@ const bandId = (bands: typeof SUBSCRIBER_BANDS) =>
     .unknown()
     .optional()
     .nullable()
-    .transform((v) => (isBand(bands, v) ? (v as string) : 'any'));
+    .transform((v) => normalizeBands(bands, v));
 
 export const criteriaSchema = z.object({
   /**

@@ -25,7 +25,7 @@ import { classifyEvidence, evidenceStrength, brandQueries } from '@/lib/discover
 import { identifyBrands } from '@/lib/discovery/competitors';
 import { runCollaborations } from '@/lib/discovery/competitors';
 import { runCriteria, criteriaReason, criteriaTerms, planCriteriaQueries } from '@/lib/discovery/criteria';
-import { SUBSCRIBER_BANDS, VIEW_BANDS, band as sizeBand, inBand, medianViews } from '@/lib/discovery/ranges';
+import { SUBSCRIBER_BANDS, VIEW_BANDS, band as sizeBand, inBand, medianViews, selectedBands } from '@/lib/discovery/ranges';
 import { runSimilar, verbatimQueries, topicTerms, MIN_REFERENCE_UPLOADS } from '@/lib/discovery/similar';
 import { outcomeStatus } from '@/lib/discovery/run';
 import {
@@ -39,6 +39,7 @@ import {
   termCoverageSignal,
 } from '@/lib/discovery/rank';
 import { searchState } from '@/lib/discovery/state';
+import { LOCALE_PARAMETER_DISCLOSURE } from '@/lib/youtube/search-contract';
 import { criteriaSchema, keepCitedOnly, similarSchema } from '@/lib/discovery/schemas';
 import type { EvidenceVideo } from '@/lib/discovery/types';
 import { discoveryLimits } from '@/lib/discovery/limits';
@@ -670,7 +671,7 @@ void (async () => {
   );
   check(
     'the language parameter is reported as a search preference',
-    criteria.notes.some((n) => n.includes('not measurements of who watches')),
+    criteria.notes.includes(LOCALE_PARAMETER_DISCLOSURE),
     true,
   );
   check(
@@ -1020,11 +1021,32 @@ void (async () => {
     planCriteriaQueries(criteriaSchema.parse({ keywords: 'hand grinder' }), 5).map((p) => p.q),
     ['hand grinder'],
   );
-  check(
-    'no category and no keyword is an honest empty, not a crash',
-    (await runCriteria(fixtureRetriever(), criteriaSchema.parse({}), LIMITS)).emptyReason,
-    'no_matches',
-  );
+  const browseRetriever = fixtureRetriever({
+    results: { '': [hit('browse1', CHANNEL.grinder, 'Coffee brewing')] },
+    videos: [video('browse1', CHANNEL.grinder, 'Coffee brewing', '')],
+    channels: [channel(CHANNEL.grinder, 'Grinder')],
+  });
+  const browse = await runCriteria(browseRetriever, criteriaSchema.parse({ language: '', market: '' }), LIMITS);
+  check('blank topics perform one unqualified search', browseRetriever.searches, ['']);
+  check('browse returns real retrieved candidates', browse.candidates.length, 1);
+  check('browse coverage names All topics', browse.coverage.queries, ['All topics']);
+  check('browse does not claim absent topic matches', browse.candidates[0].reason?.includes('none of your terms'), false);
+  check('empty locale choices normalize to no preference', criteriaSchema.parse({ language: '', market: '' }).language, null);
+  const multiple = criteriaSchema.parse({ subscribers: ['u1k', '100k'], views: ['1k', '1m'] });
+  check('checkbox selections survive parsing', multiple.subscribers, 'u1k,100k');
+  check('view checkbox selections survive parsing', multiple.views, '1k,1m');
+  check('unchecking every box means unrestricted', criteriaSchema.parse({ subscribers: [], views: [] }).views, 'any');
+  const choices = applyPostFilters([
+    candidate('small', 500), candidate('gap', 50_000), candidate('large', 500_000), candidate('hidden', null),
+  ], { subscriberBands: selectedBands(SUBSCRIBER_BANDS, multiple.subscribers) });
+  check('disjoint subscriber bands preserve the gap and unknown counts', choices.kept.map((c) => c.channelId), ['small', 'large', 'hidden']);
+  const viewChoices = applyPostFilters([
+    { ...candidate('small', 100), evidence: [ev(5_000)] },
+    { ...candidate('gap', 100), evidence: [ev(50_000)] },
+    { ...candidate('large', 100), evidence: [ev(2_000_000)] },
+    { ...candidate('unknown', 100), evidence: [ev(null)] },
+  ], { viewBands: selectedBands(VIEW_BANDS, multiple.views) });
+  check('disjoint view bands preserve the gap and missing views', viewChoices.kept.map((c) => c.channelId), ['small', 'large', 'unknown']);
 
   check('an unknown band id falls back to Any', criteriaSchema.parse({ views: 'nonsense' }).views, 'any');
   check('and a real one is kept', criteriaSchema.parse({ subscribers: '10k' }).subscribers, '10k');
@@ -1074,12 +1096,12 @@ void (async () => {
   check('and a view band', criteriaForm.includes('name="views"'), true);
   check(
     'the view band says whose median it is',
-    criteriaForm.includes('not the channel’s own figure'),
+    criteriaForm.includes('Median of retrieved videos'),
     true,
   );
   check(
     'and language is never called an audience measure',
-    criteriaForm.includes('not a measure of who watches'),
+    criteriaForm.includes('{LOCALE_PARAMETER_DISCLOSURE}'),
     true,
   );
 

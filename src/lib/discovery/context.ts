@@ -56,9 +56,13 @@ export function buildContext({
   const defaults: FilterDefaults = { ...fromSearch };
 
   const take = <K extends keyof FilterDefaults>(key: K, value: FilterDefaults[K], source: Provenance) => {
+    // A saved search is a snapshot. Explicitly cleared topics or locale
+    // preferences must not be silently restored from the brand on reload.
+    if (searchParams && Object.prototype.hasOwnProperty.call(searchParams, key)) {
+      provenance[key] = 'search';
+      return;
+    }
     const current = defaults[key];
-    // An empty array is absent, not set: a stored search with no categories
-    // must still take the brand's, or a saved run would come back blank.
     if (Array.isArray(current) ? current.length > 0 : current !== undefined && current !== '' && current !== null) {
       provenance[key] ??= 'search';
       return;
