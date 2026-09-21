@@ -7,7 +7,7 @@
     "dev": "next dev",
     "lint": "next lint",
     "start": "next start",
-    "verify": "npm run verify:actions && npm run verify:candidates && npm run verify:claims && npm run verify:climate && npm run verify:cluster-build && npm run verify:clusters && npm run verify:concurrent && npm run verify:drivers && npm run verify:intent && npm run verify:jobs && npm run verify:keywords && npm run verify:migrations && npm run verify:moderation && npm run verify:onboarding && npm run verify:onboarding-flow && npm run verify:policy && npm run verify:reference && npm run verify:retention && npm run verify:safety && npm run verify:schemas && npm run verify:sufficiency && npm run verify:channel-flow && npm run verify:discovery && npm run verify:discovery-approved && npm run verify:brands && npm run verify:shell && npm run verify:report",
+    "verify": "npm run verify:actions && npm run verify:candidates && npm run verify:claims && npm run verify:climate && npm run verify:cluster-build && npm run verify:clusters && npm run verify:concurrent && npm run verify:drivers && npm run verify:intent && npm run verify:jobs && npm run verify:keywords && npm run verify:migrations && npm run verify:moderation && npm run verify:onboarding && npm run verify:onboarding-flow && npm run verify:policy && npm run verify:reference && npm run verify:retention && npm run verify:safety && npm run verify:schemas && npm run verify:sufficiency && npm run verify:channel-flow && npm run verify:discovery && npm run verify:discovery-approved && npm run verify:brands && npm run verify:shell && npm run verify:report && npm run verify:relevance",
     "ai:check": "tsx --env-file=.env.local --tsconfig tsconfig.scripts.json scripts/ai-check.ts",
     "dev:session": "tsx --env-file=.env.local --tsconfig tsconfig.scripts.json scripts/dev-session.ts",
     "retention": "tsx --env-file=.env.local --tsconfig tsconfig.scripts.json scripts/retention.ts",
@@ -41,7 +41,8 @@
     "discovery:check": "tsx --env-file=.env.local --tsconfig tsconfig.scripts.json scripts/discovery-live-check.ts",
     "verify:brands": "tsx --tsconfig tsconfig.scripts.json scripts/verify-brands.ts",
     "verify:shell": "tsx --tsconfig tsconfig.scripts.json scripts/verify-shell.ts",
-    "verify:report": "tsx --tsconfig tsconfig.scripts.json scripts/verify-report.ts"
+    "verify:report": "tsx --tsconfig tsconfig.scripts.json scripts/verify-report.ts",
+    "verify:relevance": "tsx --tsconfig tsconfig.scripts.json scripts/verify-relevance.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",

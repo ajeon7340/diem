@@ -83,6 +83,26 @@ export async function shareReport(_: ChannelState, form: FormData): Promise<Chan
  const campaignId = String(form.get('campaignId') ?? '') || null;
  const { data: report } = await db.from('channel_analyses').select('data_fetched_at').eq('channel_id',channelId).maybeSingle();
  if (!report || !freshData(report.data_fetched_at)) return { message: 'Refresh the report before sharing.' };
+
+ /*
+  * WHICH REPORT THE LINK CARRIES is a separate question from which private
+  * fields it carries, and conflating them is how "share both" becomes a way to
+  * leak a brief. A relevance analysis contains the customer's own product,
+  * objective and avoid-list; it travels only when explicitly chosen, and only
+  * for a brand this workspace owns and has actually analysed.
+  */
+ const includeChannel = form.get('includeChannel') !== 'off';
+ const includeRelevance = form.get('includeRelevance') === 'on';
+ const brandId = String(form.get('brandId') ?? '') || null;
+ if (!includeChannel && !includeRelevance) return { message: 'Choose at least one report to share.' };
+ if (includeRelevance) {
+  if (!brandId) return { message: 'Choose which brand’s analysis to share.' };
+  const { data: analysis } = await db.from('relevance_analyses').select('id')
+   .eq('organization_id', viewer.organization.id).eq('channel_id', channelId).eq('brand_id', brandId)
+   .limit(1).maybeSingle();
+  if (!analysis) return { message: 'Run the relevance analysis for that brand before sharing it.' };
+ }
+
  if (campaignId) {
   const { data: candidate } = await db.from('campaign_candidates').select('id').eq('campaign_id',campaignId).eq('channel_id',channelId).maybeSingle();
   if (!candidate) return { message: 'Select a campaign containing this channel.' };
@@ -92,6 +112,8 @@ export async function shareReport(_: ChannelState, form: FormData): Promise<Chan
  const expires = new Date(Math.min(Date.now()+7*86400000,Date.parse(report.data_fetched_at)+30*86400000)).toISOString();
  const { data, error } = await db.from('report_shares').insert({
   organization_id:viewer.organization.id,channel_id:channelId,campaign_id:campaignId,expires_at:expires,
+  include_channel:includeChannel, include_relevance:includeRelevance, brand_id:includeRelevance?brandId:null,
+  // Unchanged: private fields stay their own opt-ins whatever is being shared.
   include_notes:!!campaignId && form.get('notes') === 'on', include_budget:!!campaignId && form.get('budget') === 'on', include_fee:!!campaignId && form.get('fee') === 'on',
  }).select('token').single();
  if (error) return { message: 'Could not create share link.' };

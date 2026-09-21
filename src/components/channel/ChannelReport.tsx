@@ -17,6 +17,7 @@ import {
   videoUrl,
 } from '@/lib/channel/highlights';
 import { matchedTerms } from '@/lib/discovery/candidates';
+import { PerformanceScatter } from '@/components/report/PerformanceScatter';
 import { safeExternalUrl } from '@/lib/format';
 
 /**
@@ -127,9 +128,15 @@ export function ChannelReport({
         {depth === 'empty' ? null : (
           <Block
             title="Recent performance"
-            note="Views accumulate with age, so uploads are compared inside age bands. These are observations of one sample, not forecasts."
+            note="Observations of one sample, not forecasts."
           >
-            <PerformanceTable report={report} format={format} now={now} />
+            {/* The chart first, the figures under it. The table alone hid the
+                shape of the sample: a channel carried by one upload and one with
+                an even spread produce the same median. */}
+            <PerformanceScatter videos={report.videos} collectedAt={report.fetchedAt} />
+            <div className="mt-4 border-t border-line pt-3">
+              <PerformanceTable report={report} format={format} now={now} />
+            </div>
           </Block>
         )}
 

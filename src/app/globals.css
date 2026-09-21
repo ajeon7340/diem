@@ -295,6 +295,44 @@ body {
   .channel-report a { color: inherit; overflow-wrap: anywhere; }
 }
 
+/*
+ * The relevance analysis prints on the same rules as the channel report, plus
+ * two of its own.
+ *
+ * THE CHART PRINTS AS A CHART. It is inline SVG, so it comes out at whatever
+ * size the page gives it with its axes, ticks and legend intact — no
+ * screenshot, no canvas, nothing that degrades to a grey box. The interactive
+ * detail card is dropped because selecting a point is meaningless on paper; the
+ * data table underneath carries the same information and is opened for print.
+ *
+ * A PAGE BREAK BETWEEN THE TWO REPORTS, because the second is a different
+ * document about a different question and running them together is how a
+ * channel report starts looking like it made a brand claim.
+ */
+@media print {
+  .relevance-report { font-size: 9.5pt; orphans: 3; widows: 3; }
+  .relevance-report .avoid-break,
+  .relevance-report .evidence-card,
+  .relevance-report .report-section { break-inside: avoid; page-break-inside: avoid; }
+  .relevance-report h1, .relevance-report h2, .relevance-report h3 { break-after: avoid; }
+  .relevance-report details > * { display: block !important; }
+  .relevance-report details > summary { display: none !important; }
+  .relevance-report a[href^="http"]::after {
+    content: " (" attr(href) ")";
+    font-size: 7pt;
+    color: #555;
+    overflow-wrap: anywhere;
+  }
+  .relevance-report .evidence-card a[href^="http"]::after { content: ""; }
+  .relevance-report table { width: 100%; table-layout: fixed; }
+  .relevance-report th, .relevance-report td { overflow-wrap: anywhere; }
+  .relevance-report { break-before: page; }
+
+  .report-chart { max-height: 70mm; }
+  .report-chart-table { break-inside: auto; }
+  .report-chart-table a[href^="http"]::after { content: ""; }
+}
+
 /* Export without the appendix: the toggle sets this on <html>. */
 @media print {
   .print-no-appendix .report-appendix { display: none !important; }
