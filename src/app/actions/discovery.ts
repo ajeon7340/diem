@@ -15,6 +15,7 @@ import {
   termList,
 } from '@/lib/discovery/schemas';
 import type { DiscoveryMode } from '@/lib/discovery/types';
+import { describeWriteFailure } from '@/lib/data/failure';
 
 /**
  * Starting, confirming, cancelling and harvesting a discovery run.
@@ -74,7 +75,9 @@ export async function startDiscovery(_: DiscoveryState, form: FormData): Promise
     .select('id')
     .single<{ id: string }>();
 
-  if (error || !search) return { message: 'Could not start this search. Please try again.' };
+  if (error || !search) {
+    return { message: describeWriteFailure(error, 'start this search', 'discovery') };
+  }
 
   // Competitor mode does NOT queue a search here. Step A names brands, a person
   // confirms them, and only then does anything get searched for — see the note
@@ -269,7 +272,7 @@ async function queueSearch(
   // A duplicate is not an error: the RPC returns false when a job for this
   // search is already queued or running, which is the correct answer to a
   // double-submitted form and to a retried server action alike.
-  if (error) return { ok: false, message: 'Could not queue this search. Please try again.' };
+  if (error) return { ok: false, message: describeWriteFailure(error, 'queue this search', 'discovery') };
   return { ok: true };
 }
 

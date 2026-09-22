@@ -8,6 +8,7 @@ import { onboardingDestination } from '@/lib/channel/state';
 import { brandSchema } from '@/lib/schemas-brand';
 import { validCountries, validLanguages } from '@/lib/locale/vocabulary';
 import { createSessionClient, isSupabaseConfigured } from '@/lib/supabase/server';
+import { describeWriteFailure } from '@/lib/data/failure';
 
 /**
  * Saving, archiving and defaulting a brand.
@@ -79,7 +80,7 @@ export async function saveBrand(_prev: BrandState, form: FormData): Promise<Bran
       return { status: 'error', message: 'That brand is not in this workspace.' };
     }
     console.error('[brand] save failed', error.message);
-    return { status: 'error', message: 'Could not save this brand. Please try again.' };
+    return { status: 'error', message: describeWriteFailure(error, 'save this brand', 'brand') };
   }
 
   const brandId = data as string | null;

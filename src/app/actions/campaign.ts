@@ -12,6 +12,7 @@ import { resolveChannel } from '@/lib/youtube/resolve';
 import { freshData } from '@/lib/channel/state';
 import { AMENDMENT_ACCEPTED } from '@/lib/report/policy';
 import { createServiceClient, createSessionClient, isSupabaseConfigured } from '@/lib/supabase/server';
+import { describeWriteFailure } from '@/lib/data/failure';
 
 export interface CampaignState {
   status: 'idle' | 'error';
@@ -97,7 +98,7 @@ export async function createCampaign(
 
   if (error || !data) {
     console.error('[campaigns] insert failed', error?.message);
-    return { status: 'error', message: 'Could not create the campaign. Please try again.' };
+    return { status: 'error', message: describeWriteFailure(error, 'create the campaign', 'campaign') };
   }
 
   const channelId = String(formData.get('channelId') ?? '');
@@ -208,7 +209,9 @@ export async function updateCandidateReview(_prev: CandidateState, formData: For
   const supabase = createSessionClient();
   const campaignId = String(formData.get('campaignId') ?? '');
   const { data, error } = await supabase.from('campaign_candidates').update({ status }).eq('id', id).eq('campaign_id', campaignId).select('id').maybeSingle();
-  if (error || !data) return { status: 'error', message: 'Could not save your decision. Please try again.' };
+  if (error || !data) {
+    return { status: 'error', message: describeWriteFailure(error, 'save your decision', 'campaign') };
+  }
   revalidatePath(`/campaigns/${campaignId}`);
   return { status: 'ok', message: 'Decision saved.' };
 }

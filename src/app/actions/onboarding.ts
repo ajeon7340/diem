@@ -8,6 +8,7 @@ import { businessOnboardingSchema } from '@/lib/schemas';
 import { createSessionClient, isSupabaseConfigured } from '@/lib/supabase/server';
 import { getViewer } from '@/lib/access/viewer';
 import { DEMO_ROLE_COOKIE, type DemoRole } from '@/lib/data/demo';
+import { describeWriteFailure } from '@/lib/data/failure';
 
 export interface OnboardingState {
   status: 'idle' | 'success' | 'error';
@@ -110,7 +111,7 @@ export async function createOrganization(
     }
 
     console.error('[create_organization] rpc failed', error.message);
-    return { status: 'error', message: 'Could not create your workspace. Please try again.' };
+    return { status: 'error', message: describeWriteFailure(error, 'create your workspace', 'onboarding') };
   }
 
   const orgId = (created as { organization_id: string }[] | null)?.[0]?.organization_id;

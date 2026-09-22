@@ -14,6 +14,7 @@ import { readCandidate } from '@/lib/report/candidate-fit';
 import { AMENDMENT_ACCEPTED } from '@/lib/report/policy';
 import { aiConfigured, aiModel } from '@/lib/ai/provider';
 import { createSessionClient, isSupabaseConfigured } from '@/lib/supabase/server';
+import { describeWriteFailure } from '@/lib/data/failure';
 
 /**
  * Run a relevance analysis for one channel and one brand.
@@ -170,7 +171,7 @@ export async function analyseRelevance(
 
   if (error) {
     console.error('[relevance] save failed', error.message);
-    return { status: 'error', message: 'Could not save this analysis. Please try again.' };
+    return { status: 'error', message: describeWriteFailure(error, 'save this analysis', 'relevance') };
   }
 
   revalidatePath(`/channels/${channelId}`);

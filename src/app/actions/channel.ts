@@ -7,6 +7,7 @@ import { youtubeHandleSchema } from '@/lib/schemas';
 import { resolveChannel, type ResolvedChannel } from '@/lib/youtube/resolve';
 import { freshData } from '@/lib/channel/state';
 import { AMENDMENT_ACCEPTED } from '@/lib/report/policy';
+import { describeWriteFailure } from '@/lib/data/failure';
 export interface ChannelState { message?: string; channel?: ResolvedChannel; exists?: boolean; shareUrl?: string }
 export async function previewChannel(_: ChannelState, form: FormData): Promise<ChannelState> {
  const parsed = youtubeHandleSchema.safeParse(form.get('channel'));
@@ -39,7 +40,7 @@ export async function startChannel(_: ChannelState, form: FormData): Promise<Cha
  if (!service || !process.env.YOUTUBE_API_KEY) return { message: 'Channel analysis is not configured. The operator must configure YouTube API access and the background worker.' };
  const days = Number(form.get('days') ?? 90);
  const { error } = await service.rpc('queue_channel_collection', { p_channel: id, p_days: [30,90,365].includes(days) ? days : 90, p_refresh: form.get('refresh') === 'true' });
- if (error) return { message: 'Could not queue analysis. Please try again.' };
+ if (error) return { message: describeWriteFailure(error, 'queue this analysis', 'channel') };
  revalidatePath('/channels');
  const format=String(form.get('format')??'all');
  redirect(`/channels/${id}${['short','long'].includes(format)?`?format=${format}`:''}`);

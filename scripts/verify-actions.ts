@@ -115,5 +115,50 @@ check(
   !isUseServer(stateSource),
 );
 
+
+// ---------------------------------------------------------------------------
+// "Please try again" is only said where trying again could work
+//
+// It was the answer to every write failure, and for the commonest one it was
+// false: a table that does not exist because a migration was never applied
+// fails identically on every retry, forever. Somebody who presses Search,
+// reads "try again", presses it again and reads it again has been told to do
+// the one thing that cannot work.
+// ---------------------------------------------------------------------------
+
+const read = (path: string) => readFileSync(path, 'utf8');
+const failure = read('src/lib/data/failure.ts');
+check('a missing table is classified as setup, not as transient', failure.includes("'42P01'"));
+check('and so is PostgREST missing it from its schema cache', failure.includes("'PGRST205'"));
+check('a permission failure is its own outcome', failure.includes("'42501'"));
+check('the raw error goes to the log, not the customer', failure.includes('console.error('));
+check(
+  'and the customer is told who can act on it',
+  failure.includes('whoever deployed adfit needs to finish it'),
+);
+check(
+  'no table name reaches the customer',
+  !/discovery_searches|channel_analyses|public\./.test(
+    failure.slice(failure.indexOf('export function describeWriteFailure')),
+  ),
+);
+
+for (const path of [
+  'src/app/actions/discovery.ts',
+  'src/app/actions/channel.ts',
+  'src/app/actions/campaign.ts',
+  'src/app/actions/brand.ts',
+  'src/app/actions/onboarding.ts',
+  'src/app/actions/relevance.ts',
+]) {
+  const src = read(path);
+  const name = path.split('/').pop();
+  check(`${name} classifies its write failures`, src.includes('describeWriteFailure('));
+  check(
+    `${name} no longer says "try again" unconditionally`,
+    !/message: 'Could not [^']*Please try again\.'/.test(src),
+  );
+}
+
 console.log(`\n  ${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);
