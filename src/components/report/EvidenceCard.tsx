@@ -25,18 +25,15 @@ export function EvidenceCard({
   video,
   reason,
   label,
-  disclosed = false,
   titleRepeats = false,
   className,
   children,
 }: {
   video: VideoEvidence;
-  /** Why this upload is here. Factual, and never a verdict on the content. */
-  reason: string;
+  /** Why this upload is here. Null where the section heading already says. */
+  reason?: string | null;
   /** A short tag for the card's purpose, e.g. "Outlier". */
   label?: string;
-  /** YouTube's paid-promotion flag, where the metadata reported one. */
-  disclosed?: boolean;
   titleRepeats?: boolean;
   /** Set by a pager to keep an off-page card in the DOM for the export. */
   className?: string;
@@ -90,12 +87,7 @@ export function EvidenceCard({
             ? ` · ${video.state === 'live' ? 'live now' : 'scheduled premiere'}`
             : ''}
         </p>
-        <p className="mt-1 text-[11px] leading-relaxed text-ink-faint">{reason}.</p>
-        {disclosed ? (
-          <p className="mt-1 text-[11px] leading-relaxed text-ink-muted">
-            Carries YouTube’s paid-promotion flag. The flag does not name the sponsor.
-          </p>
-        ) : null}
+        {reason ? <p className="mt-1 text-[11px] leading-relaxed text-ink-faint">{reason}.</p> : null}
         {titleRepeats ? (
           <p className="mt-1 text-[11px] leading-relaxed text-amber">
             Another sampled upload shares this title. They are different videos, not a duplicate.

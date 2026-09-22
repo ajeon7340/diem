@@ -38,6 +38,9 @@ const read = (p: string) => readFileSync(p, 'utf8');
     'src/components/report/EvidenceCard.tsx',
     'src/components/report/PerformanceScatter.tsx',
     'src/components/report/CompositionBars.tsx',
+    // The standing qualifications moved here — stated once rather than beside
+    // every figure they qualify. The GUARANTEE is unchanged; its address is not.
+    'src/components/report/ReportNotes.tsx',
   ].map(read).join('\n');
   check('the format split is labelled a proxy', /\(proxy\)/.test(report), true);
   // Matched on meaning rather than on one sentence: the report was rewritten
@@ -51,8 +54,10 @@ const read = (p: string) => readFileSync(p, 'utf8');
     true,
   );
   check(
+    // As PROSE: JSX wraps the sentence across lines, and what has to survive
+    // is the claim, not where the formatter chose to break it.
     'and admits the bucket can contain non-Shorts',
-    /can include non-Shorts/.test(report),
+    /can include non-Shorts/.test(report.replace(/\s+/g, ' ')),
     true,
   );
 

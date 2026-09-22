@@ -169,7 +169,7 @@ check(
 
 const noticed = observations(report());
 check('at most three observations', noticed.length <= 3, true);
-check('each one is a sentence', noticed.every((o) => o.text.trim().length > 20), true);
+check('each one is a figure with a label', noticed.every((o) => o.label && o.value), true);
 
 // ---------------------------------------------------------------------------
 // A. THE FOUR CLAIMS IN THE REFERENCE EXPORT THAT DID NOT FOLLOW
@@ -181,23 +181,30 @@ check('each one is a sentence', noticed.every((o) => o.text.trim().length > 20),
 const spread = report({
   videos: [video({ id: 'a1', views: 1_000 }), video({ id: 'b2', views: 1_200 }), video({ id: 'c3', views: 90_000 })],
 });
-const spreadText = observations(spread).map((o) => o.text).join(' ');
-check('the ratio-to-median claim is gone', /× the median, so one video carries/.test(spreadText), false);
+const spreadRows = observations(spread);
+const spreadText = spreadRows.map((o) => `${o.label} ${o.value} ${o.note ?? ''}`).join(' | ');
+check('the ratio-to-median claim is gone', /× the median/.test(spreadText), false);
 check(
   'the concentration claim is a share of the total, computed',
-  spreadText.includes('takes 98% of the 92.2K views'),
+  spreadRows.some((o) => o.label === 'Top upload dominates' && o.value === '98% of views'),
   true,
 );
-check('and it cites the upload it is about', observations(spread).some((o) => o.supporting.includes('c3')), true);
+check('and it cites the upload it is about', spreadRows.some((o) => o.supporting.includes('c3')), true);
 check('the word reach is not used of a view count', /\breach\b/i.test(spreadText), false);
-check('and views are named as plays rather than people', spreadText.includes('Views are plays, not people'), true);
+// Said ONCE, in the report's notes, rather than inside every sentence that
+// mentions a view count.
+check(
+  'views are named as plays rather than people, once',
+  read('src/components/report/ReportNotes.tsx').includes('Views are plays, not people'),
+  true,
+);
 // An even sample must NOT produce a concentration claim.
 const even = report({
   videos: [video({ id: 'a1', views: 10_000 }), video({ id: 'b2', views: 11_000 }), video({ id: 'c3', views: 12_000 })],
 });
 check(
   'an even sample says no upload dominates',
-  observations(even).some((o) => o.text.startsWith('No single upload dominates')),
+  observations(even).some((o) => o.label === 'No upload dominates'),
   true,
 );
 
@@ -209,11 +216,11 @@ const mixed = report({
     video({ id: 's1', format: 'short', seconds: 40 }),
   ],
 });
-const mixedText = observations(mixed).map((o) => o.text).join(' ');
+const mixedText = observations(mixed).map((o) => `${o.label} ${o.value} ${o.note ?? ''}`).join(' | ');
 check('publishing a format is no longer read as offering it', mixedText.includes('so a brief can ask for either'), false);
 check(
-  'and the report says outright that a history is not availability',
-  mixedText.includes('What the creator would agree to produce is not visible in a publishing history'),
+  'and the length mix is stated without inferring availability',
+  observations(mixed).some((o) => o.label === 'Long-form' && o.value === '3 of 4'),
   true,
 );
 check(
@@ -245,16 +252,21 @@ check(
     truncated: true,
     sampledStart: '2026-08-01T00:00:00.000Z',
     sampledEnd: '2026-09-01T00:00:00.000Z',
-  })).some((o) => /uploads a week across \d+ days/.test(o.text)),
+  })).some((o) => o.label === 'Upload rate' && /over \d+ days/.test(o.note ?? '')),
   true,
 );
 check(
-  'and a capped one refuses to describe the period before the sample',
+  'and a capped one says so on the figure',
   observations(report({
     truncated: true,
     sampledStart: '2026-08-01T00:00:00.000Z',
     sampledEnd: '2026-09-01T00:00:00.000Z',
-  })).some((o) => o.text.includes('nothing here describes the period before')),
+  })).some((o) => (o.note ?? '').includes('capped')),
+  true,
+);
+check(
+  'the cap is still a stated limitation, in full',
+  limitations(report({ truncated: true })).some((l) => l.includes('not all of it')),
   true,
 );
 
@@ -424,9 +436,11 @@ check(
 
 // Matched as prose: the emphasis markup around "proxy" reflows when the
 // sentence is edited, and what has to survive is the word beside "duration".
+// The GROUP LABEL carries it now — the sentence under the table was the
+// fifth place it appeared and the label is the one a reader cannot miss.
 check(
   'the Shorts proxy is still labelled a proxy',
-  /duration\s*\{?'?\s*'?\}?\s*<strong[^>]*>\s*proxy/.test(read('src/components/report/FormatPerformance.tsx')),
+  read('src/components/report/FormatPerformance.tsx').includes('(duration proxy)'),
   true,
 );
 check('commenters are still not the audience', prose('src/components/channel/ChannelReport.tsx').includes('do not represent the audience'), true);
@@ -641,7 +655,7 @@ check('the narrative splits 3 long-form and 1 short', narrativeCounts.includes('
 check('and the table counts the same four comparable uploads', tableTotal, 4);
 check(
   'observations are computed over comparable uploads too',
-  observations(agreeing).some((o) => o.text.includes('of 4 comparable uploads')),
+  observations(agreeing).some((o) => o.value === '3 of 4'),
   true,
 );
 check(
@@ -702,7 +716,7 @@ check(
 );
 check(
   'the report states outright that nothing was watched',
-  prose('src/components/channel/ChannelReport.tsx').includes('Nothing was watched'),
+  prose('src/components/report/ReportNotes.tsx').includes('No upload was watched and no transcript was read'),
   true,
 );
 check(
@@ -715,14 +729,14 @@ check(
   'a dominant upload is reported as dominant at three uploads',
   observations(report({
     videos: [video({ id: 'a', views: 1_000 }), video({ id: 'b', views: 1_200 }), video({ id: 'c', views: 90_000 })],
-  })).some((o) => o.text.includes('takes 98%') && !o.text.includes('No single upload dominates')),
+  })).some((o) => o.label === 'Top upload dominates'),
   true,
 );
 check(
   'and an even one is not, at any size',
   observations(report({
     videos: Array.from({ length: 12 }, (_, i) => video({ id: `v${i}`, views: 10_000 + i })),
-  })).some((o) => o.text.startsWith('No single upload dominates')),
+  })).some((o) => o.label === 'No upload dominates'),
   true,
 );
 check('a Korean particle is stripped so 아이폰이 and 아이폰 are one subject', composition([
@@ -749,7 +763,7 @@ check(
 );
 check(
   'the chart is never presented as growth',
-  prose('src/components/report/PerformanceScatter.tsx').includes('not a history'),
+  prose('src/components/report/ReportNotes.tsx').includes('The chart is not a history'),
   true,
 );
 check(
@@ -920,7 +934,7 @@ check('no pager where there is nothing to page', pager.includes('pages > 1'), tr
  * threw at render: "Functions cannot be passed directly to Client Components".
  * Nothing in a static suite catches that, so the shape is pinned instead.
  */
-check('the pager takes sentences, not a callback', pager.includes('items: { video: VideoEvidence; reason: string }[]'), true);
+check('the pager takes sentences, not a callback', pager.includes('items: { video: VideoEvidence; reason: string | null }[]'), true);
 check('and the report passes none', code('src/components/channel/ChannelReport.tsx').includes('reasonFor='), false);
 
 // The five lines of provenance moved; they are not gone.
@@ -970,10 +984,51 @@ check('and is not rewritten', modelled?.text, 'Home coffee equipment, mostly han
 check('an empty sample describes nothing', channelDescription(report({ videos: [] })), null);
 check(
   'neither source claims anything was watched',
-  prose('src/components/channel/ChannelReport.tsx').includes('Nothing was watched'),
-  true,
+  /\bwe watched\b|\bwatched the video\b/i.test(prose('src/components/channel/ChannelReport.tsx')),
+  false,
 );
 
+
+
+// ---------------------------------------------------------------------------
+// THE STANDING QUALIFICATIONS, ONCE
+//
+// Each of these used to sit beside the thing it qualified, on every report:
+// the proxy note under the format table, "not a history" under the chart,
+// "nothing was watched" under the composition, the flag caveat on every
+// sponsored card. They are not deleted — each one stops the report asserting
+// something the data cannot support — but they are stated once, in a block a
+// reader can open, instead of five times in the way of the figures.
+// ---------------------------------------------------------------------------
+
+const notes = read('src/components/report/ReportNotes.tsx');
+for (const [what, phrase] of [
+  ['nothing was watched', 'No upload was watched and no transcript was read'],
+  ['the Shorts proxy', 'three minutes or less is a duration proxy'],
+  ['an unreported duration is in neither group', 'in neither group'],
+  ['the chart is not a history', 'The chart is not a history'],
+  ['it shows nothing about subscribers', 'nothing here shows subscribers'],
+  ['views are plays', 'Views are plays, not people'],
+  ['the flag names no advertiser', 'marks a video, not an advertiser'],
+  ['a title is not a viewing', 'not evidence it was used or endorsed'],
+] as const) {
+  check(`the notes state ${what}`, notes.toLowerCase().includes(phrase.toLowerCase()), true);
+}
+check('and print opens them, since a PDF has nothing to click', css.includes('.channel-report details > * { display: block !important; }'), true);
+
+// And they are NOT repeated beside every figure any more.
+const bars = read('src/components/report/CompositionBars.tsx');
+const perf = read('src/components/report/FormatPerformance.tsx');
+const scat = read('src/components/report/PerformanceScatter.tsx');
+check('the composition no longer repeats the metadata caveat', bars.includes('Nothing was watched'), false);
+check('the format table no longer repeats the proxy sentence', perf.includes('can include non-Shorts'), false);
+check('the chart no longer repeats the history caveat', scat.includes('not a history. Newer uploads'), false);
+check('and no sponsored card repeats the flag caveat', read('src/components/report/EvidenceCard.tsx').includes('does not name the sponsor'), false);
+check(
+  'the report renders the notes exactly once',
+  (code('src/components/channel/ChannelReport.tsx').match(/<ReportNotes/g) ?? []).length,
+  1,
+);
 
 console.log(`\n  ${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);

@@ -51,10 +51,24 @@ import type { Promotion } from '@/types';
 
 const DAY = 86_400_000;
 
+/**
+ * A figure, not a sentence.
+ *
+ * WHAT STOOD OUT WAS FOUR PARAGRAPHS. Each was a correct sentence with its
+ * qualification attached, and together they were a wall — the numbers a reader
+ * came for were buried inside prose they had to parse to find them. A label, a
+ * value, an optional clause where the value needs a denominator, and the
+ * videos behind it as links. The caveats that used to travel inside each
+ * sentence are stated once, in the report's notes, instead of four times here.
+ */
 export interface Observation {
-  /** One sentence, in the past tense, about what was collected. */
-  text: string;
-  /** Video ids the sentence rests on. Rendered as links. */
+  /** What is being measured, in two or three words. */
+  label: string;
+  /** The figure itself. */
+  value: string;
+  /** One short clause, where the figure means nothing without one. */
+  note: string | null;
+  /** Video ids the figure rests on. Rendered as links. */
   supporting: string[];
 }
 
@@ -315,90 +329,85 @@ export function observations(report: ChannelReportView): Observation[] {
   const at = Date.parse(report.fetchedAt);
   const profile = composition(eligible);
 
-  // 1. WHAT THIS CHANNEL MAKES. First, because it is the question somebody
-  //    opened the report with, and the old first observation was a format
-  //    count that answered none of it.
+  // 1. The commonest shape, which is what the channel mostly makes.
   const dominant = dominantFormat(profile);
   if (dominant && dominant.videoIds.length >= 2) {
-    const subject = profile.subjects[0];
     out.push({
-      text:
-        `${dominant.videoIds.length} of ${profile.sampled} sampled uploads are titled as ${FORMAT_LABEL[dominant.format].toLowerCase()}` +
-        (subject
-          ? `, and “${subject.term}” appears in ${subject.videoIds.length} titles. Both read the metadata, not the videos.`
-          : '. That reads the titles, not the videos.'),
+      label: FORMAT_LABEL[dominant.format],
+      value: `${dominant.videoIds.length} of ${profile.sampled}`,
+      note: 'classified uploads',
       supporting: dominant.videoIds.slice(0, 3),
     });
   }
 
-  // 2. Format composition, stated and nothing inferred from it. What the
-  //    creator WILL accept as a deliverable is a question, not a count.
+  // 2. The most-repeated subject.
+  const subject = profile.subjects[0];
+  if (subject) {
+    out.push({
+      label: `“${subject.term}”`,
+      value: `${subject.videoIds.length} titles`,
+      note: null,
+      supporting: subject.videoIds.slice(0, 3),
+    });
+  }
+
+  // 3. Length mix. Stated, and nothing inferred from it: what a creator will
+  //    AGREE to produce is a question, and it lives in the questions.
   const long = eligible.filter((v) => v.format === 'long');
   const short = eligible.filter((v) => v.format === 'short');
   if (long.length && short.length) {
     const bigger = long.length >= short.length ? long : short;
-    const label = bigger === long ? 'long-form' : 'short (≤3 min, a duration proxy)';
     out.push({
-      text: `${bigger.length} of ${eligible.length} comparable uploads are ${label}. What the creator would agree to produce is not visible in a publishing history.`,
+      label: bigger === long ? 'Long-form' : 'Short, ≤3 min',
+      value: `${bigger.length} of ${eligible.length}`,
+      note: `${eligible.length - bigger.length} the other length`,
       supporting: bigger.slice(0, 3).map((v) => v.id),
     });
   } else if (long.length || short.length) {
     const only = long.length ? long : short;
-    const label = long.length ? 'long-form' : 'short (≤3 min, a duration proxy)';
     out.push({
-      text: `Every comparable upload is ${label}. Nothing shows the other length being published — not the same as it being unavailable.`,
+      label: long.length ? 'Long-form' : 'Short, ≤3 min',
+      value: `all ${only.length}`,
+      note: 'the other length is absent from this sample',
       supporting: only.slice(0, 3).map((v) => v.id),
     });
   }
 
-  // 3. CONCENTRATION, AS A SHARE OF THE TOTAL — which is the thing the old
-  //    sentence claimed and the ratio to the median could not establish.
+  // 4. CONCENTRATION AS A SHARE OF THE TOTAL, which is what the old sentence
+  //    claimed and a ratio to the median could not establish.
   const p = performance(eligible, at);
-  if (p.n >= 3 && p.median !== null && p.max !== null && p.min !== null && p.total) {
+  if (p.n >= 3 && p.median !== null && p.max !== null && p.total) {
     const best = [...eligible]
       .filter((v) => v.views !== null)
       .sort((a, b) => (b.views ?? 0) - (a.views ?? 0))[0];
     const share = p.max / p.total;
     const even = 1 / p.n;
-    /*
-     * "DOMINATES" HAS TO BE REACHABLE. The first threshold was three times an
-     * even share, which at three uploads is 100% — so a sample whose top
-     * upload took 98% of its views printed "no single upload dominates". Two
-     * conditions instead: at least a quarter of the total, AND at least twice
-     * what an even split would give. The floor stops a 50-upload sample
-     * calling 5% dominance; the multiple stops a 3-upload sample calling 34%.
-     */
-    if (share >= 0.25 && share >= 2 * even) {
-      out.push({
-        text: `The most-viewed upload takes ${percent(p.max, p.total)} of the ${compact(p.total)} views across ${p.n} reporting a count; an even split is ${percent(1, p.n)}. Views are plays, not people.`,
-        supporting: best ? [best.id] : [],
-      });
-    } else {
-      out.push({
-        text: `No single upload dominates: the top one takes ${percent(p.max, p.total)} of ${compact(p.total)} views across ${p.n} reporting a count, against ${percent(1, p.n)} for an even split. Views are plays, not people.`,
-        supporting: best ? [best.id] : [],
-      });
-    }
+    out.push({
+      label: share >= 0.25 && share >= 2 * even ? 'Top upload dominates' : 'No upload dominates',
+      value: `${percent(p.max, p.total)} of views`,
+      note: `even split ${percent(1, p.n)} across ${p.n}`,
+      supporting: best ? [best.id] : [],
+    });
   }
 
-  // 4. Cadence over the span the sample actually covers, not over the window
-  //    that was requested. A capped collection of the 50 most recent uploads
-  //    says nothing about the months before the earliest one it read.
+  // 5. Cadence over the span the sample covers, never over a window the
+  //    collection may have stopped short of.
   const spanDays =
     report.sampledStart && report.sampledEnd
       ? Math.max((Date.parse(report.sampledEnd) - Date.parse(report.sampledStart)) / DAY, 1)
       : null;
   if (spanDays !== null && spanDays >= 7) {
-    const rate = report.videos.length / (spanDays / 7);
     out.push({
-      text: report.truncated
-        ? `${rate.toFixed(1)} uploads a week across ${Math.round(spanDays)} days. Capped, so nothing here describes the period before ${shortDate(report.sampledStart)}.`
-        : `${rate.toFixed(1)} uploads a week across ${Math.round(spanDays)} days.`,
+      label: 'Upload rate',
+      value: `${(report.videos.length / (spanDays / 7)).toFixed(1)} a week`,
+      note: report.truncated
+        ? `over ${Math.round(spanDays)} days, capped`
+        : `over ${Math.round(spanDays)} days`,
       supporting: [],
     });
   }
 
-  return out.slice(0, 4);
+  return out.slice(0, 5);
 }
 
 /**

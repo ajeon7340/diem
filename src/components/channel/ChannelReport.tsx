@@ -26,6 +26,7 @@ import { matchedTerms } from '@/lib/discovery/candidates';
 import { CompositionBars } from '@/components/report/CompositionBars';
 import { SubjectBubbles } from '@/components/report/SubjectBubbles';
 import { PagedUploads } from '@/components/report/PagedUploads';
+import { ReportNotes } from '@/components/report/ReportNotes';
 import { FormatPerformance } from '@/components/report/FormatPerformance';
 import { PerformanceScatter } from '@/components/report/PerformanceScatter';
 import { safeExternalUrl } from '@/lib/format';
@@ -214,14 +215,13 @@ export function ChannelReport({
                 </p>
               ) : null}
               {description ? (
-                <div className={narrowed !== null ? 'mt-2' : 'mt-3 border-t border-line pt-2.5'}>
-                  <p className="text-[13px] leading-relaxed text-ink">{description.text}</p>
-                  <p className="mt-1 text-[11px] text-ink-faint">
-                    {description.source === 'model'
-                      ? 'Written by a model from the retrieved titles and descriptions. Nothing was watched.'
-                      : 'From the title classification below. Nothing was watched.'}
-                  </p>
-                </div>
+                <p
+                  className={`text-[13px] leading-relaxed text-ink ${
+                    narrowed !== null ? 'mt-2' : 'mt-3 border-t border-line pt-2.5'
+                  }`}
+                >
+                  {description.text}
+                </p>
               ) : null}
               {thin ? (
                 <p className="mt-2 text-[11px] leading-relaxed text-amber">
@@ -241,7 +241,6 @@ export function ChannelReport({
               <Block
                 title="What this creator publishes"
                 icon={<Layers size={16} strokeWidth={1.75} />}
-                note="From retrieved titles and descriptions. Nothing was watched."
               >
                 <CompositionBars composition={profile} videos={eligible} sampled={report.videos.length} />
               </Block>
@@ -249,7 +248,7 @@ export function ChannelReport({
               <Block
                 title="Recurring subjects"
                 icon={<Tags size={16} strokeWidth={1.75} />}
-                note="Words in three or more sampled titles."
+                note="Words in three or more titles."
               >
                 <SubjectBubbles subjects={profile.subjects} sampled={profile.sampled} />
               </Block>
@@ -258,7 +257,6 @@ export function ChannelReport({
               <Block
                 title="How this sample performed"
                 icon={<BarChart3 size={16} strokeWidth={1.75} />}
-                note="One sample, measured once. Not a forecast, not a history."
               >
                 <FormatPerformance videos={eligible} collectedAt={report.fetchedAt} only={format} />
                 <div className="mt-4 border-t border-line pt-3">
@@ -271,36 +269,47 @@ export function ChannelReport({
             {/* WHAT WE NOTICED, BESIDE HOW VIEWERS RESPONDED. Two readings of
                 the sample that are not counts of uploads. */}
             <div className="grid items-start gap-4 xl:grid-cols-2">
-        {noticed.length ? (
-          <Block title="What stood out" icon={<Sparkles size={16} strokeWidth={1.75} />}>
-            <ul className="space-y-2">
-              {noticed.map((item) => (
-                <li key={item.text} className="avoid-break text-[13px] leading-relaxed text-ink">
-                  {item.text}
-                  {item.supporting.length ? (
-                    <span className="ml-1.5">
-                      {item.supporting.map((id, i) => {
-                        const video = report.videos.find((v) => v.id === id);
-                        return (
-                          <a
-                            key={id}
-                            href={videoUrl(id)}
-                            rel="noopener noreferrer"
-                            target="_blank"
-                            className="source-link text-[12px] text-indigo underline-offset-4 hover:underline"
-                          >
-                            {i > 0 ? ' · ' : ''}
-                            {video ? truncate(video.title, 40) : 'Supporting video'}
-                          </a>
-                        );
-                      })}
-                    </span>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
-          </Block>
-        ) : null}
+              {noticed.length ? (
+                <Block title="What stood out" icon={<Sparkles size={16} strokeWidth={1.75} />}>
+                  <dl className="divide-y divide-line">
+                    {noticed.map((item) => (
+                      <div
+                        key={item.label}
+                        className="avoid-break flex flex-wrap items-baseline gap-x-2 gap-y-1 py-2 first:pt-0 last:pb-0"
+                      >
+                        <dt className="min-w-0 flex-1 text-[12px] text-ink-muted">{item.label}</dt>
+                        <dd className="tnum shrink-0 text-right text-[14px] font-medium text-ink">
+                          {item.value}
+                          {item.note ? (
+                            <span className="ml-1.5 text-[11px] font-normal text-ink-faint">
+                              {item.note}
+                            </span>
+                          ) : null}
+                        </dd>
+                        {item.supporting.length ? (
+                          <ul className="flex w-full flex-wrap gap-1">
+                            {item.supporting.map((id) => {
+                              const video = report.videos.find((v) => v.id === id);
+                              return (
+                                <li key={id}>
+                                  <a
+                                    href={videoUrl(id)}
+                                    rel="noopener noreferrer"
+                                    target="_blank"
+                                    className="source-link press inline-flex max-w-[24ch] items-center truncate rounded-full border border-line px-2 py-0.5 text-[11px] text-ink-muted hover:border-line-strong hover:text-ink"
+                                  >
+                                    {video ? truncate(video.title, 30) : 'Video'}
+                                  </a>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        ) : null}
+                      </div>
+                    ))}
+                  </dl>
+                </Block>
+              ) : null}
 
               <Block title="Comment response" icon={<MessagesSquare size={16} strokeWidth={1.75} />}>
                 <CommentScope report={report} />
@@ -308,6 +317,7 @@ export function ChannelReport({
             </div>
           </>
         )}
+        {depth === 'empty' ? null : <ReportNotes derivedAllowed={report.derivedAllowed} />}
         {report.videos.length >= 12 ? <PageFoot report={report} page={1} campaign={campaign} /> : null}
       </div>
 
@@ -340,14 +350,13 @@ export function ChannelReport({
                     <span className="tnum ml-1.5 font-normal text-ink-faint">{group.length}</span>
                   </h3>
                   <PagedUploads
-                    items={group.map((video, index) => ({
+                    items={group.map((video) => ({
                       video,
-                      reason:
-                        index === 0
-                          ? `Most viewed of ${group.length} ${columns.sponsored ? 'flagged ' : ''}${noun} upload${group.length === 1 ? '' : 's'} in this sample`
-                          : `#${index + 1} by views of ${group.length} ${columns.sponsored ? 'flagged ' : ''}${noun} uploads`,
+                      // The column heading says what these are and they are
+                      // ordered by views, so a line under every card repeating
+                      // both was three facts doing one job.
+                      reason: null,
                     }))}
-                    disclosed={columns.sponsored}
                     emptyNote={
                       columns.sponsored
                         ? `No ${noun} upload in this sample carries the flag.`
@@ -357,11 +366,6 @@ export function ChannelReport({
                 </div>
               ))}
             </div>
-            <p className="mt-3 border-t border-line pt-2.5 text-[11px] leading-relaxed text-ink-faint">
-              Three minutes or less is a duration <strong className="font-medium">proxy</strong>;
-              uploads reporting no duration are in neither column. A title is not evidence a product
-              was used or endorsed.
-            </p>
           </Block>
         ) : null}
 

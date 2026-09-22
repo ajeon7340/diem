@@ -103,10 +103,9 @@ export function CompositionBars({
         })}
       </ul>
 
-      <p className="text-[11px] leading-relaxed text-ink-faint">
-        {composition.sampled} classified
-        {sampled && sampled !== composition.sampled ? ` of ${sampled} sampled` : ''}. A label is how
-        the creator titled an upload, not what happens in it. {composition.basis}
+      <p className="tnum text-[11px] text-ink-faint">
+        {composition.sampled}
+        {sampled && sampled !== composition.sampled ? ` of ${sampled}` : ''} classified
       </p>
     </div>
   );

@@ -11,6 +11,7 @@
  */
 import { readFileSync } from 'node:fs';
 
+import { limitations } from '@/lib/channel/highlights';
 import { contextFingerprint, freshnessOf } from '@/lib/relevance/fingerprint';
 import {
   relevantVideos,
@@ -253,15 +254,25 @@ check('the sample runs the real analysis rather than hardcoding it', sample.incl
 check('and is labelled fictional', sample.includes('a fictional creator and a fictional brand'), true);
 
 const scatter = read('src/components/report/PerformanceScatter.tsx');
-const scatterProse = prose('src/components/report/PerformanceScatter.tsx');
+const scatterProse =
+  prose('src/components/report/PerformanceScatter.tsx') + prose('src/components/report/ReportNotes.tsx');
 check('the chart says views are as at collection, not a history', scatterProse.includes('not a history'), true);
 check(
   'it warns that newer uploads have had less time',
-  prose('src/components/report/PerformanceScatter.tsx').includes('less time to accumulate'),
+  scatterProse.includes('less time to accumulate'),
   true,
 );
-check('it never implies subscriber growth', scatterProse.includes('Nothing here shows subscribers'), true);
-check('unreported view counts are excluded rather than drawn at zero', scatterProse.includes('unknown, not zero'), true);
+check('it never implies subscriber growth', scatterProse.includes('nothing here shows subscribers'), true);
+// The chart COUNTS what it could not plot; the reason it is unknown rather
+// than zero is stated once, in the limitations.
+check('the chart counts what it could not plot', scatter.includes('report no view count'), true);
+check(
+  'and unreported is named unknown, not zero',
+  limitations(report({ videos: [video('a', 'A', { views: null }), video('b', 'B'), video('c', 'C')] })).some(
+    (l) => l.includes('unknown, not zero'),
+  ),
+  true,
+);
 check('format uses shape as well as position', scatter.includes('MARKER'), true);
 check('points are keyboard reachable', scatter.includes('ArrowRight') && scatter.includes('tabIndex={0}'), true);
 check('and there is a table alternative', scatter.includes('Chart data as a table'), true);

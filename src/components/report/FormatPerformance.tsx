@@ -100,17 +100,6 @@ export function FormatPerformance({
           </li>
         ))}
       </ul>
-      <p className="text-[11px] leading-relaxed text-ink-muted">
-        Measured on the collection date, over uploads of different ages. Public metadata does not
-        identify Shorts; three minutes or less is a duration{' '}
-        <strong className="font-medium">proxy</strong> and can include non-Shorts.
-        {groups.some((g) => g.p.n >= 2 && g.p.p25 === null)
-          ? ' A middle 50% needs eight reporting uploads.'
-          : ''}
-        {groups.some((g) => g.p.excludedLive + g.p.excludedUpcoming > 0)
-          ? ' Live broadcasts and scheduled premieres are excluded.'
-          : ''}
-      </p>
     </div>
   );
 }

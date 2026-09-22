@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 
 import { compact, exact, shortDate, thumbnailUrl, videoUrl } from '@/lib/channel/highlights';
-import { comparable, performance, setAside } from '@/lib/channel/report';
+import { comparable, performance } from '@/lib/channel/report';
 import type { VideoEvidence } from '@/lib/ingest/analyze';
 
 /**
@@ -66,9 +66,8 @@ export function PerformanceScatter({
   // upload whose view count was not reported has not been watched zero times.
   const unreported = eligible.filter((v) => v.views === null);
   // A live broadcast is still accumulating and a premiere has not been watched
-  // at all. Plotting either one at its current count draws a point that means
-  // something different from every other point on the chart.
-  const aside = useMemo(() => setAside(videos), [videos]);
+  // at all, so neither is plotted. The exclusion is counted in `limitations`;
+  // it does not need restating under every chart.
   const bands = useMemo(() => performance(videos, Date.parse(collectedAt)).ageBands, [videos, collectedAt]);
   const [selected, setSelected] = useState<string | null>(null);
 
@@ -213,22 +212,12 @@ export function PerformanceScatter({
               </li>
             ))}
         </ul>
-        <p className="text-[11px] leading-relaxed text-ink-muted">
-          Measured {shortDate(collectedAt)} — not a history. Newer uploads have had less time to
-          accumulate, so the slope is age, not growth. Nothing here shows subscribers. Highest:{' '}
-          {compact(maxV)}.
-          {unreported.length
-            ? ` ${unreported.length} not plotted, reporting no view count — unknown, not zero.`
-            : ''}
-          {aside.live || aside.upcoming
-            ? ` ${[
-                aside.live ? `${aside.live} live broadcast${aside.live === 1 ? '' : 's'}` : null,
-                aside.upcoming ? `${aside.upcoming} scheduled premiere${aside.upcoming === 1 ? '' : 's'}` : null,
-              ]
-                .filter(Boolean)
-                .join(' and ')} excluded — not comparable results.`
-            : ''}
-        </p>
+        {unreported.length || videos.length !== plotted.length ? (
+          <p className="tnum text-[11px] text-ink-faint">
+            {plotted.length} of {videos.length} plotted
+            {unreported.length ? ` · ${unreported.length} report no view count` : ''}
+          </p>
+        ) : null}
         {/* AGE GROUPS, BECAUSE THE SLOPE IS MOSTLY AGE. A month-old upload has
             had a month to accumulate; grouping the medians by age says that
             with numbers instead of asking the reader to infer it. These are

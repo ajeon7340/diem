@@ -19,7 +19,6 @@ import type { VideoEvidence } from '@/lib/ingest/analyze';
  */
 export function PagedUploads({
   items,
-  disclosed,
   emptyNote,
   perPage = 3,
 }: {
@@ -31,9 +30,7 @@ export function PagedUploads({
    * serialise it and the page throws at render. The server knows why each
    * upload is here; it says so once and passes the sentence.
    */
-  items: { video: VideoEvidence; reason: string }[];
-  /** Whether these carry YouTube's paid-promotion flag. */
-  disclosed: boolean;
+  items: { video: VideoEvidence; reason: string | null }[];
   emptyNote: string;
   perPage?: number;
 }) {
@@ -53,7 +50,6 @@ export function PagedUploads({
             key={video.id}
             video={video}
             reason={reason}
-            disclosed={disclosed}
             // Off-page cards stay rendered so the export carries all of them.
             className={index >= from && index < from + perPage ? undefined : 'hidden print:flex'}
           />
