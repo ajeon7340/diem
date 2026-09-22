@@ -8,8 +8,6 @@ import {
   ChartNoAxesCombined,
   FolderOpen,
   LogOut,
-  PanelLeftClose,
-  PanelLeftOpen,
   Settings2,
   Telescope,
   X,
@@ -31,13 +29,14 @@ import { cn } from '@/lib/cn';
  * overflow-y-auto` on the middle region means the two ends are always visible
  * and only the list in between ever scrolls.
  *
- * COLLAPSED KEEPS ITS NAMES. Icons carry `aria-label` and a `title` tooltip,
- * and `aria-current` still marks the page. An icon rail that drops its labels
- * is a rail only its author can use.
+ * ICONS ONLY, AND THERE IS NO EXPANDED STATE. Every page in this product now
+ * has its own controls column, so a 232px strip of four words was a third
+ * vertical band competing with them for the same screen — and a width that
+ * could change was a width every layout had to be correct at twice.
  *
- * DEFAULTS COLLAPSED ON DISCOVER, where the page itself has a 320px filter
- * column and the horizontal room is worth more than four words. The choice is
- * remembered from then on, so the default applies until somebody disagrees.
+ * THE NAMES DO NOT GO AWAY WITH THE WIDTH. Each item carries `aria-label` and
+ * a `title` tooltip, and `aria-current` marks the page. An icon rail that
+ * drops its labels is a rail only its author can use.
  */
 
 const GROUPS = [
@@ -58,8 +57,6 @@ const GROUPS = [
   },
 ];
 
-const STORE = 'adfit:nav-collapsed';
-
 export function AppNav({
   workspace,
   plan,
@@ -67,8 +64,6 @@ export function AppNav({
   extra,
   open,
   onClose,
-  collapsed,
-  onCollapsedChange,
 }: {
   workspace: string | null;
   plan: string | null;
@@ -76,10 +71,11 @@ export function AppNav({
   extra?: React.ReactNode;
   open: boolean;
   onClose: () => void;
-  collapsed: boolean;
-  onCollapsedChange: (next: boolean) => void;
 }) {
   const pathname = usePathname();
+  // The drawer is the only place the labels appear: on a phone there is room,
+  // and a 64px icon strip over the content would be worse than useless.
+  const collapsed = !open;
 
   useEffect(() => {
     if (!open) return;
@@ -94,16 +90,6 @@ export function AppNav({
       document.body.style.overflow = previous;
     };
   }, [open, onClose]);
-
-  function toggle() {
-    const next = !collapsed;
-    onCollapsedChange(next);
-    try {
-      window.localStorage.setItem(STORE, next ? '1' : '0');
-    } catch {
-      // A blocked storage API is not a reason to fail to render navigation.
-    }
-  }
 
   return (
     <>
@@ -148,20 +134,6 @@ export function AppNav({
               </span>
             )}
           </Link>
-          {/* Minimise/maximise, at the top where it is looked for. It was in
-              the footer, three regions away from the thing it resizes. */}
-          {collapsed ? null : (
-            <button
-              type="button"
-              onClick={toggle}
-              aria-pressed={collapsed}
-              aria-label="Collapse navigation"
-              title="Collapse navigation"
-              className="press ml-auto hidden h-8 w-8 items-center justify-center rounded-[var(--r-md)] text-ink-faint hover:bg-black/[0.04] hover:text-ink md:flex"
-            >
-              <PanelLeftClose size={16} aria-hidden />
-            </button>
-          )}
           <button
             type="button"
             onClick={onClose}
@@ -171,21 +143,6 @@ export function AppNav({
             <X size={16} aria-hidden />
           </button>
         </div>
-
-        {/* Collapsed, the expand control gets its own row so it is never the
-            thing that has to share 64px with a wordmark. */}
-        {collapsed ? (
-          <button
-            type="button"
-            onClick={toggle}
-            aria-pressed={collapsed}
-            aria-label="Expand navigation"
-            title="Expand navigation"
-            className="press mx-auto mb-1 hidden h-8 w-8 items-center justify-center rounded-[var(--r-md)] text-ink-faint hover:bg-black/[0.04] hover:text-ink md:flex"
-          >
-            <PanelLeftOpen size={16} aria-hidden />
-          </button>
-        ) : null}
 
         <div className="min-h-0 flex-1 overflow-y-auto px-2.5 pb-2">
           {GROUPS.map((group) => (
@@ -282,5 +239,3 @@ export function AppNav({
     </>
   );
 }
-
-export { STORE as NAV_COLLAPSED_KEY };

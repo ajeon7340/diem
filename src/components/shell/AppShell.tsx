@@ -1,7 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { usePathname } from 'next/navigation';
+import { useRef, useState, type ReactNode } from 'react';
 import { Menu } from 'lucide-react';
 
 import { AppNav } from './AppNav';
@@ -33,27 +32,6 @@ export function AppShell({
   children: ReactNode;
 }) {
   const [navOpen, setNavOpen] = useState(false);
-  const pathname = usePathname();
-  /*
-   * COLLAPSE LIVES HERE, because the grid template that reads it is here. It
-   * was inside the nav, where the column could change width without the track
-   * that holds it changing with it — which is how a fixed-looking sidebar ends
-   * up over the page.
-   *
-   * Discovery defaults to collapsed: that page has its own 320px filter
-   * column, and the horizontal room is worth more there than four words.
-   */
-  const [collapsed, setCollapsed] = useState(false);
-  useEffect(() => {
-    // The inline script in the layout already decided this before paint; read
-    // it back so the icon and the labels agree with the column.
-    setCollapsed(document.documentElement.dataset.navCollapsed === 'true');
-  }, [pathname]);
-
-  function changeCollapsed(next: boolean) {
-    setCollapsed(next);
-    document.documentElement.dataset.navCollapsed = next ? 'true' : 'false';
-  }
   const opener = useRef<HTMLButtonElement>(null);
 
   function close() {
@@ -64,7 +42,7 @@ export function AppShell({
   }
 
   return (
-    <div className="app-shell" data-collapsed={collapsed ? 'true' : 'false'}>
+    <div className="app-shell">
       <AppNav
         workspace={workspace}
         plan={plan}
@@ -72,8 +50,6 @@ export function AppShell({
         extra={navExtra}
         open={navOpen}
         onClose={close}
-        collapsed={collapsed}
-        onCollapsedChange={changeCollapsed}
       />
       <div className="app-main">
         {/* The mobile strip. On desktop the nav column carries the brand and

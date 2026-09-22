@@ -4,16 +4,18 @@ import { redirect } from 'next/navigation';
 
 import { ContextBar } from '@/components/discovery/ContextBar';
 import { FilterPanel } from '@/components/discovery/FilterPanel';
-import { ResultsArea, type SearchRow } from '@/components/discovery/ResultsArea';
+import { DiscoverPanel } from '@/components/discovery/DiscoverPanel';
+import { RecentRuns, type SearchRow } from '@/components/discovery/RecentRuns';
 import { ModeForm } from '@/components/discovery/SearchForms';
 import { WorkspaceLayout } from '@/components/shell/WorkspaceLayout';
 import { getViewer } from '@/lib/access/viewer';
 import { getCampaign, getCampaigns } from '@/lib/data/campaigns';
 import { getBrands, pickBrand } from '@/lib/data/brands';
 import { buildContext } from '@/lib/discovery/context';
-import { getSavedCandidates, getSearches, getSearchJobs } from '@/lib/data/discovery';
+import { countRunsToday, getSavedCandidates, getSearches, getSearchJobs } from '@/lib/data/discovery';
 import { nextStep } from '@/lib/channel/state';
 import { searchState, SEARCH_STATE_LABEL } from '@/lib/discovery/state';
+import { SEARCH_CALLS_PER_DAY } from '@/lib/youtube/quota';
 import { type DiscoveryMode } from '@/lib/discovery/types';
 
 export const metadata: Metadata = { title: 'Discover creators' };
@@ -48,12 +50,13 @@ export default async function DiscoverPage({
     ? (searchParams.mode as DiscoveryMode)
     : 'criteria';
 
-  const [campaign, brands, campaigns, searches, saved] = await Promise.all([
+  const [campaign, brands, campaigns, searches, saved, runsUsed] = await Promise.all([
     searchParams.campaign ? getCampaign(searchParams.campaign) : Promise.resolve(null),
     getBrands(viewer.organization.id),
     getCampaigns(viewer.organization.id),
     getSearches(viewer.organization.id, 12),
     getSavedCandidates(viewer.organization.id),
+    countRunsToday(viewer.organization.id),
   ]);
 
   // The brand a campaign belongs to wins over the one in the URL: a campaign
@@ -122,7 +125,20 @@ export default async function DiscoverPage({
             }
           />
 
-          <ResultsArea searches={rows} saved={saved} campaignId={campaign?.id ?? null} />
+          {/* IDLE: nothing has been run on this page, so the composer fills
+              it. The last run's results live at /discover/[id], where the same
+              panel renders in its `results` state over that run's candidates. */}
+          <div className="flex min-h-0 flex-col">
+            <DiscoverPanel
+              state="idle"
+              candidates={[]}
+              runId={null}
+              runsUsed={runsUsed}
+              runsPerDay={SEARCH_CALLS_PER_DAY}
+              ranked={false}
+            />
+            <RecentRuns searches={rows} saved={saved} />
+          </div>
         </div>
       </div>
     </WorkspaceLayout>

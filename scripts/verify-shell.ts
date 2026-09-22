@@ -72,9 +72,17 @@ const nav = code('src/components/shell/AppNav.tsx');
 // The state moved up to the shell, because the GRID TEMPLATE reads it: a
 // column that changed width without its track changing too is how a sidebar
 // ends up over the page.
-check('the nav collapses', code('src/components/shell/AppShell.tsx').includes("data-collapsed={collapsed ? 'true' : 'false'}"), true);
-check('and remembers the choice', nav.includes('localStorage.setItem(STORE'), true);
-check('a collapsed item keeps its accessible name', nav.includes("collapsed ? 'sr-only' : 'truncate'"), true);
+/*
+ * THE RAIL HAS ONE WIDTH.
+ *
+ * It was 232px with a 64px collapsed state, a toggle and a persisted
+ * preference. Every page now carries its own controls column, so a third
+ * vertical band of four words competed with them for the same screen — and a
+ * width that could change was a width every layout had to be correct at twice.
+ */
+check('there is no expanded state to get wrong', read('src/app/globals.css').includes('--rail-collapsed'), false);
+check('and no toggle to find', nav.includes('Collapse navigation'), false);
+check('the names survive the width', nav.includes("collapsed ? 'sr-only' : 'truncate'"), true);
 check('and still marks the current page', nav.includes("aria-current={active ? 'page' : undefined}"), true);
 check('the mobile drawer closes on Escape', nav.includes("event.key === 'Escape'"), true);
 check('and focus returns to the button that opened it',
@@ -289,7 +297,7 @@ check('and cannot be pushed wider than it', css.includes('  width: 100%;\n  min-
 const shellCss = read('src/app/globals.css');
 check('the shell is a grid, not a flex row', shellCss.includes('.app-shell {\n  display: grid;'), true);
 check('the rail is a track whose width is one variable', shellCss.includes('grid-template-columns: var(--rail) minmax(0, 1fr);'), true);
-check('collapsed swaps the track, not the element width', shellCss.includes("data-collapsed='true'"), true);
+check('the rail is one track width', shellCss.includes('grid-template-columns: var(--rail) minmax(0, 1fr);'), true);
 // `1fr` floors at min-content: a wide table would push the track past the
 // viewport and scroll the whole document sideways.
 check('the content track can shrink', shellCss.includes('minmax(0, 1fr)'), true);
@@ -304,21 +312,8 @@ check('its middle region scrolls, not the column', rail.includes('min-h-0 flex-1
 check('so the footer cannot be pushed off the screen', rail.includes('shrink-0 space-y-2 border-t border-line'), true);
 check('every icon-only control is labelled', (rail.match(/aria-label=/g) ?? []).length >= 5, true);
 check('and collapsed items keep a tooltip', rail.includes('title={collapsed ? label : undefined}'), true);
-/*
- * THE NAV WIDTH IS DECIDED BEFORE PAINT.
- *
- * It was React state read from localStorage in an effect, so every load
- * rendered expanded and snapped to collapsed a frame later — which on the page
- * whose default IS collapsed made every navigation look like the menu opening
- * and closing itself.
- */
-check(
-  'collapse persists, and defaults collapsed on discovery',
-  read('src/app/layout.tsx').includes("location.pathname.indexOf('/discover')===0"),
-  true,
-);
-check('decided before the first paint, not in an effect', read('src/app/layout.tsx').includes('NAV_WIDTH_SCRIPT'), true);
-check('and the grid reads it from the document', css.includes("html[data-nav-collapsed='true'] .app-shell"), true);
+// A hard navigation remounts the shell, which is what made the rail flash
+// when the mode tabs were plain anchors.
 check(
   'a mode tab is a client navigation, so the shell does not remount',
   read('src/components/discovery/FilterPanel.tsx').includes('<Link\n              key={id}'),

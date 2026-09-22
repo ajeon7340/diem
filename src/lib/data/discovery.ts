@@ -311,3 +311,38 @@ export async function getSavedCandidates(organizationId: string): Promise<SavedC
     };
   });
 }
+
+/**
+ * Runs this workspace started today.
+ *
+ * COUNTED FOR THE WORKSPACE, NOT THE PROJECT. The hundred-a-day bound in
+ * `quota.ts` belongs to the API project and is shared by everything using the
+ * same key — other workspaces, the worker, a live check. RLS scopes this query
+ * to one organisation, so it can only ever be a floor. Every surface that
+ * shows it says so, because "37 left" that turns out to be 4 is worse than no
+ * number at all.
+ *
+ * MIDNIGHT IS THE API'S, NOT THE CUSTOMER'S. YouTube resets the daily bound at
+ * midnight Pacific, so that is the boundary counted from — a workspace in Seoul
+ * asking "how many today" wants the answer the quota will give, not the one
+ * their own calendar would.
+ */
+export async function countRunsToday(organizationId: string): Promise<number> {
+  if (!isSupabaseConfigured()) return 0;
+  // Pacific is UTC-8 or UTC-7; taking the later offset makes the window
+  // slightly generous rather than reporting more runs left than exist.
+  const since = new Date(Date.now() - 7 * 3_600_000);
+  since.setUTCHours(7, 0, 0, 0);
+  const start = since.getTime() > Date.now() ? new Date(since.getTime() - 86_400_000) : since;
+
+  const { count, error } = await createSessionClient()
+    .from('discovery_searches')
+    .select('id', { count: 'exact', head: true })
+    .eq('organization_id', organizationId)
+    .gte('created_at', start.toISOString());
+  if (error) {
+    console.error('[discovery] run count failed', error.message);
+    return 0;
+  }
+  return count ?? 0;
+}

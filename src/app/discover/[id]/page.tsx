@@ -8,7 +8,7 @@ import { EmptyState } from '@/components/discovery/EmptyState';
 import { ContextBar } from '@/components/discovery/ContextBar';
 import { FilterPanel } from '@/components/discovery/FilterPanel';
 import { NarrowingProvider, PerformanceFilters } from '@/components/discovery/Narrowing';
-import { ResultList } from '@/components/discovery/ResultList';
+import { DiscoverPanel } from '@/components/discovery/DiscoverPanel';
 import { ModeForm } from '@/components/discovery/SearchForms';
 import { WorkspaceLayout } from '@/components/shell/WorkspaceLayout';
 import { Badge } from '@/components/ui/Badge';
@@ -16,7 +16,7 @@ import { getViewer } from '@/lib/access/viewer';
 import { getCampaign, getCampaigns } from '@/lib/data/campaigns';
 import { getBrands as getWorkspaceBrands, pickBrand } from '@/lib/data/brands';
 import { buildContext } from '@/lib/discovery/context';
-import { getBrands, getCandidates, getSearch, getSearchJobs } from '@/lib/data/discovery';
+import { countRunsToday, getBrands, getCandidates, getSearch, getSearchJobs } from '@/lib/data/discovery';
 import { describeJob } from '@/lib/ingest/jobs';
 import { coverageSentence, searchStage, searchState, SEARCH_STATE_LABEL } from '@/lib/discovery/state';
 import { DISCOVERY_MODES, SIMILARITY_DIMENSION_LABEL, SIMILARITY_LIMIT } from '@/lib/discovery/types';
@@ -29,6 +29,7 @@ import {
   DISCOVERY_RANKING_WITHHELD,
 } from '@/lib/report/policy';
 import { aiConfigured } from '@/lib/ai/provider';
+import { SEARCH_CALLS_PER_DAY } from '@/lib/youtube/quota';
 
 export const metadata: Metadata = { title: 'Discovery results' };
 export const dynamic = 'force-dynamic';
@@ -48,13 +49,14 @@ export default async function DiscoveryResults({ params }: { params: { id: strin
   const search = await getSearch(params.id);
   if (!search) notFound();
 
-  const [candidates, competitorBrands, jobs, campaigns, workspaceBrands, campaign] = await Promise.all([
+  const [candidates, competitorBrands, jobs, campaigns, workspaceBrands, campaign, runsUsed] = await Promise.all([
     getCandidates(search.id),
     search.mode === 'competitor' ? getBrands(search.id) : Promise.resolve([]),
     getSearchJobs([search.id]),
     viewer.organization ? getCampaigns(viewer.organization.id) : Promise.resolve([]),
     viewer.organization ? getWorkspaceBrands(viewer.organization.id) : Promise.resolve([]),
     search.campaignId ? getCampaign(search.campaignId) : Promise.resolve(null),
+    viewer.organization ? countRunsToday(viewer.organization.id) : Promise.resolve(0),
   ]);
 
   // The context this search RAN under, not the one selected now — the panel
@@ -71,13 +73,6 @@ export default async function DiscoveryResults({ params }: { params: { id: strin
   const state = searchState(searchJobs, candidates.length, search.collectedAt, search.emptyReason);
   const live = state === 'queued' || state === 'running';
   const stage = searchStage(job);
-
-  // Both halves, chipped together above the list: a reader comparing two runs
-  // needs to see what was asked, and the split between what YouTube narrowed
-  // and what we narrowed afterwards is kept in the detail panel below.
-  const conditions = [...(search.appliedFilters?.api ?? []), ...(search.appliedFilters?.post ?? [])].map(
-    (condition) => ({ ...condition, value: condition.value.slice(0, 80) }),
-  );
 
   return (
     <WorkspaceLayout
@@ -191,12 +186,15 @@ export default async function DiscoveryResults({ params }: { params: { id: strin
               {search.reference ? <ReferenceCard reference={search.reference} /> : null}
 
               {candidates.length > 0 ? (
-                <ResultList
-                  searchId={search.id}
+                <DiscoverPanel
+                  state={live ? 'running' : 'results'}
                   candidates={candidates}
-                  ranked={search.rankingEnabled}
+                  runId={search.id}
+                  searchId={search.id}
                   campaigns={campaigns.map((c) => ({ id: c.id, name: c.name }))}
-                  conditions={conditions}
+                  runsUsed={runsUsed}
+                  runsPerDay={SEARCH_CALLS_PER_DAY}
+                  ranked={search.rankingEnabled}
                 />
               ) : live ? (
                 <div className="rounded-2xl border border-line bg-surface px-6 py-12 text-center">

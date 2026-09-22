@@ -1004,21 +1004,72 @@ void (async () => {
    * area disagree about what is applied — which is the bug the chip row exists
    * to prevent.
    */
-  const results = readFileSync('src/components/discovery/ResultsArea.tsx', 'utf8');
+  const results = readFileSync('src/components/discovery/DiscoverPanel.tsx', 'utf8');
+  // ONE HOOK, so the panel, the chips and the chat cannot disagree about what
+  // is applied — there is one copy and it lives in the address bar.
+  const hook = readFileSync('src/components/discovery/useFilterState.ts', 'utf8');
+  check('the state hook reads the filters from the URL', hook.includes('useSearchParams'), true);
+  check('and writes them back to it', hook.includes('router.replace'), true);
   for (const [where, src] of [['the panel', panel], ['the results area', results]] as const) {
-    check(`${where} reads the filters from the URL`, src.includes('useSearchParams'), true);
-    check(`and ${where} writes them back to it`, src.includes('router.replace'), true);
+    check(`${where} uses that one hook`, src.includes('useFilterState()'), true);
   }
-  check('no filter state is held in a store', /createContext|zustand|redux/i.test(panel + results), false);
+  check('no filter state is held in a store', /createContext|zustand|redux/i.test(panel + results + hook), false);
+  check('and a chat patch can be undone once', hook.includes('const undo = useCallback'), true);
   check('every applied filter is a chip you can clear', results.includes('Clear filter:'), true);
-  check('and all of them at once', results.includes('Clear all'), true);
+  /*
+   * THE TWO TIERS, AND THE INTERFACE NEVER CONFUSES THEM.
+   *
+   * A narrow filter reads rows already fetched: instant, free, no request. A
+   * run filter changes the question put to YouTube and spends one of the
+   * hundred calls a day the API allows. A narrow filter that quietly refetched
+   * would burn the budget on somebody dragging a range.
+   */
+  check('a run chip is marked as costing a search', results.includes("chip.tier === 'run'"), true);
+  check('and changing one asks before spending', results.includes('Re-run search (uses 1 of'), true);
+  check('narrowing never refetches', /router\.(push|replace)[\s\S]{0,80}narrow/i.test(results), false);
+  check('filtered-out candidates stay in the array', results.includes('hidden by filters'), true);
+  check(
+    'the run posts run filters only',
+    panel.includes('ONLY RUN FILTERS ARE POSTED') && !panel.includes('name="minSubscribers"'),
+    true,
+  );
+  const narrowSrc = readFileSync('src/lib/discovery/narrow.ts', 'utf8');
+  check('narrowing is a pure filter over the fetched set', narrowSrc.includes('candidates.filter('), true);
+  check('and reports what each filter removed', narrowSrc.includes('removedBy'), true);
+  check('unmeasured rows are kept, not dropped', narrowSrc.includes('// unmeasured: neither in nor out'), true);
+  check(
+    'the empty-after-narrow state is not the idle state',
+    results.includes('match your filters') && results.includes('relaxing a filter brings them straight back'),
+    true,
+  );
+  // Once as the count, once as the refusal when it reaches zero — never on a
+  // narrow filter change, which is the whole point of the split.
+  check('the budget is shown on the header', results.includes('{runsLeft} of {runsPerDay} runs left today'), true);
+  check('and never moves when narrowing', /runsLeft[\s\S]{0,200}narrow\(/.test(results), false);
+  check('and zero runs is a reason, not a silent no-op', results.includes('No runs left today'), true);
+  // The chat sets filters. It cannot return creators and cannot start a run.
+  const chat = readFileSync('src/components/discovery/ChatComposer.tsx', 'utf8');
+  check('the chat produces a patch, not results', chat.includes("fetch('/api/discover/parse'"), true);
+  check('and says so where it is used', chat.includes('This sets filters. It does not search'), true);
+  const route = readFileSync('src/app/api/discover/parse/route.ts', 'utf8');
+  check('the parse route needs a session', route.includes('Sign in to use this.'), true);
+  check('and returns no candidates', /candidates|creators/i.test(route.replace(/\/\*[\s\S]*?\*\//g, '')), false);
+  const parser = readFileSync('src/lib/discovery/parse-message.ts', 'utf8');
+  check('model output is validated against a known schema', parser.includes('patchSchema.safeParse'), true);
+  check('unknown keys are dropped', parser.includes('key in patchSchema.shape'), true);
+  check('the patterns run without any provider', parser.includes('if (!aiConfigured()'), true);
+  check(
+    'and filters this product cannot support are named, not faked',
+    parser.includes('UNSUPPORTED_FILTERS.hasPublicEmail'),
+    true,
+  );
   check(
     'clearing a range clears both ends',
     readFileSync('src/lib/discovery/filters.ts', 'utf8').includes("if (key === 'subsFrom') return { ...filters, subsFrom: null, subsTo: null };"),
     true,
   );
   check('the empty state runs a search rather than naming the page', results.includes('form="discovery-search"'), true);
-  check('and says what one costs', results.includes('spends one of the day'), true);
+  check('and says what one costs', results.includes('Re-run search (uses 1 of'), true);
   // The view range is a post-retrieval filter and the panel says so.
   check('the view range names what it narrows', panel.includes('not a channel average'), true);
   check(
@@ -1031,20 +1082,20 @@ void (async () => {
   check('the results column cannot be pushed sideways by a long name', list.includes('min-w-0 flex-1'), true);
   check(
     'the result count leads the results header',
-    /\{candidates\.length\} creator|of \$\{candidates\.length\} creators/.test(list),
+    results.includes('shown') && results.includes('hidden by filters'),
     true,
   );
   // Only the sort control's own options, not the campaign picker's.
-  const sortOptions = list
-    .slice(list.indexOf('value={order}'), list.indexOf('</select>', list.indexOf('value={order}')))
+  const sortOptions = results
+    .slice(results.indexOf('value={order}'), results.indexOf('</select>', results.indexOf('value={order}')))
     .match(/<option value="([^"]*)"/g) ?? [];
   check(
     'sorting offers only what exists: the search order, and the figure we hold',
     sortOptions,
     ['<option value="search"', '<option value="subscribers"'],
   );
-  check('and says it reorders this page rather than re-searching', list.includes('It does not run a new search.'), true);
-  check('a hidden subscriber count sorts last, not as zero', list.includes('(b.subscribers ?? -1) - (a.subscribers ?? -1)'), true);
+  check('and says it reorders this page rather than re-searching', results.includes('It does not run a new search.'), true);
+  check('a hidden subscriber count sorts last, not as zero', results.includes('(b.subscribers ?? -1) - (a.subscribers ?? -1)'), true);
 
   const card = readFileSync('src/components/discovery/ResultCard.tsx', 'utf8');
   check(
@@ -1198,15 +1249,15 @@ void (async () => {
   const narrowing = readFileSync('src/components/discovery/Narrowing.tsx', 'utf8');
   check('subscribers narrow the results live, from the rail', narrowing.includes('SUBSCRIBER_STEPS'), true);
   check('and so do views', narrowing.includes('VIEW_STEPS'), true);
-  check('the list reads them rather than owning them', list.includes('useNarrowing()'), true);
+  check('the list renders what it is given', list.includes('const narrowed = candidates;'), true);
   check(
     'an unmeasured figure is kept rather than filtered out',
-    list.includes('inRange(candidate.subscribers, subscribers)') && list.includes('=== false'),
+    narrowSrc.includes('if (value === null) return null; // unmeasured: neither in nor out'),
     true,
   );
   check(
     'and how many were kept that way is printed',
-    list.includes('with figures hidden, kept'),
+    results.includes('kept with a figure the filter could not read'),
     true,
   );
   check(

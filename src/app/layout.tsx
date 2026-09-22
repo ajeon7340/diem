@@ -28,31 +28,9 @@ export const metadata: Metadata = {
     'Analyse any public YouTube channel against your campaign: recent content, public performance and sponsorship evidence, with sources and unknowns in view. Creators do not need to register, approve access or connect an account.',
 };
 
-/**
- * THE NAV WIDTH IS DECIDED BEFORE THE FIRST PAINT.
- *
- * It was React state, read from localStorage in an effect — so every load
- * rendered the rail expanded, then snapped it to collapsed a frame later. On
- * the Discover page, where the default IS collapsed, that made every
- * navigation look like the menu opening and closing itself.
- *
- * This runs before the body paints and writes the answer onto <html>, which is
- * what the grid template reads. React state still mirrors it for the toggle's
- * icon and labels, but the LAYOUT never waits for hydration. Wrapped in
- * try/catch because a blocked storage API must not stop the page rendering.
- */
-const NAV_WIDTH_SCRIPT = `try{
-  var s=localStorage.getItem('adfit:nav-collapsed');
-  var c=s===null?location.pathname.indexOf('/discover')===0:s==='1';
-  document.documentElement.dataset.navCollapsed=c?'true':'false';
-}catch(e){}`;
-
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <head>
-        <script dangerouslySetInnerHTML={{ __html: NAV_WIDTH_SCRIPT }} />
-      </head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>{children}</body>
     </html>
   );

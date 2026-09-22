@@ -1,7 +1,6 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useFormState, useFormStatus } from 'react-dom';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ChevronDown, PanelLeftClose, PanelLeftOpen, Search, SlidersHorizontal, X } from 'lucide-react';
@@ -11,7 +10,8 @@ import { INITIAL_DISCOVERY } from '@/app/actions/state';
 import { COUNTRIES, LANGUAGES } from '@/lib/locale/vocabulary';
 import { LOCALE_PARAMETER_DISCLOSURE } from '@/lib/youtube/search-contract';
 import { SUBSCRIBER_STEPS, VIEW_STEPS, stepLabel } from '@/lib/discovery/ranges';
-import { appliedCount, readFilters, writeFilters, type Filters } from '@/lib/discovery/filters';
+import { useFilterState } from './useFilterState';
+import { appliedCount, type FilterState } from '@/lib/discovery/filter-state';
 import { DISCOVERY_MODES, type DiscoveryMode } from '@/lib/discovery/types';
 import { CAMPAIGN_CATEGORIES, CATEGORY_LABEL } from '@/types';
 import { cn } from '@/lib/cn';
@@ -58,20 +58,12 @@ export function FilterPanel({
   /** The reference-channel or competitor inputs, for the other two modes. */
   modeExtra?: ReactNode;
 }) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const params = useSearchParams();
-  const filters = readFilters(new URLSearchParams(params.toString()));
+  const { filters, apply, reset } = useFilterState();
   const applied = appliedCount(filters);
   const [state, action] = useFormState(startDiscovery, INITIAL_DISCOVERY);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [minimised, setMinimised] = useState(false);
   const opener = useRef<HTMLButtonElement>(null);
-
-  function apply(next: Partial<Filters>) {
-    const query = writeFilters({ ...filters, ...next }, new URLSearchParams(params.toString()));
-    router.replace(`${pathname}?${query}`, { scroll: false });
-  }
 
   useEffect(() => {
     if (!sheetOpen) return;
@@ -140,40 +132,42 @@ export function FilterPanel({
         <input type="hidden" name="mode" value={mode} />
         {campaignId ? <input type="hidden" name="campaignId" value={campaignId} /> : null}
         {brandId ? <input type="hidden" name="brandId" value={brandId} /> : null}
-        {/* The URL is the state; the form posts exactly what it says. */}
+        {/*
+          * ONLY RUN FILTERS ARE POSTED.
+          *
+          * The narrow ones are deliberately absent. Sending them would make
+          * the server drop rows before they ever reach the browser, and then
+          * loosening a range could not widen the results — it would need
+          * another search, which is the cost this whole split exists to
+          * avoid. The run fetches the widest honest set; narrowing happens
+          * over it, in memory, for free.
+          */}
         {filters.category ? <input type="hidden" name="categories" value={filters.category} /> : null}
         {filters.market ? <input type="hidden" name="market" value={filters.market} /> : null}
-        {filters.language ? <input type="hidden" name="language" value={filters.language} /> : null}
-        {filters.subsFrom !== null ? <input type="hidden" name="minSubscribers" value={filters.subsFrom} /> : null}
-        {filters.subsTo !== null ? <input type="hidden" name="maxSubscribers" value={filters.subsTo} /> : null}
-        {filters.viewsFrom !== null ? <input type="hidden" name="viewsFrom" value={filters.viewsFrom} /> : null}
-        {filters.viewsTo !== null ? <input type="hidden" name="viewsTo" value={filters.viewsTo} /> : null}
-        {filters.within ? <input type="hidden" name="publishedWithinDays" value={filters.within} /> : null}
-        {filters.length ? <input type="hidden" name="formats" value={filters.length} /> : null}
-        {filters.exclude ? <input type="hidden" name="excludeTopics" value={filters.exclude} /> : null}
+        {filters.contentLanguage ? <input type="hidden" name="language" value={filters.contentLanguage} /> : null}
+        {filters.publishedWithinDays ? <input type="hidden" name="publishedWithinDays" value={filters.publishedWithinDays} /> : null}
+        {filters.videoLength ? <input type="hidden" name="formats" value={filters.videoLength} /> : null}
+        {filters.similarToChannel ? <input type="hidden" name="channel" value={filters.similarToChannel} /> : null}
+        {filters.competitorBrand ? <input type="hidden" name="knownCompetitors" value={filters.competitorBrand} /> : null}
 
         <div className="min-h-0 flex-1 overflow-y-auto">
           {mode === 'criteria' ? (
             <>
               <Section title="Category" defaultOpen>
-                <div className="flex flex-wrap gap-1.5">
+                <label className="sr-only" htmlFor="category">Category</label>
+                <select
+                  id="category"
+                  value={filters.category ?? ''}
+                  onChange={(event) =>
+                    apply({ category: (event.target.value || null) as FilterState['category'] })
+                  }
+                  className={SELECT_FIELD}
+                >
+                  <option value="">Any category</option>
                   {CAMPAIGN_CATEGORIES.map((id) => (
-                    <button
-                      key={id}
-                      type="button"
-                      aria-pressed={filters.category === id}
-                      onClick={() => apply({ category: filters.category === id ? null : id })}
-                      className={cn(
-                        'press min-h-8 rounded-full border px-2.5 text-[12px] transition-colors duration-150',
-                        filters.category === id
-                          ? 'border-indigo bg-indigo text-white'
-                          : 'border-line text-ink-muted hover:border-line-strong hover:text-ink',
-                      )}
-                    >
-                      {CATEGORY_LABEL[id]}
-                    </button>
+                    <option key={id} value={id}>{CATEGORY_LABEL[id]}</option>
                   ))}
-                </div>
+                </select>
                 <p className={HELP}>One category becomes the search term.</p>
               </Section>
 
@@ -193,8 +187,8 @@ export function FilterPanel({
                 <label className={cn(LABEL, 'mt-3')} htmlFor="language">Content language</label>
                 <select
                   id="language"
-                  value={filters.language ?? ''}
-                  onChange={(event) => apply({ language: event.target.value || null })}
+                  value={filters.contentLanguage ?? ''}
+                  onChange={(event) => apply({ contentLanguage: event.target.value || null })}
                   className={cn(SELECT_FIELD, 'mt-1.5')}
                 >
                   <option value="">Any language</option>
@@ -205,13 +199,16 @@ export function FilterPanel({
                 <p className={HELP}>{LOCALE_PARAMETER_DISCLOSURE}</p>
               </Section>
 
+              {/* Below here is NARROW: every one of these reads a figure on a
+                  candidate the last run already fetched, so it applies
+                  instantly and costs nothing. Above is RUN — it changes the
+                  question put to YouTube. */}
               <Section title="Subscriber range" defaultOpen>
                 <Range
-                  from={filters.subsFrom}
-                  to={filters.subsTo}
+                  from={filters.subscriberMin}
+                  to={filters.subscriberMax}
                   steps={SUBSCRIBER_STEPS}
-                  presets={[[10_000, 100_000], [100_000, 1_000_000], [1_000_000, null]]}
-                  onChange={(from, to) => apply({ subsFrom: from, subsTo: to })}
+                  onChange={(from, to) => apply({ subscriberMin: from, subscriberMax: to })}
                   label="Subscribers"
                 />
                 <p className={HELP}>Narrows the channels a run read. A hidden count is kept, not dropped.</p>
@@ -219,11 +216,10 @@ export function FilterPanel({
 
               <Section title="Avg. views range" defaultOpen>
                 <Range
-                  from={filters.viewsFrom}
-                  to={filters.viewsTo}
+                  from={filters.avgViewsMin}
+                  to={filters.avgViewsMax}
                   steps={VIEW_STEPS}
-                  presets={[[10_000, 100_000], [100_000, 1_000_000], [1_000_000, null]]}
-                  onChange={(from, to) => apply({ viewsFrom: from, viewsTo: to })}
+                  onChange={(from, to) => apply({ avgViewsMin: from, avgViewsMax: to })}
                   label="Typical views"
                 />
                 <p className={HELP}>Median views of the videos this search reads, not a channel average.</p>
@@ -232,8 +228,8 @@ export function FilterPanel({
               <Section title="Last upload">
                 <select
                   aria-label="Published within"
-                  value={filters.within ?? ''}
-                  onChange={(event) => apply({ within: event.target.value ? Number(event.target.value) : null })}
+                  value={filters.publishedWithinDays ?? ''}
+                  onChange={(event) => apply({ publishedWithinDays: event.target.value ? Number(event.target.value) : null })}
                   className={SELECT_FIELD}
                 >
                   <option value="">Any time</option>
@@ -247,9 +243,9 @@ export function FilterPanel({
               <Section title="Video length">
                 <select
                   aria-label="Video length"
-                  value={filters.length ?? ''}
+                  value={filters.videoLength ?? ''}
                   onChange={(event) =>
-                    apply({ length: (event.target.value || null) as Filters['length'] })
+                    apply({ videoLength: (event.target.value || null) as FilterState['videoLength'] })
                   }
                   className={SELECT_FIELD}
                 >
@@ -263,8 +259,8 @@ export function FilterPanel({
               <Section title="Excluded keywords">
                 <input
                   aria-label="Excluded keywords"
-                  value={filters.exclude}
-                  onChange={(event) => apply({ exclude: event.target.value })}
+                  value={filters.excludedKeywords}
+                  onChange={(event) => apply({ excludedKeywords: event.target.value })}
                   placeholder="crypto, gambling"
                   maxLength={200}
                   className={NUMBER_FIELD}
@@ -287,7 +283,7 @@ export function FilterPanel({
           <Submit applied={applied} />
           <button
             type="button"
-            onClick={() => router.replace(pathname + (campaignId ? `?campaign=${campaignId}` : ''), { scroll: false })}
+            onClick={reset}
             className="press mt-1.5 min-h-9 w-full rounded-[var(--r-md)] text-[13px] text-ink-muted hover:bg-black/[0.04] hover:text-ink"
           >
             Reset
@@ -428,78 +424,64 @@ function Section({
 }
 
 /**
- * Two number fields and a few presets.
+ * Two ends, each chosen from a list of steps.
  *
- * NOT A SLIDER. The values people care about here are round and exact —
- * 10,000, 100,000, a million — and a slider makes those the hardest ones to
- * hit. A preset gives the common case in one tap and the fields give the rest.
+ * NOT OPEN NUMBER FIELDS. "At least 17,428 subscribers" is a precision the
+ * retrieved rows do not have, and a free field invites it; the values people
+ * actually mean here are round. A list also removes the debounce problem
+ * entirely — there is no partial value to recompute over, so narrowing stays
+ * synchronous on every change.
+ *
+ * THE UPPER END ONLY OFFERS VALUES ABOVE THE LOWER ONE, so a range that can
+ * only ever return nothing is unreachable. Raising the floor past the ceiling
+ * clears the ceiling rather than silently swapping them: a filter that
+ * rewrites itself is a filter nobody trusts.
  */
 function Range({
   from,
   to,
   steps,
-  presets,
   onChange,
   label,
 }: {
   from: number | null;
   to: number | null;
   steps: number[];
-  presets: [number, number | null][];
   onChange: (from: number | null, to: number | null) => void;
   label: string;
 }) {
-  const parse = (value: string) => {
-    const n = Number(value.replace(/[,\s]/g, ''));
-    return value.trim() === '' || !Number.isFinite(n) || n < 0 ? null : n;
-  };
+  const value = (raw: string) => (raw === '' ? null : Number(raw));
   return (
-    <div>
-      <div className="flex items-center gap-1.5">
-        <input
-          inputMode="numeric"
-          aria-label={`${label}, minimum`}
-          placeholder="Min"
-          defaultValue={from ?? ''}
-          key={`from-${from ?? ''}`}
-          onBlur={(event) => onChange(parse(event.target.value), to)}
-          className={NUMBER_FIELD}
-        />
-        <span aria-hidden className="text-[12px] text-ink-faint">–</span>
-        <input
-          inputMode="numeric"
-          aria-label={`${label}, maximum`}
-          placeholder="Max"
-          defaultValue={to ?? ''}
-          key={`to-${to ?? ''}`}
-          onBlur={(event) => onChange(from, parse(event.target.value))}
-          className={NUMBER_FIELD}
-        />
-      </div>
-      <div className="mt-1.5 flex flex-wrap gap-1">
-        {presets.map(([low, high]) => {
-          const on = from === low && to === high;
-          return (
-            <button
-              key={`${low}-${high}`}
-              type="button"
-              aria-pressed={on}
-              onClick={() => onChange(on ? null : low, on ? null : high)}
-              className={cn(
-                'press min-h-7 rounded-full border px-2 text-[11px] tabular-nums transition-colors duration-150',
-                on ? 'border-indigo bg-indigo-wash text-indigo' : 'border-line text-ink-muted hover:text-ink',
-              )}
-            >
-              {stepLabel(low)}–{high === null ? '∞' : stepLabel(high)}
-            </button>
-          );
-        })}
-      </div>
-      <datalist id={`${label}-steps`}>
+    <div className="flex items-center gap-1 rounded-[var(--r-md)] border border-line bg-surface px-1">
+      <select
+        aria-label={`${label}, from`}
+        value={from ?? ''}
+        onChange={(event) => {
+          const next = value(event.target.value);
+          const ceiling = next !== null && to !== null && to <= next ? null : to;
+          onChange(next, ceiling);
+        }}
+        className="min-h-9 min-w-0 flex-1 bg-transparent px-1.5 text-[13px] tabular-nums text-ink focus:outline-none"
+      >
+        <option value="">From</option>
         {steps.map((step) => (
-          <option key={step} value={step} />
+          <option key={step} value={step}>{stepLabel(step)}</option>
         ))}
-      </datalist>
+      </select>
+      <span aria-hidden className="text-[12px] text-ink-faint">–</span>
+      <select
+        aria-label={`${label}, to`}
+        value={to ?? ''}
+        onChange={(event) => onChange(from, value(event.target.value))}
+        className="min-h-9 min-w-0 flex-1 bg-transparent px-1.5 text-[13px] tabular-nums text-ink focus:outline-none"
+      >
+        <option value="">To</option>
+        {steps
+          .filter((step) => from === null || step > from)
+          .map((step) => (
+            <option key={step} value={step}>{stepLabel(step)}</option>
+          ))}
+      </select>
     </div>
   );
 }

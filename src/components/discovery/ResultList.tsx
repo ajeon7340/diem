@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useFormState, useFormStatus } from 'react-dom';
 
 import {
@@ -10,8 +10,7 @@ import {
 } from '@/app/actions/discovery';
 import { INITIAL_DISCOVERY } from '@/app/actions/state';
 import { ResultCard } from './ResultCard';
-import { useNarrowing } from './Narrowing';
-import { inRange, medianViews, rangeIsSet } from '@/lib/discovery/ranges';
+
 import type { DiscoveryCandidate } from '@/lib/discovery/types';
 
 /**
@@ -33,24 +32,18 @@ import type { DiscoveryCandidate } from '@/lib/discovery/types';
  * or "by best fit", because neither exists.
  */
 
-type Order = 'search' | 'subscribers';
-
 export function ResultList({
   searchId,
   candidates,
   ranked,
   campaigns,
-  conditions,
 }: {
   searchId: string;
   candidates: DiscoveryCandidate[];
   ranked: boolean;
   campaigns: { id: string; name: string }[];
-  /** Applied conditions, shown as chips above the list. */
-  conditions: { name: string; value: string }[];
 }) {
   const [selected, setSelected] = useState<string[]>([]);
-  const [order, setOrder] = useState<Order>('search');
   /**
    * LIVE, BECAUSE THESE NEVER TOUCHED THE SEARCH.
    *
@@ -59,32 +52,13 @@ export function ResultList({
    * controls live in the filter rail, which is where somebody looks for them;
    * the state lives above both columns. See `Narrowing`.
    */
-  const { subscribers, views } = useNarrowing();
+
   const [saveState, save] = useFormState(saveCandidates, INITIAL_DISCOVERY);
   const [campaignState, addToCampaign] = useFormState(addCandidatesToCampaign, INITIAL_DISCOVERY);
 
-  // Unmeasured is kept, never dropped: a hidden subscriber count is not a small
-  // one, and a channel whose retrieved videos reported no views has not failed
-  // the filter. How many were kept that way is COUNTED and printed, so "12 of
-  // 40" never quietly includes rows the filter could not actually judge.
-  const { narrowed, unjudged } = useMemo(() => {
-    const kept: DiscoveryCandidate[] = [];
-    let unjudged = 0;
-    for (const candidate of candidates) {
-      const bySubs = inRange(candidate.subscribers, subscribers);
-      if (bySubs === false) continue;
-      const byViews = inRange(medianViews(candidate.evidence.map((e) => e.views)), views);
-      if (byViews === false) continue;
-      if (bySubs === null || byViews === null) unjudged += 1;
-      kept.push(candidate);
-    }
-    return { narrowed: kept, unjudged };
-  }, [candidates, subscribers, views]);
+  const narrowed = candidates;
 
-  const shown = useMemo(() => {
-    if (order === 'search') return narrowed;
-    return [...narrowed].sort((a, b) => (b.subscribers ?? -1) - (a.subscribers ?? -1));
-  }, [narrowed, order]);
+  const shown = narrowed;
 
   function toggle(channelId: string) {
     setSelected((current) =>
@@ -96,54 +70,8 @@ export function ResultList({
 
   return (
     <div className="space-y-3">
-      <div className="surface sticky top-2 z-10 bg-surface/95 px-3.5 py-3 backdrop-blur">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <h2 className="text-[13px] font-semibold text-ink">
-            {narrowed.length === candidates.length
-              ? `${candidates.length} creator${candidates.length === 1 ? '' : 's'}`
-              : `${narrowed.length} of ${candidates.length} creators`}
-          </h2>
-          <span className="text-[11px] text-ink-faint">
-            {ranked ? 'ranked by adfit' : 'in the order YouTube returned'}
-          </span>
-          {/* Said out loud rather than folded into the count: with a range set,
-              these are rows the filter could not judge, kept because a hidden
-              figure is not a failing one. */}
-          {unjudged > 0 && (rangeIsSet(subscribers) || rangeIsSet(views)) ? (
-            <span className="tnum text-[11px] text-ink-faint">
-              {unjudged} with figures hidden, kept
-            </span>
-          ) : null}
-
-          <label className="ml-auto flex items-center gap-2 text-[11px] text-ink-muted">
-            <span className="sr-only sm:not-sr-only">Order</span>
-            <select
-              value={order}
-              onChange={(event) => setOrder(event.target.value as Order)}
-              className="min-h-8 rounded-lg border border-line bg-surface px-2 text-[12px] text-ink"
-              title="Reorders the results already on this page. It does not run a new search."
-            >
-              <option value="search">{ranked ? 'Match strength' : 'Search order'}</option>
-              <option value="subscribers">Subscribers, high to low</option>
-            </select>
-          </label>
-        </div>
-
-        {conditions.length ? (
-          <ul className="mt-2.5 flex flex-wrap gap-1.5">
-            {conditions.map((condition) => (
-              <li
-                key={`${condition.name}-${condition.value}`}
-                className="rounded-md border border-line bg-paper px-2 py-1 text-[11px] text-ink-muted"
-                title={condition.name}
-              >
-                <span className="text-ink-faint">{condition.name}:</span> {condition.value}
-              </li>
-            ))}
-          </ul>
-        ) : null}
-
-        <div className="mt-2.5 flex flex-wrap items-center gap-2 border-t border-line pt-2.5">
+      <div className="surface sticky top-2 z-10 bg-surface/95 px-3.5 py-2.5 backdrop-blur">
+        <div className="flex flex-wrap items-center gap-2">
           <label className="inline-flex items-center gap-2 text-[12px] text-ink">
             {/* Select all selects what is SHOWN. Selecting rows a filter has
                 hidden, and then saving them, is how somebody ends up with a
