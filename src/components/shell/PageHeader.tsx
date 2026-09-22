@@ -36,23 +36,23 @@ export function PageHeader({
   tabs?: ReactNode;
 }) {
   return (
-    <header className="app-page-header border-b border-line bg-surface px-4 pt-4 sm:px-6">
+    <header className="app-page-header px-4 pt-5 sm:px-6">
       <div className="mx-auto w-full max-w-[1480px]">
         <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
           <div className="flex min-w-0 flex-1 items-start gap-3">
             {icon ? <div className="shrink-0 pt-0.5">{icon}</div> : null}
             <div className="min-w-0 flex-1">
-            {eyebrow ? <div className="rail mb-1.5">{eyebrow}</div> : null}
-            <h1 className="break-words text-[17px] font-semibold leading-tight tracking-tight text-ink">
+            {eyebrow ? <div className="rail mb-2">{eyebrow}</div> : null}
+            <h1 className="break-words text-[23px] font-semibold leading-tight tracking-tight text-ink">
               {title}
             </h1>
             {meta ? (
-              <div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[12px] text-ink-muted">
+              <div className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[13px] text-ink-muted">
                 {meta}
               </div>
             ) : null}
             {summary ? (
-              <p className="mt-1.5 max-w-[68ch] text-[12px] leading-relaxed text-ink-muted">
+              <p className="mt-2 max-w-[72ch] text-[13px] leading-relaxed text-ink-muted">
                 {summary}
               </p>
             ) : null}
@@ -65,7 +65,11 @@ export function PageHeader({
             </div>
           ) : null}
         </div>
-        {tabs ? <div className="mt-3">{tabs}</div> : <div className="h-4" />}
+        {tabs ? (
+          <div className="mt-4 border-b border-line">{tabs}</div>
+        ) : (
+          <div className="h-1" />
+        )}
       </div>
     </header>
   );

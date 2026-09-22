@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { BarChart3, FileVideo2, Layers, ShieldQuestion, Sparkles } from 'lucide-react';
 
 import type { EvidencePurpose } from '@/lib/channel/highlights';
 
@@ -163,7 +164,7 @@ export function ChannelReport({
             {/* THE FIGURES A BUYER SCANS FOR, ONCE, IN A ROW. They were spread
                 across four paragraphs of prose, which is where a number goes
                 to be skipped. */}
-            <section className="report-section report-metrics avoid-break rounded-lg border border-line bg-surface p-4">
+            <section className="report-section report-metrics avoid-break rounded-[var(--r-lg)] bg-surface p-4 shadow-[var(--shadow-panel)]">
               <dl className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-4">
                 <Metric
                   label="Subscribers"
@@ -210,6 +211,7 @@ export function ChannelReport({
                 buyer has and never the first. */}
             <Block
               title="What this creator publishes"
+              icon={<Layers size={16} strokeWidth={1.75} />}
               note="Classified from retrieved titles and descriptions. No upload was watched and no transcript was read, so nothing here describes what happens inside a video."
             >
               <CompositionBars composition={profile} videos={eligible} sampled={report.videos.length} />
@@ -217,6 +219,7 @@ export function ChannelReport({
 
             <Block
               title="How this sample performed"
+              icon={<BarChart3 size={16} strokeWidth={1.75} />}
               note="One bounded sample, measured once. Not a forecast and not a history."
             >
               <FormatPerformance videos={eligible} collectedAt={report.fetchedAt} only={format} />
@@ -234,7 +237,7 @@ export function ChannelReport({
       {/* ---------------------------------------------------------------- */}
       <div className="report-page-2 space-y-4">
         {noticed.length ? (
-          <Block title="What stood out">
+          <Block title="What stood out" icon={<Sparkles size={16} strokeWidth={1.75} />}>
             <ul className="space-y-2">
               {noticed.map((item) => (
                 <li key={item.text} className="avoid-break text-[13px] leading-relaxed text-ink">
@@ -267,6 +270,7 @@ export function ChannelReport({
         {evidence.length ? (
           <Block
             title="Representative uploads"
+              icon={<FileVideo2 size={16} strokeWidth={1.75} />}
             note="One upload per reason: the commonest subject, the commonest shape, where the middle of the distribution sits, a genuine outlier, and a disclosed promotion. Each is chosen from the collected sample on a stated rule."
           >
             <ul className="space-y-2">
@@ -332,7 +336,7 @@ export function ChannelReport({
             collected; the right is what only the creator can answer. Mixing
             them is how "our collection was capped" became a question asking the
             creator to make up the difference. */}
-        <Block title="What this does not establish">
+        <Block title="What this does not establish" icon={<ShieldQuestion size={16} strokeWidth={1.75} />}>
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <h3 className="text-[12px] font-semibold text-ink">Limits of this collection</h3>
@@ -369,13 +373,40 @@ export function ChannelReport({
   );
 }
 
-/** A section. One heading, one optional qualification, no repeated provenance. */
-function Block({ title, note, children }: { title: string; note?: string; children: ReactNode }) {
+/**
+ * A section. One heading, one optional qualification, no repeated provenance.
+ *
+ * THE MARK IS PART OF THE HEADING. A page of white rectangles gives the eye
+ * nothing to land on; one dark chip per card is where a reader picks the page
+ * back up after looking away. Near-black rather than the accent, because the
+ * accent means "you can act on this" and a heading cannot be acted on. Hidden
+ * in print, where the sheet is already one column and the ink is not free.
+ */
+function Block({
+  title,
+  note,
+  icon,
+  children,
+}: {
+  title: string;
+  note?: string;
+  icon?: ReactNode;
+  children: ReactNode;
+}) {
   return (
-    <section className="report-section avoid-break rounded-lg border border-line bg-surface p-4">
-      <h2 className="text-[14px] font-semibold text-ink">{title}</h2>
-      {note ? <p className="mt-1 text-[11px] leading-relaxed text-ink-muted">{note}</p> : null}
-      <div className="mt-2.5">{children}</div>
+    <section className="report-section avoid-break rounded-[var(--r-lg)] bg-surface p-4 shadow-[var(--shadow-panel)]">
+      <div className="flex items-start gap-3">
+        {icon ? (
+          <span className="icon-chip print:hidden" aria-hidden>
+            {icon}
+          </span>
+        ) : null}
+        <div className="min-w-0 flex-1">
+          <h2 className="text-[15px] font-semibold tracking-tight text-ink">{title}</h2>
+          {note ? <p className="mt-1 text-[12px] leading-relaxed text-ink-muted">{note}</p> : null}
+        </div>
+      </div>
+      <div className="mt-3">{children}</div>
     </section>
   );
 }

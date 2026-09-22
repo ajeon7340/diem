@@ -14,14 +14,25 @@
 :root {
   color-scheme: light;
 
-  --paper: #f7f8fc;        /* slate-50  */
+  /*
+   * A WARM GROUND, NOT A COOL ONE. The ground was slate-50, which is blue, and
+   * every white card on it read as a panel cut out of a spreadsheet. An
+   * off-white with a little warmth in it lets a pure-white card float instead
+   * of sitting in a hole, which is the whole reason the card is white.
+   */
+  --paper: #f6f5f3;
   --surface: #ffffff;
-  --line: #e5e7ef;         /* slate-200 */
-  --line-strong: #cbd5e1;  /* slate-300 */
+  --line: #e8e6e2;
+  --line-strong: #d3d0ca;
 
-  --ink: #202336;          /* slate-900 */
-  --ink-muted: #475569;    /* slate-600 */
-  --ink-faint: #68758b;    /* slate-400 */
+  /*
+   * Neutrals warmed to match, and NOT lightened. A calm interface is not a
+   * faint one: `--ink-muted` stays at 7:1 on the ground so the qualifications
+   * this product exists to print are still readable.
+   */
+  --ink: #1d1c1a;
+  --ink-muted: #5b5852;
+  --ink-faint: #8b877f;
 
   --indigo: #5850e6;
   --indigo-hover: #4338ca;
@@ -43,28 +54,45 @@
    * The nav is a real column, so its width is a variable the main area reads
    * rather than a number repeated in two places that drift.
    */
-  --nav-w: 232px;
-  --nav-w-collapsed: 60px;
-  --header-h: 52px;
+  --nav-w: 264px;
+  --nav-w-collapsed: 68px;
+  --header-h: 56px;
 
   /*
    * RADIUS SCALE. Nested surfaces are concentric: outer = inner + padding.
    * A 12px card holding an 8px control needs 4px of padding between them, and
    * the pair looks wrong at any other combination.
    */
-  --r-sm: 6px;
-  --r-md: 8px;
-  --r-lg: 12px;
-  --r-xl: 16px;
+  --r-sm: 8px;
+  --r-md: 10px;
+  --r-lg: 16px;
+  --r-xl: 20px;
 
   /*
    * ELEVATION IS SHADOW, STRUCTURE IS BORDER. A border drawn only to suggest
    * depth makes every surface read as a box; layered transparent shadows lift
    * without adding another line to the page. Borders stay where they separate.
    */
-  --shadow-raise: 0 1px 2px rgba(23, 26, 44, 0.04), 0 1px 1px rgba(23, 26, 44, 0.03);
-  --shadow-panel: 0 1px 2px rgba(23, 26, 44, 0.05), 0 8px 24px rgba(23, 26, 44, 0.07);
-  --shadow-overlay: 0 1px 2px rgba(23, 26, 44, 0.06), 0 16px 48px rgba(23, 26, 44, 0.14);
+  /*
+   * FIVE LAYERS, EACH NEARLY INVISIBLE. One 8px shadow at 7% reads as a drop
+   * shadow; the same total darkness spread over 1/3/6/12/24px reads as a card
+   * resting on paper, which is the only kind of elevation this interface wants.
+   * The card has NO border — a hairline plus a shadow is two answers to the
+   * same question and makes every surface look like a box.
+   */
+  --shadow-raise:
+    0 1px 1px rgba(0, 0, 0, 0.04),
+    0 2px 2px rgba(0, 0, 0, 0.03);
+  --shadow-panel:
+    0 1px 1px rgba(0, 0, 0, 0.06),
+    0 3px 3px rgba(0, 0, 0, 0.05),
+    0 6px 6px rgba(0, 0, 0, 0.04),
+    0 12px 12px rgba(0, 0, 0, 0.03),
+    0 24px 24px rgba(0, 0, 0, 0.03);
+  --shadow-overlay:
+    0 2px 4px rgba(0, 0, 0, 0.06),
+    0 12px 24px rgba(0, 0, 0, 0.10),
+    0 32px 56px rgba(0, 0, 0, 0.12);
 
   /*
    * MOTION. Strong curves, short durations. `ease-in` is never used on an
@@ -440,7 +468,7 @@ body {
   .page-title { @apply text-3xl font-semibold tracking-tight text-ink sm:text-4xl; }
   .primary-action { @apply inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-indigo px-5 text-sm font-medium text-white transition-colors hover:bg-indigo-hover; }
   /* Legacy alias for `.surface`. One recipe, so the two cannot drift. */
-  .surface-card { @apply rounded-[var(--r-lg)] border border-line bg-surface shadow-[var(--shadow-raise)]; }
+  .surface-card { @apply rounded-[var(--r-lg)] bg-surface shadow-[var(--shadow-panel)]; }
 }
 a:focus-visible, button:focus-visible, summary:focus-visible {
   outline: 2px solid var(--indigo); outline-offset: 4px;
@@ -455,11 +483,33 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   .workspace-dialog { max-height: 100dvh; }
 }
 @media screen {
-  .channel-report .report-section { border-radius: 16px; padding: 28px; }
-  .channel-report .report-section h2 { letter-spacing: -.025em; }
+  .channel-report .report-section { border-radius: var(--r-lg); padding: 24px; }
+  .channel-report .report-section h2 { letter-spacing: -.02em; }
   .channel-report .report-section dl > div { background: var(--paper); border-radius: 12px; padding: 16px; }
   .channel-report .report-section dd { font-variant-numeric: tabular-nums; font-weight: 600; }
   .channel-report .report-section > p { line-height: 1.75; }
+
+  /*
+   * THE METRIC ROW IS NOT FOUR CARDS INSIDE A CARD.
+   *
+   * The rule above tints every definition list in a report section, which
+   * turned the four headline figures into four grey boxes nested in a white
+   * one — the "card inside a card" that makes a surface read as packaging
+   * rather than as a page. Hairline dividers do the separating instead, which
+   * is what a row of figures needs.
+   */
+  .channel-report .report-metrics dl > div {
+    background: transparent;
+    border-radius: 0;
+    padding: 0 20px;
+    border-left: 1px solid var(--line);
+  }
+  .channel-report .report-metrics dl > div:first-child { border-left: 0; padding-left: 0; }
+}
+
+@media screen and (max-width: 640px) {
+  /* Two per row on a phone, so the left border only divides within a row. */
+  .channel-report .report-metrics dl > div:nth-child(odd) { border-left: 0; padding-left: 0; }
 }
 @media screen and (max-width: 640px) {
   .channel-report .report-section { padding: 20px; }
@@ -509,8 +559,17 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 
 /* The nav column. `width` transitions because the main area reflows with it;
    this is an infrequent, deliberate action, so the movement is worth showing. */
+/*
+ * The nav shares the page's ground and draws no edge.
+ *
+ * It was a white column with a border down its right side, which made it a
+ * second panel competing with the content instead of the frame around it.
+ * Transparent, borderless, and the only thing with a background is the item
+ * you are on.
+ */
 .app-nav {
   width: var(--nav-w);
+  background: transparent;
   transition: width var(--t-panel) var(--ease-out);
 }
 .app-nav[data-collapsed='true'] { width: var(--nav-w-collapsed); }
@@ -523,9 +582,35 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
  */
 .surface {
   background: var(--surface);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-panel);
+}
+
+/* Where a surface genuinely needs an edge — a quiet inset panel on the ground
+   rather than a card lifted off it. */
+.surface-flat {
+  background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
-  box-shadow: var(--shadow-raise);
+}
+
+/*
+ * The dark icon chip beside a section heading.
+ *
+ * One recognisable mark per card, so a page of white rectangles has somewhere
+ * for the eye to land. Near-black rather than the accent: the accent means
+ * "actionable", and a heading is not.
+ */
+.icon-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border-radius: 10px;
+  background: var(--ink);
+  color: var(--surface);
 }
 
 /* A row in a list of records. The hover is a surface change, not a border. */
@@ -533,10 +618,10 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   display: grid;
   align-items: center;
   gap: 12px;
-  padding: 10px 14px;
+  padding: 12px 16px;
   transition: background-color var(--t-hover) var(--ease-out);
 }
-.row:hover { background: var(--paper); }
+.row:hover { background: rgba(0, 0, 0, 0.02); }
 .row[data-selected='true'] { background: var(--indigo-wash); }
 
 /*
@@ -547,24 +632,22 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 .data-table { width: 100%; border-collapse: collapse; }
 .data-table th {
   text-align: left;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 500;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
   color: var(--ink-faint);
-  padding: 8px 12px;
+  padding: 10px 16px;
   border-bottom: 1px solid var(--line);
   white-space: nowrap;
 }
 .data-table td {
-  padding: 10px 12px;
+  padding: 12px 16px;
   font-size: 13px;
   border-bottom: 1px solid var(--line);
   vertical-align: top;
 }
 .data-table tbody tr:last-child td { border-bottom: 0; }
 .data-table tbody tr { transition: background-color var(--t-hover) var(--ease-out); }
-.data-table tbody tr:hover { background: var(--paper); }
+.data-table tbody tr:hover { background: rgba(0, 0, 0, 0.02); }
 .data-table .num { text-align: right; font-variant-numeric: tabular-nums; }
 
 /* A table too wide for the column scrolls inside its own box. The PAGE never

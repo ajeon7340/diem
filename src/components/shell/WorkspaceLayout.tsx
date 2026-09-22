@@ -83,7 +83,7 @@ export async function WorkspaceLayout({
       {bare ? (
         children
       ) : (
-      <main className="flex-1 px-4 py-5 sm:px-6 print:p-0">
+      <main className="flex-1 px-4 pb-8 pt-4 sm:px-6 print:p-0">
         <div
           className={`mx-auto w-full print:max-w-none ${
             width === 'wide' ? 'max-w-[1480px]' : 'max-w-[1200px]'
