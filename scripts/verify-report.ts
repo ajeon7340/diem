@@ -21,8 +21,10 @@ import {
   observations,
   openQuestions,
   percent,
+  channelDescription,
   representativeVideos,
   reportDepth,
+  sponsoredColumns,
   thumbnailUrl,
   videoUrl,
 } from '@/lib/channel/highlights';
@@ -845,10 +847,132 @@ check(
   limitations(report()).at(-1)?.includes('No upload was watched'),
   true,
 );
-check('and there are never more than five', limitations(report({
+check('and there are never more than six', limitations(report({
   truncated: true, unreadable: 3,
   videos: [video({ id: 'a', views: null }), video({ id: 'b', format: 'unknown', seconds: null }), video({ id: 'c', state: 'live' })],
-})).length <= 5, true);
+})).length <= 6, true);
+// The window gap moved here from the summary; it is a limit of the collection,
+// not a description of the channel.
+check(
+  'the requested-window gap is a limitation, not a headline',
+  limitations(report({
+    requestedStart: '2026-06-22T00:00:00.000Z',
+    sampledStart: '2026-07-04T00:00:00.000Z',
+    sampledEnd: '2026-09-18T00:00:00.000Z',
+  })).some((l) => l.includes('the sample starts 12 days in')),
+  true,
+);
+
+
+
+// ---------------------------------------------------------------------------
+// The sponsored split, and the description that replaced the provenance
+// ---------------------------------------------------------------------------
+
+const promoted = report({
+  videos: [
+    video({ id: 'l1', views: 90_000 }), video({ id: 'l2', views: 50_000 }),
+    video({ id: 'l3', views: 10_000 }), video({ id: 'l4', views: 5_000 }),
+    video({ id: 's1', format: 'short', seconds: 30, views: 70_000 }),
+    video({ id: 'u1', format: 'unknown', seconds: null, views: 1_000 }),
+  ],
+  promotions: [promotion({ postId: 'l1' }), promotion({ postId: 'l3' }), promotion({ postId: 's1' })],
+});
+const cols = sponsoredColumns(promoted);
+check('sponsored uploads split by deliverable', [cols.long.map((v) => v.id), cols.short.map((v) => v.id)], [['l1', 'l3'], ['s1']]);
+check('and the caller is told they are sponsored', cols.sponsored, true);
+check('ordered by views, highest first', cols.long[0].id, 'l1');
+// A duration the metadata never reported is not a Short.
+check('an unknown duration is in neither column', [...cols.long, ...cols.short].some((v) => v.id === 'u1'), false);
+
+const unsponsored = sponsoredColumns(report({
+  videos: [video({ id: 'a', views: 10 }), video({ id: 'b', views: 20 }), video({ id: 's', format: 'short', seconds: 20, views: 5 })],
+}));
+check('with nothing flagged it falls back to the sample', unsponsored.long.map((v) => v.id), ['b', 'a']);
+check('and says the columns are not sponsored', unsponsored.sponsored, false);
+check(
+  'one flagged upload "carries", it does not "carry"',
+  code('src/components/channel/ChannelReport.tsx').includes("disclosedTotal === 1 ? ' carries' : 's carry'"),
+  true,
+);
+check(
+  'the report states the fallback rather than implying a sponsorship',
+  prose('src/components/channel/ChannelReport.tsx').includes('these are the most-viewed of each length'),
+  true,
+);
+check(
+  'a hidden view count never ranks above a reported one',
+  sponsoredColumns(report({
+    videos: [video({ id: 'hidden', views: null }), video({ id: 'known', views: 1 })],
+  })).long.map((v) => v.id),
+  ['known', 'hidden'],
+);
+// Paging must not cost the export its evidence.
+const pager = read('src/components/report/PagedUploads.tsx');
+check('off-page uploads stay in the DOM for print', pager.includes("'hidden print:flex'"), true);
+check('and the pager itself does not print', pager.includes('print:hidden'), true);
+check('no pager where there is nothing to page', pager.includes('pages > 1'), true);
+/*
+ * A CLIENT COMPONENT CANNOT BE HANDED A FUNCTION.
+ *
+ * The first version passed `reasonFor` — a callback — from the server report
+ * into this client pager. It type-checked, it linted, it BUILT, and the page
+ * threw at render: "Functions cannot be passed directly to Client Components".
+ * Nothing in a static suite catches that, so the shape is pinned instead.
+ */
+check('the pager takes sentences, not a callback', pager.includes('items: { video: VideoEvidence; reason: string }[]'), true);
+check('and the report passes none', code('src/components/channel/ChannelReport.tsx').includes('reasonFor='), false);
+
+// The five lines of provenance moved; they are not gone.
+const markupNow = code('src/components/channel/ChannelReport.tsx');
+// Twice only: the empty-collection branch, where the summary IS the content
+// because there is no sample to describe, and the appendix. Never above the
+// figures, which is where it used to open.
+check('the summary renders in exactly two places', (markupNow.match(/\{summary\.map\(/g) ?? []).length, 2);
+check(
+  'the first is the empty-collection branch',
+  markupNow.indexOf("depth === 'empty'") < markupNow.indexOf('{summary.map(') &&
+    markupNow.indexOf('{summary.map(') < markupNow.indexOf('report-metrics'),
+  true,
+);
+check(
+  'and the second is the appendix',
+  markupNow.lastIndexOf('{summary.map(') > markupNow.indexOf('report-appendix'),
+  true,
+);
+check(
+  'the description takes its place above the charts',
+  markupNow.indexOf('{description.text}') < markupNow.indexOf('<CompositionBars'),
+  true,
+);
+check('but the appendix still carries every line', markupNow.includes('What this collection found'), true);
+check(
+  'a thin sample still warns where the figures are read',
+  markupNow.includes('{thin}'),
+  true,
+);
+
+const described = channelDescription(report({
+  videos: [
+    video({ id: 'a', title: 'Grinder review one' }),
+    video({ id: 'b', title: 'Grinder review two' }),
+    video({ id: 'c', title: 'Grinder comparison' }),
+  ],
+}));
+check('the description names what the channel makes', described?.source, 'metadata');
+check('and is built from the classification, not a model', described?.text.includes('Mostly review'), true);
+check('naming the recurring subject', described?.text.includes('grinder'), true);
+const modelled = channelDescription(report({
+  contentProfile: { summary: 'Home coffee equipment, mostly hands-on.', topics: [], questions: [] },
+}));
+check('a stored model summary is used when the gate allows one', modelled?.source, 'model');
+check('and is not rewritten', modelled?.text, 'Home coffee equipment, mostly hands-on.');
+check('an empty sample describes nothing', channelDescription(report({ videos: [] })), null);
+check(
+  'neither source claims anything was watched',
+  prose('src/components/channel/ChannelReport.tsx').includes('Nothing was watched'),
+  true,
+);
 
 
 console.log(`\n  ${pass} passed, ${fail} failed`);

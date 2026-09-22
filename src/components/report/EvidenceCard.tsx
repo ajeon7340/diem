@@ -27,6 +27,7 @@ export function EvidenceCard({
   label,
   disclosed = false,
   titleRepeats = false,
+  className,
   children,
 }: {
   video: VideoEvidence;
@@ -37,10 +38,12 @@ export function EvidenceCard({
   /** YouTube's paid-promotion flag, where the metadata reported one. */
   disclosed?: boolean;
   titleRepeats?: boolean;
+  /** Set by a pager to keep an off-page card in the DOM for the export. */
+  className?: string;
   children?: ReactNode;
 }) {
   return (
-    <li className="evidence-card avoid-break flex gap-3 rounded-lg border border-line bg-paper p-2.5">
+    <li className={`evidence-card avoid-break flex gap-3 rounded-[var(--r-md)] border border-line bg-paper p-2.5 ${className ?? ''}`}>
       <a
         href={videoUrl(video.id)}
         rel="noopener noreferrer"

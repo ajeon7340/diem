@@ -1,22 +1,23 @@
 import type { ReactNode } from 'react';
 import { BarChart3, FileVideo2, Layers, MessagesSquare, ShieldQuestion, Sparkles, Tags } from 'lucide-react';
 
-import type { EvidencePurpose } from '@/lib/channel/highlights';
+import type { EvidencePurpose, RepresentativeVideo } from '@/lib/channel/highlights';
 
 import { DERIVED_DISCLOSURE } from '@/lib/report/policy';
 import type { ChannelReportView } from '@/lib/channel/report';
 import { comparable, performance } from '@/lib/channel/report';
 import { composition } from '@/lib/channel/composition';
 import {
+  channelDescription,
   compact,
   disclosedCount,
-  disclosedPromotions,
   exact,
   factualSummary,
   limitations,
   observations,
   openQuestions,
   representativeVideos,
+  sponsoredColumns,
   reportDepth,
   shortDate,
   videoUrl,
@@ -24,7 +25,7 @@ import {
 import { matchedTerms } from '@/lib/discovery/candidates';
 import { CompositionBars } from '@/components/report/CompositionBars';
 import { SubjectBubbles } from '@/components/report/SubjectBubbles';
-import { EvidenceCard } from '@/components/report/EvidenceCard';
+import { PagedUploads } from '@/components/report/PagedUploads';
 import { FormatPerformance } from '@/components/report/FormatPerformance';
 import { PerformanceScatter } from '@/components/report/PerformanceScatter';
 import { safeExternalUrl } from '@/lib/format';
@@ -100,15 +101,15 @@ export function ChannelReport({
   const profile = composition(eligible);
   const overall = performance(report.videos, now);
   const summary = factualSummary(report);
+  const description = channelDescription(report);
+  // The one line of `factualSummary` with nowhere else to live: a sample too
+  // small to describe a pattern has to say so where the figures are read.
+  const thin = summary.find((line) => line.includes('too few to describe a pattern')) ?? null;
   const noticed = observations(report);
   const questions = openQuestions(report);
   const limits = limitations(report);
   const evidence = representativeVideos(report);
-  // The sponsorship list shows what the evidence cards have NOT already shown.
-  // Three cards on one page and the same three videos listed again on the next
-  // is how the reference export spent a page and a half saying one thing.
-  const shownIds = evidence.map((item) => item.video.id);
-  const disclosed = disclosedPromotions(report, 3, shownIds);
+  const columns = sponsoredColumns(report);
   const disclosedTotal = disclosedCount(report);
 
   return (
@@ -202,29 +203,41 @@ export function ChannelReport({
                   note={disclosedTotal ? 'sponsor not named by the flag' : 'none in this sample'}
                 />
               </dl>
-              {/* THE SAMPLE CONTEXT, UNDER THE FIGURES IT QUALIFIES. It used to
-                  be a section of its own called "What this collection found",
-                  four paragraphs above a table that repeated them. Here it is
-                  the small print on the numbers, which is what it is. */}
-              <div className="mt-3 border-t border-line pt-2.5">
-                {narrowed !== null ? (
-                  <p className="mb-1.5 text-[11px] font-medium leading-relaxed text-indigo">
-                    Filtered to a date range: {report.videos.length} of {narrowed} collected uploads.
-                    Every figure below is over this slice.
+              {/* WHAT THIS CHANNEL IS, where five lines of provenance used to
+                  be. Every one of those facts is on the figures above or in
+                  the limitations below; they now sit in the appendix, and the
+                  question a reader actually arrives with is answered first. */}
+              {narrowed !== null ? (
+                <p className="mt-3 border-t border-line pt-2.5 text-[11px] font-medium leading-relaxed text-indigo">
+                  Filtered to a date range: {report.videos.length} of {narrowed} collected uploads.
+                  Every figure is over this slice.
+                </p>
+              ) : null}
+              {description ? (
+                <div className={narrowed !== null ? 'mt-2' : 'mt-3 border-t border-line pt-2.5'}>
+                  <p className="text-[13px] leading-relaxed text-ink">{description.text}</p>
+                  <p className="mt-1 text-[11px] text-ink-faint">
+                    {description.source === 'model'
+                      ? 'Written by a model from the retrieved titles and descriptions. Nothing was watched.'
+                      : 'From the title classification below. Nothing was watched.'}
                   </p>
-                ) : null}
-                {summary.map((line) => (
-                  <p key={line} className="text-[11px] leading-relaxed text-ink-muted">
-                    {line}
-                  </p>
-                ))}
-              </div>
+                </div>
+              ) : null}
+              {thin ? (
+                <p className="mt-2 text-[11px] leading-relaxed text-amber">
+                  {thin}
+                </p>
+              ) : null}
             </section>
 
             {/* WHAT THEY PUBLISH, BESIDE HOW IT PERFORMED. Two questions a
                 buyer asks together, stacked one under the other so answering
                 the second meant scrolling past the first. */}
             <div className="grid items-start gap-4 xl:grid-cols-2">
+              {/* SUBJECTS SIT UNDER THE COMPOSITION THEY COME FROM. Both are
+                  readings of the same classification; splitting them across
+                  the page made them look like separate findings. */}
+              <div className="space-y-4">
               <Block
                 title="What this creator publishes"
                 icon={<Layers size={16} strokeWidth={1.75} />}
@@ -232,6 +245,15 @@ export function ChannelReport({
               >
                 <CompositionBars composition={profile} videos={eligible} sampled={report.videos.length} />
               </Block>
+
+              <Block
+                title="Recurring subjects"
+                icon={<Tags size={16} strokeWidth={1.75} />}
+                note="Words in three or more sampled titles."
+              >
+                <SubjectBubbles subjects={profile.subjects} sampled={profile.sampled} />
+              </Block>
+              </div>
 
               <Block
                 title="How this sample performed"
@@ -245,29 +267,10 @@ export function ChannelReport({
               </Block>
             </div>
 
-            {/* The two readings of the sample that are not counts of uploads. */}
+
+            {/* WHAT WE NOTICED, BESIDE HOW VIEWERS RESPONDED. Two readings of
+                the sample that are not counts of uploads. */}
             <div className="grid items-start gap-4 xl:grid-cols-2">
-              <Block
-                title="Recurring subjects"
-                icon={<Tags size={16} strokeWidth={1.75} />}
-                note="Words in three or more sampled titles."
-              >
-                <SubjectBubbles subjects={profile.subjects} sampled={profile.sampled} />
-              </Block>
-
-              <Block title="Comment response" icon={<MessagesSquare size={16} strokeWidth={1.75} />}>
-                <CommentScope report={report} />
-              </Block>
-            </div>
-          </>
-        )}
-        {report.videos.length >= 12 ? <PageFoot report={report} page={1} campaign={campaign} /> : null}
-      </div>
-
-      {/* ---------------------------------------------------------------- */}
-      {/* Page 2 — the evidence, and what it does not establish              */}
-      {/* ---------------------------------------------------------------- */}
-      <div className="report-page-2 space-y-4">
         {noticed.length ? (
           <Block title="What stood out" icon={<Sparkles size={16} strokeWidth={1.75} />}>
             <ul className="space-y-2">
@@ -299,66 +302,66 @@ export function ChannelReport({
           </Block>
         ) : null}
 
-        {evidence.length ? (
+              <Block title="Comment response" icon={<MessagesSquare size={16} strokeWidth={1.75} />}>
+                <CommentScope report={report} />
+              </Block>
+            </div>
+          </>
+        )}
+        {report.videos.length >= 12 ? <PageFoot report={report} page={1} campaign={campaign} /> : null}
+      </div>
+
+      {/* ---------------------------------------------------------------- */}
+      {/* Page 2 — the evidence, and what it does not establish              */}
+      {/* ---------------------------------------------------------------- */}
+      <div className="report-page-2 space-y-4">
+        {/* THE SPONSORED WORK, SPLIT BY DELIVERABLE. Long-form and short are
+            priced and negotiated differently, so they are two columns rather
+            than one ranked list, and each pages rather than printing twelve
+            cards down a page nobody scrolls. */}
+        {columns.long.length || columns.short.length ? (
           <Block
             title="Representative uploads"
-              icon={<FileVideo2 size={16} strokeWidth={1.75} />}
-            note="One upload per reason. Each card states the rule that chose it."
+            icon={<FileVideo2 size={16} strokeWidth={1.75} />}
+            note={
+              columns.sponsored
+                ? `${disclosedTotal} of ${report.videos.length} sampled upload${disclosedTotal === 1 ? ' carries' : 's carry'} YouTube’s paid-promotion flag. The flag does not name the advertiser.`
+                : 'No sampled upload carries the paid-promotion flag, so these are the most-viewed of each length — not a record of the channel never having run one.'
+            }
           >
-            <ul className="space-y-2">
-              {evidence.map(({ video, reason, purpose, titleRepeats, disclosed: flagged }) => (
-                <EvidenceCard
-                  key={video.id}
-                  video={video}
-                  reason={reason}
-                  label={PURPOSE_LABEL[purpose]}
-                  disclosed={flagged && purpose !== 'sponsored'}
-                  titleRepeats={titleRepeats}
-                />
+            <div className="grid items-start gap-5 sm:grid-cols-2">
+              {([
+                ['long', columns.sponsored ? 'Sponsored, long-form' : 'Long-form', columns.long, 'long-form'],
+                ['short', columns.sponsored ? 'Sponsored, ≤3 min' : 'Short, ≤3 min', columns.short, 'short'],
+              ] as const).map(([key, heading, group, noun]) => (
+                <div key={key}>
+                  <h3 className="mb-2 text-[12px] font-semibold text-ink">
+                    {heading}
+                    <span className="tnum ml-1.5 font-normal text-ink-faint">{group.length}</span>
+                  </h3>
+                  <PagedUploads
+                    items={group.map((video, index) => ({
+                      video,
+                      reason:
+                        index === 0
+                          ? `Most viewed of ${group.length} ${columns.sponsored ? 'flagged ' : ''}${noun} upload${group.length === 1 ? '' : 's'} in this sample`
+                          : `#${index + 1} by views of ${group.length} ${columns.sponsored ? 'flagged ' : ''}${noun} uploads`,
+                    }))}
+                    disclosed={columns.sponsored}
+                    emptyNote={
+                      columns.sponsored
+                        ? `No ${noun} upload in this sample carries the flag.`
+                        : `No ${noun} upload in this sample.`
+                    }
+                  />
+                </div>
               ))}
-            </ul>
-            {/* The sponsorship evidence lives HERE, on the cards, and the list
-                below carries only what is not already above it. */}
-            {disclosedTotal > 0 && disclosed.length > 0 ? (
-              <div className="mt-3 border-t border-line pt-2.5">
-                <h3 className="text-[12px] font-semibold text-ink">
-                  Other disclosed promotions
-                  <span className="ml-1.5 font-normal text-ink-faint">
-                    {disclosedTotal} flagged · the flag does not name the advertiser
-                  </span>
-                </h3>
-                {(
-                  <>
-                    <ul className="mt-1.5 space-y-1">
-                      {disclosed.map((promotion) => (
-                        <li key={promotion.postId} className="avoid-break text-[12px] leading-relaxed">
-                          <a
-                            href={videoUrl(promotion.postId)}
-                            rel="noopener noreferrer"
-                            target="_blank"
-                            className="source-link text-indigo underline-offset-4 hover:underline"
-                          >
-                            {promotion.title}
-                          </a>
-                          <span className="tnum ml-1.5 text-ink-muted">
-                            {shortDate(promotion.publishedAt)} · sponsor not identified by the flag
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                    {disclosedTotal > disclosed.length + shownIds.filter((id) => report.promotions.some((p) => p.postId === id && p.disclosure === 'explicit')).length ? (
-                      <p className="mt-1 text-[11px] text-ink-faint">
-                        The rest are listed in the appendix.
-                      </p>
-                    ) : null}
-                  </>
-                )}
-              </div>
-            ) : disclosedTotal === 0 ? (
-              <p className="mt-3 border-t border-line pt-2.5 text-[12px] text-ink-muted">
-                None flagged here — not a record of the channel never having run one.
-              </p>
-            ) : null}
+            </div>
+            <p className="mt-3 border-t border-line pt-2.5 text-[11px] leading-relaxed text-ink-faint">
+              Three minutes or less is a duration <strong className="font-medium">proxy</strong>;
+              uploads reporting no duration are in neither column. A title is not evidence a product
+              was used or endorsed.
+            </p>
           </Block>
         ) : null}
 
@@ -393,7 +396,9 @@ export function ChannelReport({
         <PageFoot report={report} page={report.videos.length >= 12 ? 2 : 1} campaign={campaign} />
       </div>
 
-      {appendix ? <Appendix report={report} selected={selected} now={now} /> : null}
+      {appendix ? (
+        <Appendix report={report} selected={selected} now={now} summary={summary} evidence={evidence} />
+      ) : null}
 
       {report.derivedAllowed ? (
         <p className="text-[11px] leading-relaxed text-ink-faint">{DERIVED_DISCLOSURE}</p>
@@ -684,10 +689,16 @@ function Appendix({
   report,
   selected,
   now,
+  summary,
+  evidence,
 }: {
   report: ChannelReportView;
   selected: ChannelReportView['videos'];
   now: number;
+  /** The provenance lines the top of the report used to open with. */
+  summary: string[];
+  /** One upload per selection rule, kept where somebody checking the work looks. */
+  evidence: RepresentativeVideo[];
 }) {
   const p = performance(report.videos, now);
   const overall = p;
@@ -771,6 +782,46 @@ function Appendix({
             </ul>
           </div>
         ) : null}
+
+        {/* THE COMPLEMENTARY PICKS. The page above shows the sponsored work,
+            which is what an advertiser came for; these are one upload per
+            selection rule — the commonest subject, the commonest shape, the
+            middle of the distribution, a genuine outlier — kept where somebody
+            checking how the report was built will look for them. */}
+        {evidence.length ? (
+          <div>
+            <h3 className="text-[12px] font-semibold text-ink">
+              One upload per selection rule ({evidence.length})
+            </h3>
+            <ul className="mt-1.5 space-y-1.5">
+              {evidence.map(({ video, purpose, reason }) => (
+                <li key={video.id} className="avoid-break text-[12px] leading-relaxed">
+                  <span className="rail mr-1.5">{PURPOSE_LABEL[purpose]}</span>
+                  <a
+                    href={videoUrl(video.id)}
+                    rel="noopener noreferrer"
+                    target="_blank"
+                    className="source-link text-indigo underline-offset-4 hover:underline"
+                  >
+                    {video.title}
+                  </a>
+                  <span className="ml-1.5 text-ink-muted">{reason}.</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
+        <div>
+          <h3 className="text-[12px] font-semibold text-ink">What this collection found</h3>
+          <div className="mt-1.5 space-y-1">
+            {summary.map((line) => (
+              <p key={line} className="text-[11px] leading-relaxed text-ink-muted">
+                {line}
+              </p>
+            ))}
+          </div>
+        </div>
 
         <div>
           <h3 className="text-[12px] font-semibold text-ink">Method and sources</h3>

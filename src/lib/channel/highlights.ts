@@ -230,6 +230,74 @@ export function factualSummary(report: ChannelReportView, now = Date.now()): str
 }
 
 /**
+ * What this channel is, in a sentence or two.
+ *
+ * WHAT THIS REPLACED. The report opened with five lines of provenance — how
+ * many uploads, which window was asked for, how the formats split, how many
+ * reported no duration, how many carried the flag. Every one of those facts is
+ * already on the figures above it or in the limitations below it, so the first
+ * thing a reader met was the small print restated, and the question they
+ * actually arrived with — what does this person make — was answered four
+ * sections later. Those lines are not deleted; they moved to the appendix,
+ * which is where provenance belongs.
+ *
+ * TWO SOURCES, AND THE CALLER IS TOLD WHICH.
+ *
+ *   model      `contentProfile.summary`, written by the gated pass over the
+ *              collected metadata with its citations checked against the
+ *              sample. It exists only where the derived-analysis approval is
+ *              configured AND the pass has run. No new dependency and no new
+ *              cost: this is the profile the collection already stores.
+ *   metadata   A deterministic sentence built from the same classification the
+ *              composition chart draws. Always available, never labelled as a
+ *              model reading, and it says nothing the chart does not.
+ *
+ * NEITHER MAY DESCRIBE WHAT HAPPENS INSIDE A VIDEO, because neither has
+ * watched one. Both describe how the creator titles and describes their work.
+ */
+export interface ChannelDescription {
+  text: string;
+  source: 'model' | 'metadata';
+}
+
+export function channelDescription(report: ChannelReportView): ChannelDescription | null {
+  const model = report.contentProfile?.summary?.trim();
+  if (model) return { text: model, source: 'model' };
+
+  const eligible = comparable(report.videos);
+  if (eligible.length === 0) return null;
+  const profile = composition(eligible);
+  const dominant = dominantFormat(profile);
+  const subjects = profile.subjects.slice(0, 3).map((s) => s.term);
+  const long = eligible.filter((v) => v.format === 'long').length;
+  const short = eligible.filter((v) => v.format === 'short').length;
+
+  const parts: string[] = [];
+  if (dominant) {
+    parts.push(
+      `Mostly ${FORMAT_LABEL[dominant.format].toLowerCase()} — ${dominant.videoIds.length} of ${profile.sampled} classified uploads`,
+    );
+  } else {
+    parts.push(`No title pattern recurs across the ${profile.sampled} classified uploads`);
+  }
+  if (subjects.length) {
+    parts.push(
+      `returning to ${subjects.length === 1 ? subjects[0] : `${subjects.slice(0, -1).join(', ')} and ${subjects.at(-1)}`}`,
+    );
+  }
+  const shape =
+    long && short
+      ? `${long} long-form and ${short} short`
+      : long
+        ? 'entirely long-form'
+        : short
+          ? 'entirely short'
+          : null;
+  const tail = shape ? `Published ${shape} in this sample.` : '';
+  return { text: `${parts.join(', ')}. ${tail}`.trim(), source: 'metadata' };
+}
+
+/**
  * Up to four observations, each pointing at the videos behind it.
  *
  * Ordered by how much a buyer can act on them. Every one is a statement about
@@ -347,6 +415,14 @@ export function limitations(report: ChannelReportView): string[] {
   const aside = setAside(report.videos);
   const unknown = comparable(report.videos).filter((v) => v.format === 'unknown').length;
 
+  if (report.sampledStart && report.requestedStart) {
+    const missed = Math.round((Date.parse(report.sampledStart) - Date.parse(report.requestedStart)) / DAY);
+    if (missed >= 7) {
+      out.push(
+        `${report.windowDays} days were requested; the sample starts ${missed} days in, so the earliest part of the window is not described here.`,
+      );
+    }
+  }
   if (report.truncated) {
     out.push(
       `Capped at ${report.videos.length} uploads, so this is the most recent slice of the ${report.windowDays}-day window, not all of it. Re-collect with a larger bound to widen it.`,
@@ -378,7 +454,7 @@ export function limitations(report: ChannelReportView): string[] {
   out.push(
     'All of it is public metadata. No upload was watched, no transcript read, and nothing here shows who the audience is.',
   );
-  return out.slice(0, 5);
+  return out.slice(0, 6);
 }
 
 /**
@@ -596,4 +672,45 @@ export function shortDate(value: string | null): string {
     year: 'numeric',
     timeZone: 'UTC',
   });
+}
+
+/**
+ * The sponsored uploads, split by length and ordered by views.
+ *
+ * WHAT AN ADVERTISER OPENS THIS REPORT TO SEE. A creator's paid work is the
+ * closest public evidence of what a collaboration with them looks like, and
+ * the report was showing at most one of them among five cards chosen for five
+ * different reasons. Long-form and short are separated because they are
+ * different deliverables, priced and negotiated differently.
+ *
+ * FALLS BACK, AND SAYS SO. A channel with nothing flagged still has long-form
+ * and short uploads worth seeing; the caller is told which pool it got so the
+ * column heading can be honest rather than implying a sponsorship that is not
+ * in the evidence.
+ *
+ * ORDERED BY VIEWS, and an upload that reported none is never ranked above one
+ * that did — a hidden count is not a high one.
+ */
+export interface UploadColumns {
+  long: VideoEvidence[];
+  short: VideoEvidence[];
+  /** True when these carry YouTube's paid-promotion flag. */
+  sponsored: boolean;
+}
+
+export function sponsoredColumns(report: ChannelReportView): UploadColumns {
+  const flagged = new Set(
+    report.promotions.filter((p) => p.disclosure === 'explicit').map((p) => p.postId),
+  );
+  const eligible = comparable(report.videos);
+  const pool = flagged.size > 0 ? eligible.filter((v) => flagged.has(v.id)) : eligible;
+  const byViews = (group: VideoEvidence[]) =>
+    [...group].sort((a, b) => (b.views ?? -1) - (a.views ?? -1));
+  return {
+    long: byViews(pool.filter((v) => v.format === 'long')),
+    // A duration the metadata did not report is not a Short, so it sits with
+    // neither column rather than being guessed into one.
+    short: byViews(pool.filter((v) => v.format === 'short')),
+    sponsored: flagged.size > 0,
+  };
 }
