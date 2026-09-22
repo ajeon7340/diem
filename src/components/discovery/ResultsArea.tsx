@@ -65,8 +65,11 @@ export function ResultsArea({
   return (
     <div className="flex h-full min-w-0 flex-col">
       {/* Sticky, so what is applied travels with the list. */}
-      <div className="sticky top-0 z-10 border-b border-line bg-paper/95 px-4 py-2.5 backdrop-blur sm:px-5">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+      {/* Same `--header-h` band as the rail's logo row and the filter tabs, so
+          the three columns share one horizontal line. It grows only when the
+          chips wrap, which is content, not chrome. */}
+      <div className="sticky top-0 z-10 min-h-[var(--header-h)] border-b border-line bg-paper/95 px-4 py-2 backdrop-blur sm:px-5">
+        <div className="flex min-h-[calc(var(--header-h)-1rem)] flex-wrap items-center gap-x-3 gap-y-2">
           <p className="tnum text-[12px] text-ink-muted">
             {rows.length} {rows.length === 1 ? 'search' : 'searches'}
           </p>

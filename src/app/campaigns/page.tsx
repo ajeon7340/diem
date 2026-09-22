@@ -79,6 +79,7 @@ export default async function CampaignsPage({
   return (
     <WorkspaceLayout
       width="wide"
+      panelLabel="Filters"
       header={{
         // The page is named ONCE. It used to be named three times: a rail card
         // headed "Campaigns", a sentence under it, and an "All campaigns"
@@ -107,7 +108,7 @@ export default async function CampaignsPage({
         ),
       }}
       panel={
-        <div className="surface space-y-4 p-4">
+        <div className="space-y-4">
           {brands.length > 0 ? (
             <PanelSection title={agency ? 'Client brand' : 'Brand'}>
               <ul className="space-y-0.5">

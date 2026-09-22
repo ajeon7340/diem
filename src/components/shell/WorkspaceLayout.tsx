@@ -52,6 +52,7 @@ export async function WorkspaceLayout({
   sticky = false,
   width = 'default',
   bare = false,
+  panelLabel = 'Page controls',
 }: {
   /** The compact page header. Omitted only where the page draws its own. */
   header?: PageHeaderProps;
@@ -68,6 +69,8 @@ export async function WorkspaceLayout({
    * that client component rather than being composed around it.
    */
   bare?: boolean;
+  /** What the controls column is, named for the reader and the toggle. */
+  panelLabel?: string;
 }) {
   const viewer = await getViewer();
   const demo = !isSupabaseConfigured();
@@ -82,22 +85,27 @@ export async function WorkspaceLayout({
       {header ? <PageHeader {...header} /> : null}
       {bare ? (
         children
-      ) : (
-      <main className="flex-1 px-4 pb-8 pt-4 sm:px-6 print:p-0">
-        <div
-          className={`mx-auto w-full print:max-w-none ${
-            width === 'wide' ? 'max-w-[1480px]' : 'max-w-[1200px]'
-          }`}
-        >
-          {panel ? (
-            <ContextWorkspace sidebar={panel} sticky={sticky}>
+      ) : panel ? (
+        // A page WITH controls is two columns, the same two Discovery uses:
+        // the controls on their own surface, the work beside them, nothing
+        // floating in the middle of the page.
+        <main className="flex min-h-0 flex-1 flex-col print:block">
+          <ContextWorkspace sidebar={panel} sticky={sticky} label={panelLabel}>
+            <div className={`mx-auto w-full print:max-w-none ${width === 'wide' ? 'max-w-[1480px]' : 'max-w-[1100px]'}`}>
               {children}
-            </ContextWorkspace>
-          ) : (
-            children
-          )}
-        </div>
-      </main>
+            </div>
+          </ContextWorkspace>
+        </main>
+      ) : (
+        <main className="flex-1 px-4 pb-8 pt-4 sm:px-6 print:p-0">
+          <div
+            className={`mx-auto w-full print:max-w-none ${
+              width === 'wide' ? 'max-w-[1480px]' : 'max-w-[1200px]'
+            }`}
+          >
+            {children}
+          </div>
+        </main>
       )}
     </AppShell>
   );

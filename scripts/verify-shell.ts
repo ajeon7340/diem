@@ -56,11 +56,13 @@ for (const [name, path] of [
 }
 
 const shell = code(SHELL) + code('src/components/shell/ContextWorkspace.tsx');
-check('the rail is inside the 320–360px band', shell.includes('lg:w-[340px]'), true);
-check('and does not shrink when the work area grows', shell.includes('lg:shrink-0'), true);
-check('the work area cannot be pushed sideways by long content', shell.includes('min-w-0 flex-1'), true);
-check('below lg the rail stacks above the work rather than squeezing beside it',
-  shell.includes('flex flex-col gap-4 lg:flex-row'), true);
+// THE CONTEXT COLUMN IS A GRID TRACK NOW, the same shape Discovery uses, so
+// moving between pages does not mean re-learning where the controls are.
+check('the context column is 320px', shell.includes('lg:w-[320px]'), true);
+check('and the track is auto, so minimising returns the width', shell.includes('lg:grid-cols-[auto_minmax(0,1fr)]'), true);
+check('the work area cannot be pushed sideways by long content', shell.includes('min-w-0'), true);
+check('below lg it stacks above the work rather than squeezing beside it', shell.includes('grid-cols-1 lg:grid-cols'), true);
+check('and it can be minimised per page', shell.includes('aria-label={`Minimise ${label.toLowerCase()}`}'), true);
 // THE NAVIGATION MOVED OUT OF THE TOP BAR. It is a persistent left column now,
 // and the page's own rail is not allowed to duplicate it: two answers to "where
 // am I" on one screen is what this shell exists to stop.
@@ -80,8 +82,8 @@ check('and focus returns to the button that opened it',
 check('the workspace is named once, in the nav', nav.includes('title={workspace}'), true);
 check('and no page rail repeats the global links',
   [CHANNELS, CAMPAIGNS, CAMPAIGN, SETTINGS].every((path) => !code(path).includes('<WorkspaceNav')), true);
-check('and is labelled as page controls, not a second navigation',
-  shell.includes('aria-label="Page controls"'), true);
+check('and it is named for what it holds, not as a navigation',
+  shell.includes("label = 'Page controls'") && shell.includes('aria-label={label}'), true);
 check('sticky is opt-in rather than the default', shell.includes('sticky = false'), true);
 
 // The campaign page no longer HAS a rail: a comparison table needs the width,
@@ -302,9 +304,24 @@ check('its middle region scrolls, not the column', rail.includes('min-h-0 flex-1
 check('so the footer cannot be pushed off the screen', rail.includes('shrink-0 space-y-2 border-t border-line'), true);
 check('every icon-only control is labelled', (rail.match(/aria-label=/g) ?? []).length >= 5, true);
 check('and collapsed items keep a tooltip', rail.includes('title={collapsed ? label : undefined}'), true);
+/*
+ * THE NAV WIDTH IS DECIDED BEFORE PAINT.
+ *
+ * It was React state read from localStorage in an effect, so every load
+ * rendered expanded and snapped to collapsed a frame later — which on the page
+ * whose default IS collapsed made every navigation look like the menu opening
+ * and closing itself.
+ */
 check(
   'collapse persists, and defaults collapsed on discovery',
-  code('src/components/shell/AppShell.tsx').includes("pathname.startsWith('/discover')"),
+  read('src/app/layout.tsx').includes("location.pathname.indexOf('/discover')===0"),
+  true,
+);
+check('decided before the first paint, not in an effect', read('src/app/layout.tsx').includes('NAV_WIDTH_SCRIPT'), true);
+check('and the grid reads it from the document', css.includes("html[data-nav-collapsed='true'] .app-shell"), true);
+check(
+  'a mode tab is a client navigation, so the shell does not remount',
+  read('src/components/discovery/FilterPanel.tsx').includes('<Link\n              key={id}'),
   true,
 );
 // z-index only where something genuinely floats.

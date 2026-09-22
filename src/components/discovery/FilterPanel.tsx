@@ -1,9 +1,10 @@
 'use client';
 
+import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useFormState, useFormStatus } from 'react-dom';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { ChevronDown, Search, SlidersHorizontal, X } from 'lucide-react';
+import { ChevronDown, PanelLeftClose, PanelLeftOpen, Search, SlidersHorizontal, X } from 'lucide-react';
 
 import { startDiscovery } from '@/app/actions/discovery';
 import { INITIAL_DISCOVERY } from '@/app/actions/state';
@@ -64,6 +65,7 @@ export function FilterPanel({
   const applied = appliedCount(filters);
   const [state, action] = useFormState(startDiscovery, INITIAL_DISCOVERY);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [minimised, setMinimised] = useState(false);
   const opener = useRef<HTMLButtonElement>(null);
 
   function apply(next: Partial<Filters>) {
@@ -85,26 +87,50 @@ export function FilterPanel({
 
   const body = (
     <>
-      {/* Mode: a search mode, not a tab. Each one swaps everything below it. */}
-      <div className="shrink-0 border-b border-line px-3 py-3">
-        <div role="tablist" aria-label="Search mode" className="flex gap-1">
+      {/*
+        * ONE HEADER BAND. The tabs sat in a padded block whose height was
+        * whatever its content came to, so the panel's first row started a few
+        * pixels off the rail's logo row and the results bar started off both.
+        * All three are `--header-h` now and the eye reads one line across.
+        */}
+      <div className="flex h-[var(--header-h)] shrink-0 items-center gap-2 border-b border-line px-3">
+        <div role="tablist" aria-label="Search mode" className="flex min-w-0 flex-1 gap-1">
           {(Object.keys(DISCOVERY_MODES) as DiscoveryMode[]).map((id) => (
-            <a
+            <Link
               key={id}
               role="tab"
               aria-selected={mode === id}
               href={`/discover?mode=${id}${campaignId ? `&campaign=${campaignId}` : ''}`}
+              // Equal thirds with the same box on every tab, active or not:
+              // when only the selected one had a background, the three sat at
+              // three different apparent widths and the row read as ragged.
               className={cn(
-                'press min-h-8 flex-1 rounded-[var(--r-md)] px-2 text-center text-[12px] font-medium transition-colors duration-150',
-                mode === id ? 'bg-indigo text-white' : 'text-ink-muted hover:bg-black/[0.04] hover:text-ink',
+                'press flex h-8 flex-1 items-center justify-center rounded-[var(--r-md)] px-1 text-center text-[12px] font-medium',
+                'truncate transition-colors duration-150',
+                mode === id
+                  ? 'bg-indigo text-white'
+                  : 'bg-black/[0.03] text-ink-muted hover:bg-black/[0.06] hover:text-ink',
               )}
             >
               {{ criteria: 'By criteria', similar: 'Similar to', competitor: 'Competitors' }[id]}
-            </a>
+            </Link>
           ))}
         </div>
-        <p className="mt-2 text-[11px] leading-relaxed text-ink-muted">{DISCOVERY_MODES[mode].blurb}</p>
+        {/* Minimise the filter column, so a comparison table can have the
+            width back without losing the filters that produced it. */}
+        <button
+          type="button"
+          onClick={() => setMinimised(true)}
+          aria-label="Minimise filters"
+          title="Minimise filters"
+          className="press hidden h-8 w-8 shrink-0 items-center justify-center rounded-[var(--r-md)] text-ink-faint hover:bg-black/[0.04] hover:text-ink lg:flex"
+        >
+          <PanelLeftClose size={16} aria-hidden />
+        </button>
       </div>
+      <p className="shrink-0 border-b border-line px-3 py-2 text-[11px] leading-relaxed text-ink-muted">
+        {DISCOVERY_MODES[mode].blurb}
+      </p>
 
       <form
         id="discovery-search"
@@ -296,14 +322,51 @@ export function FilterPanel({
         />
       ) : null}
 
+      {minimised ? (
+        <aside
+          aria-label="Search filters, minimised"
+          className="hidden shrink-0 flex-col items-center gap-2 border-r border-line bg-black/[0.02] py-3 lg:flex"
+        >
+          <button
+            type="button"
+            onClick={() => setMinimised(false)}
+            aria-label="Expand filters"
+            title="Expand filters"
+            className="press flex h-8 w-8 items-center justify-center rounded-[var(--r-md)] text-ink-faint hover:bg-black/[0.04] hover:text-ink"
+          >
+            <PanelLeftOpen size={16} aria-hidden />
+          </button>
+          {applied ? (
+            <span
+              className="tnum rounded-full bg-indigo px-1.5 py-0.5 text-[11px] text-white"
+              title={`${applied} filter${applied === 1 ? '' : 's'} applied`}
+            >
+              {applied}
+            </span>
+          ) : null}
+          {/* Search stays reachable while minimised: the form is still in the
+              DOM, so the filters it posts are the ones that were set. */}
+          <button
+            type="submit"
+            form="discovery-search"
+            aria-label="Search"
+            title="Search"
+            className="press flex h-8 w-8 items-center justify-center rounded-[var(--r-md)] bg-indigo text-white hover:bg-indigo-hover"
+          >
+            <Search size={15} strokeWidth={2} aria-hidden />
+          </button>
+        </aside>
+      ) : null}
+
       <aside
         aria-label="Search filters"
         className={cn(
           'flex flex-col border-r border-line bg-black/[0.02]',
+          minimised && 'lg:hidden',
           sheetOpen
             ? 'fixed inset-x-0 bottom-0 z-40 max-h-[85dvh] rounded-t-[var(--r-xl)] border-r-0 bg-paper shadow-[var(--shadow-overlay)]'
             : 'hidden',
-          'lg:static lg:z-auto lg:flex lg:h-full lg:max-h-none lg:rounded-none lg:bg-black/[0.02] lg:shadow-none',
+          'lg:static lg:z-auto lg:flex lg:h-full lg:w-[320px] lg:max-h-none lg:rounded-none lg:bg-black/[0.02] lg:shadow-none',
         )}
       >
         <button

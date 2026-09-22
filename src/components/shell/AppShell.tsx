@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
 import { Menu } from 'lucide-react';
 
-import { AppNav, NAV_COLLAPSED_KEY } from './AppNav';
+import { AppNav } from './AppNav';
 
 /**
  * The frame every authenticated page renders inside.
@@ -45,14 +45,15 @@ export function AppShell({
    */
   const [collapsed, setCollapsed] = useState(false);
   useEffect(() => {
-    let stored: string | null = null;
-    try {
-      stored = window.localStorage.getItem(NAV_COLLAPSED_KEY);
-    } catch {
-      /* blocked storage is not a reason to fail to render */
-    }
-    setCollapsed(stored === null ? pathname.startsWith('/discover') : stored === '1');
+    // The inline script in the layout already decided this before paint; read
+    // it back so the icon and the labels agree with the column.
+    setCollapsed(document.documentElement.dataset.navCollapsed === 'true');
   }, [pathname]);
+
+  function changeCollapsed(next: boolean) {
+    setCollapsed(next);
+    document.documentElement.dataset.navCollapsed = next ? 'true' : 'false';
+  }
   const opener = useRef<HTMLButtonElement>(null);
 
   function close() {
@@ -72,7 +73,7 @@ export function AppShell({
         open={navOpen}
         onClose={close}
         collapsed={collapsed}
-        onCollapsedChange={setCollapsed}
+        onCollapsedChange={changeCollapsed}
       />
       <div className="app-main">
         {/* The mobile strip. On desktop the nav column carries the brand and

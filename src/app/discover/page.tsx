@@ -91,10 +91,16 @@ export default async function DiscoverPage({
           </p>
         ) : null}
 
-        {/* Rows are named at mobile too: with the panel collapsed to a button,
+        {/* THE FILTER TRACK IS `auto`, NOT A FIXED 320px, so minimising the
+            panel actually returns the width to the results: a fixed track goes
+            on reserving its space whatever the column inside it does. The
+            content track stays `minmax(0, 1fr)` so a wide row can never push
+            the page sideways.
+
+            Rows are named at mobile too: with the panel collapsed to a button,
             an auto row would otherwise share the height with the results and
             leave a gap between the two. */}
-        <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[auto_minmax(0,1fr)] lg:grid-cols-[320px_minmax(0,1fr)] lg:grid-rows-1">
+        <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[auto_minmax(0,1fr)] lg:grid-cols-[auto_minmax(0,1fr)] lg:grid-rows-1">
           <FilterPanel
             mode={mode}
             campaignId={campaign?.id ?? null}

@@ -121,7 +121,19 @@ export function AppNav({
           'md:static md:z-auto md:flex md:w-auto md:shadow-none',
         )}
       >
-        <div className="flex h-[var(--header-h)] shrink-0 items-center gap-2 px-4">
+        {/*
+          * ONE HEADER BAND ACROSS ALL THREE COLUMNS.
+          *
+          * The rail's logo, a page's filter tabs and the results bar all sit on
+          * `--header-h`, so the eye reads one horizontal line across the app
+          * instead of three rows starting at three different heights.
+          */}
+        <div
+          className={cn(
+            'flex h-[var(--header-h)] shrink-0 items-center gap-2 px-3',
+            collapsed && 'justify-center px-0',
+          )}
+        >
           <Link
             href="/"
             aria-label="adfit home"
@@ -136,6 +148,20 @@ export function AppNav({
               </span>
             )}
           </Link>
+          {/* Minimise/maximise, at the top where it is looked for. It was in
+              the footer, three regions away from the thing it resizes. */}
+          {collapsed ? null : (
+            <button
+              type="button"
+              onClick={toggle}
+              aria-pressed={collapsed}
+              aria-label="Collapse navigation"
+              title="Collapse navigation"
+              className="press ml-auto hidden h-8 w-8 items-center justify-center rounded-[var(--r-md)] text-ink-faint hover:bg-black/[0.04] hover:text-ink md:flex"
+            >
+              <PanelLeftClose size={16} aria-hidden />
+            </button>
+          )}
           <button
             type="button"
             onClick={onClose}
@@ -145,6 +171,21 @@ export function AppNav({
             <X size={16} aria-hidden />
           </button>
         </div>
+
+        {/* Collapsed, the expand control gets its own row so it is never the
+            thing that has to share 64px with a wordmark. */}
+        {collapsed ? (
+          <button
+            type="button"
+            onClick={toggle}
+            aria-pressed={collapsed}
+            aria-label="Expand navigation"
+            title="Expand navigation"
+            className="press mx-auto mb-1 hidden h-8 w-8 items-center justify-center rounded-[var(--r-md)] text-ink-faint hover:bg-black/[0.04] hover:text-ink md:flex"
+          >
+            <PanelLeftOpen size={16} aria-hidden />
+          </button>
+        ) : null}
 
         <div className="min-h-0 flex-1 overflow-y-auto px-2.5 pb-2">
           {GROUPS.map((group) => (
@@ -211,23 +252,13 @@ export function AppNav({
           {collapsed ? null : extra}
 
           <div className={cn('flex items-center gap-1', collapsed && 'flex-col')}>
-            <button
-              type="button"
-              onClick={toggle}
-              aria-pressed={collapsed}
-              aria-label={collapsed ? 'Expand navigation' : 'Collapse navigation'}
-              title={collapsed ? 'Expand navigation' : 'Collapse navigation'}
-              className="press hidden h-8 w-8 items-center justify-center rounded-[var(--r-md)] text-ink-faint hover:bg-black/[0.04] hover:text-ink md:flex"
-            >
-              {collapsed ? <PanelLeftOpen size={16} aria-hidden /> : <PanelLeftClose size={16} aria-hidden />}
-            </button>
             {signedIn ? (
-              <form action="/auth/signout" method="post" className={collapsed ? '' : 'ml-auto'}>
+              <form action="/auth/signout" method="post" className={collapsed ? 'mx-auto' : 'w-full'}>
                 <button
                   type="submit"
                   aria-label="Sign out"
                   title="Sign out"
-                  className="press flex min-h-8 items-center gap-1.5 rounded-[var(--r-md)] px-2 text-[12px] text-ink-faint hover:bg-black/[0.04] hover:text-ink"
+                  className="press flex min-h-8 w-full items-center gap-1.5 rounded-[var(--r-md)] px-2 text-[12px] text-ink-faint hover:bg-black/[0.04] hover:text-ink"
                 >
                   {collapsed ? <LogOut size={15} aria-hidden /> : 'Sign out'}
                 </button>
@@ -239,7 +270,7 @@ export function AppNav({
                 title="Sign in"
                 className={cn(
                   'press flex min-h-8 items-center gap-1.5 rounded-[var(--r-md)] px-2 text-[12px] text-ink-faint hover:bg-black/[0.04] hover:text-ink',
-                  collapsed ? '' : 'ml-auto',
+                  collapsed ? 'mx-auto' : 'w-full',
                 )}
               >
                 {collapsed ? <LogOut size={15} aria-hidden className="rotate-180" /> : 'Sign in'}

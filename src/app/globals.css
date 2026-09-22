@@ -555,8 +555,15 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   .app-shell {
     grid-template-columns: var(--rail) minmax(0, 1fr);
   }
+  /* Driven by <html>, which an inline script sets before the first paint, so
+     the column is never the wrong width for a frame. The shell's own attribute
+     follows React state and keeps the two in step after hydration. */
+  html[data-nav-collapsed='true'] .app-shell,
   .app-shell[data-collapsed='true'] {
     grid-template-columns: var(--rail-collapsed) minmax(0, 1fr);
+  }
+  html[data-nav-collapsed='false'] .app-shell[data-collapsed='false'] {
+    grid-template-columns: var(--rail) minmax(0, 1fr);
   }
 }
 

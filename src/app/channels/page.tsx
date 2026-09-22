@@ -66,6 +66,7 @@ export default async function Channels({
   return (
     <WorkspaceLayout
       width="wide"
+      panelLabel="Analyse a channel"
       header={{
         title: 'Channel analysis',
         meta: (
@@ -80,7 +81,7 @@ export default async function Channels({
         summary: 'Reports are reused when you add a channel to a campaign — nothing is collected twice.',
       }}
       panel={
-        <div className="surface space-y-4 p-4">
+        <div className="space-y-4">
           {/* THE LOOKUP IS THE PAGE'S ONE CONTROL, so it leads the rail. The
               heading it used to sit under said "New channel analysis" beside a
               page header that said "Channel analysis". */}

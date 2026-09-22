@@ -66,6 +66,7 @@ export default async function Settings({ searchParams }: { searchParams: { secti
 
   return (
     <WorkspaceLayout
+      panelLabel="Sections"
       header={{
         eyebrow: 'Settings',
         title: viewer.organization.name,
@@ -83,7 +84,7 @@ export default async function Settings({ searchParams }: { searchParams: { secti
         ),
       }}
       panel={
-        <div className="surface space-y-4 p-4">
+        <div className="space-y-4">
           <PanelSection title="Sections">
             <nav aria-label="Settings sections">
               <ul className="space-y-0.5">

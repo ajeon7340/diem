@@ -954,7 +954,11 @@ void (async () => {
    */
   const page = readFileSync('src/app/discover/page.tsx', 'utf8');
   check('navigation and filters do not share a column', panel.includes('RAIL_WIDTH'), false);
-  check('the page declares the filter column as a track', page.includes('lg:grid-cols-[320px_minmax(0,1fr)]'), true);
+  // `auto`, not a fixed 320px: a fixed track goes on reserving its space when
+  // the panel inside it minimises, so the width never returns to the results.
+  check('the page declares the filter column as a track', page.includes('lg:grid-cols-[auto_minmax(0,1fr)]'), true);
+  check('and the column owns its own width', panel.includes('lg:w-[320px]'), true);
+  check('which it can give back', panel.includes('aria-label="Expand filters"'), true);
   // `1fr` floors at min-content, so a wide row pushes the track past the
   // viewport and the PAGE scrolls sideways. This is what stops it.
   check('the results track can shrink', page.includes('minmax(0,1fr)'), true);
