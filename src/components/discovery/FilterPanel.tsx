@@ -11,6 +11,8 @@ import { COUNTRIES, LANGUAGES } from '@/lib/locale/vocabulary';
 import { LOCALE_PARAMETER_DISCLOSURE } from '@/lib/youtube/search-contract';
 import { SUBSCRIBER_STEPS, VIEW_STEPS, stepLabel } from '@/lib/discovery/ranges';
 import { useFilterState } from './useFilterState';
+import { ModeForm, type FilterDefaults } from './SearchForms';
+import type { SearchContext } from '@/lib/discovery/context';
 import { appliedCount, type FilterState } from '@/lib/discovery/filter-state';
 import { DISCOVERY_MODES, type DiscoveryMode } from '@/lib/discovery/types';
 import { CAMPAIGN_CATEGORIES, CATEGORY_LABEL } from '@/types';
@@ -44,21 +46,35 @@ const NUMBER_FIELD =
 const SELECT_FIELD =
   'min-h-9 w-full rounded-[var(--r-md)] border border-line bg-surface px-2 text-[13px] text-ink';
 const LABEL = 'block text-[12px] font-medium text-ink';
+
+/**
+ * The markets this product is used for, first.
+ *
+ * An alphabetical list of 250 countries puts Afghanistan above the United
+ * States, which is a list sorted for the alphabet rather than for anybody
+ * using it. These twelve are the ones the rest of the product already treats
+ * as common, in `LocalePicker`.
+ */
+const POPULAR_MARKETS = ['US', 'GB', 'KR', 'JP', 'CA', 'AU', 'DE', 'FR', 'ES', 'BR', 'IN', 'ID'];
 const HELP = 'mt-1 text-[11px] leading-relaxed text-ink-muted';
 
 export function FilterPanel({
   mode,
   campaignId,
   brandId,
-  modeExtra,
+  defaults,
+  context,
 }: {
   mode: DiscoveryMode;
   campaignId: string | null;
   brandId: string | null;
-  /** The reference-channel or competitor inputs, for the other two modes. */
-  modeExtra?: ReactNode;
+  /** Prefilled from the brand and from a stored run, with provenance. */
+  defaults?: FilterDefaults;
+  context?: SearchContext;
 }) {
   const { filters, apply, reset } = useFilterState();
+  const popular = POPULAR_MARKETS.flatMap((code) => COUNTRIES.filter((c) => c.code === code));
+  const rest = COUNTRIES.filter((c) => !POPULAR_MARKETS.includes(c.code));
   const applied = appliedCount(filters);
   const [state, action] = useFormState(startDiscovery, INITIAL_DISCOVERY);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -151,6 +167,22 @@ export function FilterPanel({
         {filters.competitorBrand ? <input type="hidden" name="knownCompetitors" value={filters.competitorBrand} /> : null}
 
         <div className="min-h-0 flex-1 overflow-y-auto">
+          {mode === 'criteria' ? null : (
+            /* The other two modes ask for a channel or a brand, plus the
+               fields that shape their run. They render INSIDE this form —
+               `bare` strips their own <form> and footer — so the page has one
+               Search button and one Reset instead of two of each. */
+            <Section title={mode === 'similar' ? 'Reference channel' : 'Competing brands'} defaultOpen>
+              <ModeForm
+                bare
+                mode={mode}
+                campaignId={campaignId}
+                defaults={defaults}
+                context={context}
+              />
+            </Section>
+          )}
+
           {mode === 'criteria' ? (
             <>
               <Section title="Category" defaultOpen>
@@ -171,7 +203,7 @@ export function FilterPanel({
                 <p className={HELP}>One category becomes the search term.</p>
               </Section>
 
-              <Section title="Market & language" defaultOpen>
+              <Section title="Market" defaultOpen>
                 <label className={LABEL} htmlFor="market">Market</label>
                 <select
                   id="market"
@@ -180,29 +212,48 @@ export function FilterPanel({
                   className={cn(SELECT_FIELD, 'mt-1.5')}
                 >
                   <option value="">Anywhere</option>
-                  {COUNTRIES.map((c) => (
-                    <option key={c.code} value={c.code}>{c.name}</option>
-                  ))}
-                </select>
-                <label className={cn(LABEL, 'mt-3')} htmlFor="language">Content language</label>
-                <select
-                  id="language"
-                  value={filters.contentLanguage ?? ''}
-                  onChange={(event) => apply({ contentLanguage: event.target.value || null })}
-                  className={cn(SELECT_FIELD, 'mt-1.5')}
-                >
-                  <option value="">Any language</option>
-                  {LANGUAGES.map((l) => (
-                    <option key={l.code} value={l.code}>{l.name}</option>
-                  ))}
+                  {/* The dozen markets this product is actually used for, then
+                      the rest. Scrolling past Afghanistan to reach the United
+                      States is a list sorted for the alphabet, not the user. */}
+                  <optgroup label="Common">
+                    {popular.map((c) => (
+                      <option key={c.code} value={c.code}>{c.name}</option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="All markets">
+                    {rest.map((c) => (
+                      <option key={c.code} value={c.code}>{c.name}</option>
+                    ))}
+                  </optgroup>
                 </select>
                 <p className={HELP}>{LOCALE_PARAMETER_DISCLOSURE}</p>
               </Section>
 
-              {/* Below here is NARROW: every one of these reads a figure on a
-                  candidate the last run already fetched, so it applies
-                  instantly and costs nothing. Above is RUN — it changes the
-                  question put to YouTube. */}
+              {/* OPTIONAL, AND COLLAPSED TO SAY SO. A content language is a
+                  search preference most runs do not need, and it is not an
+                  audience: a Korean-language video is watched wherever it is
+                  watched. */}
+              <Section title="Content language">
+                <label className="sr-only" htmlFor="language">Content language</label>
+                <select
+                  id="language"
+                  value={filters.contentLanguage ?? ''}
+                  onChange={(event) => apply({ contentLanguage: event.target.value || null })}
+                  className={SELECT_FIELD}
+                >
+                  <option value="">Any language (default)</option>
+                  {LANGUAGES.map((l) => (
+                    <option key={l.code} value={l.code}>{l.name}</option>
+                  ))}
+                </select>
+                <p className={HELP}>Optional. Language is not a location.</p>
+              </Section>
+
+            </>
+          ) : null}
+
+          {/* NARROW FILTERS APPLY IN EVERY MODE: they read figures on the
+              candidates a run returned, and every mode returns candidates. */}
               <Section title="Subscriber range" defaultOpen>
                 <Range
                   from={filters.subscriberMin}
@@ -267,10 +318,7 @@ export function FilterPanel({
                 />
                 <p className={HELP}>Drops a channel when a retrieved title carries one of these.</p>
               </Section>
-            </>
-          ) : (
-            <div className="p-3">{modeExtra}</div>
-          )}
+
         </div>
 
         {/* Sticky, so Search is reachable without scrolling the sections. */}

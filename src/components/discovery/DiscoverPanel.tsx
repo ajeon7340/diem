@@ -206,9 +206,12 @@ export function DiscoverPanel({
         ) : null}
       </div>
 
-      <div className="min-w-0 flex-1 px-4 py-4 sm:px-5">
+      <div className={cn('min-w-0 flex-1 px-4 sm:px-5', state === 'idle' ? 'flex' : 'py-4')}>
         {state === 'idle' ? (
-          <div className="py-10 text-center">
+          /* Centred on both axes: with no results there is nothing for the
+             composer to sit above, and pinning it to the top of an empty
+             column leaves the page looking like it failed to load. */
+          <div className="m-auto w-full max-w-[620px] py-10 text-center">
             <h2 className="text-[20px] font-semibold tracking-tight text-ink">
               Describe who you are looking for
             </h2>

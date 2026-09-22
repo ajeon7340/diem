@@ -336,23 +336,24 @@ export function SimilarForm({
   campaignId,
   defaults = {},
   context,
+  bare = false,
 }: {
   campaignId: string | null;
   defaults?: FilterDefaults;
   context?: SearchContext;
+  /** Render the fields only: the caller owns the form and the submit. */
+  bare?: boolean;
 }) {
   const [state, action] = useFormState(startDiscovery, INITIAL_DISCOVERY);
   const picked = defaults.dimensions;
 
-  return (
-    <form action={action} className="flex min-h-0 flex-1 flex-col">
-      <input type="hidden" name="mode" value="similar" />
-      {campaignId ? <input type="hidden" name="campaignId" value={campaignId} /> : null}
-      {context?.brand ? <input type="hidden" name="brandId" value={context.brand.id} /> : null}
-
-      <div className={scroll}>
+  const fields = (
+    <>
         <div>
-          <label className={label} htmlFor="channel">
+          {/* The section around this is titled "Reference channel" when it
+              renders bare, so the label is for screen readers only and the
+              help line does not repeat the placeholder. */}
+          <label className={bare ? 'sr-only' : label} htmlFor="channel">
             Reference channel
           </label>
           <input
@@ -364,10 +365,9 @@ export function SimilarForm({
             autoComplete="off"
             autoCapitalize="none"
             spellCheck={false}
-            className={`${field} mt-1.5`}
+            className={`${field} ${bare ? '' : 'mt-1.5'}`}
             placeholder="URL or @handle"
           />
-          <p className={help}>URL or @handle.</p>
         </div>
 
         <MoreFilters open={Boolean(picked && picked.length !== SIMILARITY_DIMENSIONS.length)}>
@@ -391,9 +391,17 @@ export function SimilarForm({
           </fieldset>
         </MoreFilters>
 
-        <p className={`${help} rounded-lg border border-line bg-paper px-2.5 py-2`}>{SIMILARITY_LIMIT}</p>
-      </div>
+      <p className={`${help} rounded-lg border border-line bg-paper px-2.5 py-2`}>{SIMILARITY_LIMIT}</p>
+    </>
+  );
 
+  if (bare) return <div className="space-y-4">{fields}</div>;
+  return (
+    <form action={action} className="flex min-h-0 flex-1 flex-col">
+      <input type="hidden" name="mode" value="similar" />
+      {campaignId ? <input type="hidden" name="campaignId" value={campaignId} /> : null}
+      {context?.brand ? <input type="hidden" name="brandId" value={context.brand.id} /> : null}
+      <div className={scroll}>{fields}</div>
       <Footer state={state} />
     </form>
   );
@@ -403,25 +411,22 @@ export function CompetitorForm({
   campaignId,
   defaults = {},
   context,
+  bare = false,
 }: {
   campaignId: string | null;
   defaults?: FilterDefaults;
   context?: SearchContext;
+  bare?: boolean;
 }) {
   const [state, action] = useFormState(startDiscovery, INITIAL_DISCOVERY);
   const hasOptional = Boolean(
     defaults.category || defaults.customerNeed || defaults.market || defaults.pricePositioning,
   );
 
-  return (
-    <form action={action} className="flex min-h-0 flex-1 flex-col">
-      <input type="hidden" name="mode" value="competitor" />
-      {campaignId ? <input type="hidden" name="campaignId" value={campaignId} /> : null}
-      {context?.brand ? <input type="hidden" name="brandId" value={context.brand.id} /> : null}
-
-      <div className={scroll}>
+  const fields = (
+    <>
         <div>
-          <label className={label} htmlFor="knownCompetitors">
+          <label className={bare ? 'sr-only' : label} htmlFor="knownCompetitors">
             Competing brands
           </label>
           <input
@@ -511,9 +516,17 @@ export function CompetitorForm({
               </select>
             </div>
           </div>
-        </MoreFilters>
-      </div>
+      </MoreFilters>
+    </>
+  );
 
+  if (bare) return <div className="space-y-4">{fields}</div>;
+  return (
+    <form action={action} className="flex min-h-0 flex-1 flex-col">
+      <input type="hidden" name="mode" value="competitor" />
+      {campaignId ? <input type="hidden" name="campaignId" value={campaignId} /> : null}
+      {context?.brand ? <input type="hidden" name="brandId" value={context.brand.id} /> : null}
+      <div className={scroll}>{fields}</div>
       <Footer state={state} />
     </form>
   );
@@ -524,13 +537,20 @@ export function ModeForm({
   campaignId,
   defaults,
   context,
+  bare = false,
 }: {
   mode: DiscoveryMode;
   campaignId: string | null;
   defaults?: FilterDefaults;
   context?: SearchContext;
+  /** Fields only. The discovery panel owns the form and the one Search. */
+  bare?: boolean;
 }) {
-  if (mode === 'similar') return <SimilarForm campaignId={campaignId} defaults={defaults} context={context} />;
-  if (mode === 'competitor') return <CompetitorForm campaignId={campaignId} defaults={defaults} context={context} />;
+  if (mode === 'similar') {
+    return <SimilarForm campaignId={campaignId} defaults={defaults} context={context} bare={bare} />;
+  }
+  if (mode === 'competitor') {
+    return <CompetitorForm campaignId={campaignId} defaults={defaults} context={context} bare={bare} />;
+  }
   return <CriteriaForm campaignId={campaignId} defaults={defaults} context={context} />;
 }

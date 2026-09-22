@@ -2,14 +2,12 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
-import { ContextBar } from '@/components/discovery/ContextBar';
 import { FilterPanel } from '@/components/discovery/FilterPanel';
 import { DiscoverPanel } from '@/components/discovery/DiscoverPanel';
 import { RecentRuns, type SearchRow } from '@/components/discovery/RecentRuns';
-import { ModeForm } from '@/components/discovery/SearchForms';
 import { WorkspaceLayout } from '@/components/shell/WorkspaceLayout';
 import { getViewer } from '@/lib/access/viewer';
-import { getCampaign, getCampaigns } from '@/lib/data/campaigns';
+import { getCampaign } from '@/lib/data/campaigns';
 import { getBrands, pickBrand } from '@/lib/data/brands';
 import { buildContext } from '@/lib/discovery/context';
 import { countRunsToday, getSavedCandidates, getSearches, getSearchJobs } from '@/lib/data/discovery';
@@ -50,10 +48,9 @@ export default async function DiscoverPage({
     ? (searchParams.mode as DiscoveryMode)
     : 'criteria';
 
-  const [campaign, brands, campaigns, searches, saved, runsUsed] = await Promise.all([
+  const [campaign, brands, searches, saved, runsUsed] = await Promise.all([
     searchParams.campaign ? getCampaign(searchParams.campaign) : Promise.resolve(null),
     getBrands(viewer.organization.id),
-    getCampaigns(viewer.organization.id),
     getSearches(viewer.organization.id, 12),
     getSavedCandidates(viewer.organization.id),
     countRunsToday(viewer.organization.id),
@@ -108,21 +105,8 @@ export default async function DiscoverPage({
             mode={mode}
             campaignId={campaign?.id ?? null}
             brandId={context.brand?.id ?? null}
-            modeExtra={
-              <div className="space-y-3">
-                <ContextBar
-                  context={context}
-                  brands={brands.map((b) => ({ id: b.id, name: b.name }))}
-                  campaigns={campaigns.map((c) => ({ id: c.id, name: c.name, brandId: c.brandId }))}
-                />
-                <ModeForm
-                  mode={mode}
-                  campaignId={campaign?.id ?? null}
-                  defaults={context.defaults}
-                  context={context}
-                />
-              </div>
-            }
+            defaults={context.defaults}
+            context={context}
           />
 
           {/* IDLE: nothing has been run on this page, so the composer fills

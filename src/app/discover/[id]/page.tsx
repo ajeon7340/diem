@@ -5,11 +5,9 @@ import { notFound } from 'next/navigation';
 import { cancelSearch } from '@/app/actions/discovery';
 import { BrandList } from '@/components/discovery/BrandList';
 import { EmptyState } from '@/components/discovery/EmptyState';
-import { ContextBar } from '@/components/discovery/ContextBar';
 import { FilterPanel } from '@/components/discovery/FilterPanel';
 import { NarrowingProvider, PerformanceFilters } from '@/components/discovery/Narrowing';
 import { DiscoverPanel } from '@/components/discovery/DiscoverPanel';
-import { ModeForm } from '@/components/discovery/SearchForms';
 import { WorkspaceLayout } from '@/components/shell/WorkspaceLayout';
 import { Badge } from '@/components/ui/Badge';
 import { getViewer } from '@/lib/access/viewer';
@@ -116,26 +114,13 @@ export default async function DiscoveryResults({ params }: { params: { id: strin
           {/* The provider wraps BOTH columns: the performance filters render in
               the rail, the rows they hide are in the list beside it. */}
           <NarrowingProvider>
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-6">
+          <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[auto_minmax(0,1fr)] lg:grid-cols-[auto_minmax(0,1fr)] lg:grid-rows-1">
             <FilterPanel
               mode={search.mode}
               campaignId={search.campaignId}
               brandId={context.brand?.id ?? null}
-              modeExtra={
-                <div className="space-y-3">
-                  <ContextBar
-                    context={context}
-                    brands={workspaceBrands.map((b) => ({ id: b.id, name: b.name }))}
-                    campaigns={campaigns.map((c) => ({ id: c.id, name: c.name, brandId: c.brandId }))}
-                  />
-                  <ModeForm
-                    mode={search.mode}
-                    campaignId={search.campaignId}
-                    defaults={context.defaults}
-                    context={context}
-                  />
-                </div>
-              }
+              defaults={context.defaults}
+              context={context}
             />
             {candidates.length > 0 ? (
               <div className="lg:hidden">

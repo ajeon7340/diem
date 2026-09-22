@@ -1223,6 +1223,26 @@ void (async () => {
     { viewBands: [{ id: 'custom', label: 'Typical views', min: null, max: 100 }] },
   ).kept.length, 1);
 
+  /*
+   * ONE SEARCH BUTTON, ONE RESET.
+   *
+   * Similar and Competitor rendered their own form with their own footer
+   * inside the panel that already had one, so those two modes showed two
+   * Search buttons and two Resets. `bare` renders their fields only; the
+   * panel owns the form, so there is one of each in every mode.
+   */
+  check('the other modes render fields, not a second form', forms.includes('if (bare) return <div className="space-y-4">{fields}</div>;'), true);
+  check('and the panel renders them bare', panel.includes('<ModeForm\n                bare'), true);
+  check('so there is one submit in the panel', (panel.match(/type="submit"/g) ?? []).length <= 2, true);
+  // Popular markets first: an alphabetical list of 250 puts Afghanistan above
+  // the United States, which is sorted for the alphabet, not for anybody.
+  check('common markets lead the list', panel.includes('<optgroup label="Common">'), true);
+  check('and the rest follow', panel.includes('<optgroup label="All markets">'), true);
+  // Content language is optional and reads as optional.
+  check('content language is its own collapsed section', /<Section title="Content language">/.test(panel), true);
+  check('and says it is optional', panel.includes('Any language (default)'), true);
+  check('and is never called an audience', panel.includes('Language is not a location.'), true);
+
   const criteriaForm = readFileSync('src/components/discovery/SearchForms.tsx', 'utf8');
   check('the criteria form no longer asks for free-text topics', criteriaForm.includes('id="keywords"'), false);
   check('nor for a product description', criteriaForm.includes('id="product"'), false);
