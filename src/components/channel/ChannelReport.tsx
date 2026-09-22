@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { BarChart3, FileVideo2, Layers, ShieldQuestion, Sparkles } from 'lucide-react';
+import { BarChart3, FileVideo2, Layers, MessagesSquare, ShieldQuestion, Sparkles, Tags } from 'lucide-react';
 
 import type { EvidencePurpose } from '@/lib/channel/highlights';
 
@@ -23,6 +23,7 @@ import {
 } from '@/lib/channel/highlights';
 import { matchedTerms } from '@/lib/discovery/candidates';
 import { CompositionBars } from '@/components/report/CompositionBars';
+import { SubjectBubbles } from '@/components/report/SubjectBubbles';
 import { EvidenceCard } from '@/components/report/EvidenceCard';
 import { FormatPerformance } from '@/components/report/FormatPerformance';
 import { PerformanceScatter } from '@/components/report/PerformanceScatter';
@@ -66,6 +67,7 @@ export function ChannelReport({
   campaign = null,
   appendix = true,
   identity = true,
+  narrowed = null,
 }: {
   report: ChannelReportView;
   sample?: boolean;
@@ -83,6 +85,13 @@ export function ChannelReport({
    * that does not say whose it is would be useless on paper.
    */
   identity?: boolean;
+  /**
+   * The size of the full collection when a date filter is narrowing it.
+   *
+   * Null when the report describes everything collected. Printed, so a
+   * filtered median is never read as the channel's median.
+   */
+  narrowed?: number | null;
 }) {
   const now = Date.parse(report.fetchedAt);
   const depth = reportDepth(report);
@@ -198,6 +207,12 @@ export function ChannelReport({
                   four paragraphs above a table that repeated them. Here it is
                   the small print on the numbers, which is what it is. */}
               <div className="mt-3 border-t border-line pt-2.5">
+                {narrowed !== null ? (
+                  <p className="mb-1.5 text-[11px] font-medium leading-relaxed text-indigo">
+                    Filtered to a date range: {report.videos.length} of {narrowed} collected uploads.
+                    Every figure below is over this slice.
+                  </p>
+                ) : null}
                 {summary.map((line) => (
                   <p key={line} className="text-[11px] leading-relaxed text-ink-muted">
                     {line}
@@ -206,27 +221,44 @@ export function ChannelReport({
               </div>
             </section>
 
-            {/* WHAT THEY PUBLISH, BEFORE HOW IT PERFORMED. The report used to
-                open with view counts, which answers the second question a
-                buyer has and never the first. */}
-            <Block
-              title="What this creator publishes"
-              icon={<Layers size={16} strokeWidth={1.75} />}
-              note="Classified from retrieved titles and descriptions. No upload was watched and no transcript was read, so nothing here describes what happens inside a video."
-            >
-              <CompositionBars composition={profile} videos={eligible} sampled={report.videos.length} />
-            </Block>
+            {/* WHAT THEY PUBLISH, BESIDE HOW IT PERFORMED. Two questions a
+                buyer asks together, stacked one under the other so answering
+                the second meant scrolling past the first. */}
+            <div className="grid items-start gap-4 xl:grid-cols-2">
+              <Block
+                title="What this creator publishes"
+                icon={<Layers size={16} strokeWidth={1.75} />}
+                note="From retrieved titles and descriptions. Nothing was watched."
+              >
+                <CompositionBars composition={profile} videos={eligible} sampled={report.videos.length} />
+              </Block>
 
-            <Block
-              title="How this sample performed"
-              icon={<BarChart3 size={16} strokeWidth={1.75} />}
-              note="One bounded sample, measured once. Not a forecast and not a history."
-            >
-              <FormatPerformance videos={eligible} collectedAt={report.fetchedAt} only={format} />
-              <div className="mt-4 border-t border-line pt-3">
-                <PerformanceScatter videos={report.videos} collectedAt={report.fetchedAt} />
-              </div>
-            </Block>
+              <Block
+                title="How this sample performed"
+                icon={<BarChart3 size={16} strokeWidth={1.75} />}
+                note="One sample, measured once. Not a forecast, not a history."
+              >
+                <FormatPerformance videos={eligible} collectedAt={report.fetchedAt} only={format} />
+                <div className="mt-4 border-t border-line pt-3">
+                  <PerformanceScatter videos={report.videos} collectedAt={report.fetchedAt} />
+                </div>
+              </Block>
+            </div>
+
+            {/* The two readings of the sample that are not counts of uploads. */}
+            <div className="grid items-start gap-4 xl:grid-cols-2">
+              <Block
+                title="Recurring subjects"
+                icon={<Tags size={16} strokeWidth={1.75} />}
+                note="Words in three or more sampled titles."
+              >
+                <SubjectBubbles subjects={profile.subjects} sampled={profile.sampled} />
+              </Block>
+
+              <Block title="Comment response" icon={<MessagesSquare size={16} strokeWidth={1.75} />}>
+                <CommentScope report={report} />
+              </Block>
+            </div>
           </>
         )}
         {report.videos.length >= 12 ? <PageFoot report={report} page={1} campaign={campaign} /> : null}
@@ -271,7 +303,7 @@ export function ChannelReport({
           <Block
             title="Representative uploads"
               icon={<FileVideo2 size={16} strokeWidth={1.75} />}
-            note="One upload per reason: the commonest subject, the commonest shape, where the middle of the distribution sits, a genuine outlier, and a disclosed promotion. Each is chosen from the collected sample on a stated rule."
+            note="One upload per reason. Each card states the rule that chose it."
           >
             <ul className="space-y-2">
               {evidence.map(({ video, reason, purpose, titleRepeats, disclosed: flagged }) => (
@@ -290,9 +322,9 @@ export function ChannelReport({
             {disclosedTotal > 0 && disclosed.length > 0 ? (
               <div className="mt-3 border-t border-line pt-2.5">
                 <h3 className="text-[12px] font-semibold text-ink">
-                  Other disclosed paid promotions
+                  Other disclosed promotions
                   <span className="ml-1.5 font-normal text-ink-faint">
-                    {disclosedTotal} flagged in this sample · the flag does not name the advertiser
+                    {disclosedTotal} flagged · the flag does not name the advertiser
                   </span>
                 </h3>
                 {(
@@ -324,8 +356,7 @@ export function ChannelReport({
               </div>
             ) : disclosedTotal === 0 ? (
               <p className="mt-3 border-t border-line pt-2.5 text-[12px] text-ink-muted">
-                No sampled upload carries YouTube’s paid-promotion flag. That is not a record of the
-                channel never having run one.
+                None flagged here — not a record of the channel never having run one.
               </p>
             ) : null}
           </Block>
@@ -339,7 +370,7 @@ export function ChannelReport({
         <Block title="What this does not establish" icon={<ShieldQuestion size={16} strokeWidth={1.75} />}>
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <h3 className="text-[12px] font-semibold text-ink">Limits of this collection</h3>
+              <h3 className="text-[12px] font-semibold text-ink">Our limits</h3>
               <ul className="mt-1.5 list-disc space-y-1 pl-4 text-[12px] leading-relaxed text-ink-muted">
                 {limits.map((line) => (
                   <li key={line} className="avoid-break">{line}</li>
@@ -354,12 +385,10 @@ export function ChannelReport({
                 ))}
               </ul>
               <p className="mt-2 text-[11px] leading-relaxed text-ink-faint">
-                Also worth settling: product experience, format, existing exclusivity, and fee,
-                deliverables, usage rights and approval terms.
+                Also settle: product experience, exclusivity, fee, deliverables, usage rights.
               </p>
             </div>
           </div>
-          <CommentScope report={report} />
         </Block>
         <PageFoot report={report} page={report.videos.length >= 12 ? 2 : 1} campaign={campaign} />
       </div>
@@ -394,7 +423,7 @@ function Block({
   children: ReactNode;
 }) {
   return (
-    <section className="report-section avoid-break rounded-[var(--r-lg)] bg-surface p-4 shadow-[var(--shadow-panel)]">
+    <section className="report-section avoid-break min-w-0 rounded-[var(--r-lg)] bg-surface p-4 shadow-[var(--shadow-panel)]">
       <div className="flex items-start gap-3">
         {icon ? (
           <span className="icon-chip print:hidden" aria-hidden>
@@ -487,40 +516,36 @@ const PURPOSE_LABEL: Record<EvidencePurpose, string> = {
 function CommentScope({ report }: { report: ChannelReportView }) {
   if (!report.derivedAllowed) {
     return (
-      <p className="mt-3 border-t border-line pt-2.5 text-[11px] leading-relaxed text-ink-faint">
+      <p className="text-[12px] leading-relaxed text-ink-muted">
         Comment themes are not available on this deployment. Nothing above depends on them.
       </p>
     );
   }
   if (!report.analysedAt) {
     return (
-      <p className="mt-3 border-t border-line pt-2.5 text-[11px] leading-relaxed text-ink-faint">
-        The comment pass has not finished. No conclusion about the response is available yet, which
-        is not the same as having found nothing.
+      <p className="text-[12px] leading-relaxed text-ink-muted">
+        The pass has not finished. No conclusion about the response is available yet — not the same
+        as having found nothing.
       </p>
     );
   }
   if (report.clusters.length === 0) {
     return (
-      <p className="mt-3 border-t border-line pt-2.5 text-[11px] leading-relaxed text-ink-faint">
-        The comment pass ran over {exact(report.comments)} comments and produced no supported theme.
-        Missing or disabled comments do not indicate a negative response.
+      <p className="text-[12px] leading-relaxed text-ink-muted">
+        Ran over {exact(report.comments)} comments, no supported theme. Missing or disabled comments
+        do not indicate a negative response.
       </p>
     );
   }
   return (
-    <div className="mt-3 border-t border-line pt-2.5">
-      <h3 className="text-[12px] font-semibold text-ink">
-        Comment response
-        <span className="tnum ml-1.5 font-normal text-ink-faint">
-          {exact(report.comments)} classified · analysed {shortDate(report.analysedAt)}
-        </span>
-      </h3>
+    <div>
+      <p className="tnum text-[11px] text-ink-faint">
+        {exact(report.comments)} classified · analysed {shortDate(report.analysedAt)}
+      </p>
       <p className="mt-1 text-[11px] leading-relaxed text-ink-muted">
-        Commenters are a self-selected slice and do not represent the audience. Product questions do
-        not establish purchases.
+        Commenters are self-selected and do not represent the audience. Questions are not purchases.
         {report.unreadable > 0
-          ? ` Comments could not be read on ${report.unreadable} sampled upload${report.unreadable === 1 ? '' : 's'}, which limits the evidence and says nothing negative about the audience.`
+          ? ` Unreadable on ${report.unreadable} upload${report.unreadable === 1 ? '' : 's'}, which limits the evidence and says nothing negative about the audience.`
           : ''}
       </p>
       <ul className="mt-2 space-y-2">

@@ -121,6 +121,11 @@ check(
   true,
 );
 check(
+  'one disclosed upload "carries", it does not "carry"',
+  factualSummary(report({ promotions: [promotion()] })).join(' ').includes('1 upload carries YouTube'),
+  true,
+);
+check(
   'a disclosure found says the flag does not name the sponsor',
   factualSummary(report({ promotions: [promotion()] })).join(' ').includes('does not name the sponsor'),
   true,
@@ -178,7 +183,7 @@ const spreadText = observations(spread).map((o) => o.text).join(' ');
 check('the ratio-to-median claim is gone', /× the median, so one video carries/.test(spreadText), false);
 check(
   'the concentration claim is a share of the total, computed',
-  spreadText.includes('accounts for 98% of the 92.2K views'),
+  spreadText.includes('takes 98% of the 92.2K views'),
   true,
 );
 check('and it cites the upload it is about', observations(spread).some((o) => o.supporting.includes('c3')), true);
@@ -211,7 +216,7 @@ check(
 );
 check(
   'availability is asked instead of assumed',
-  openQuestions(mixed).some((q) => q.includes('publishing a format is not agreeing to produce one')),
+  openQuestions(mixed).some((q) => q.includes('Publishing a format is not agreeing to produce one')),
   true,
 );
 
@@ -224,7 +229,7 @@ check(
 );
 check(
   'it is a stated limitation of this collection',
-  limitations(capped).some((l) => l.includes('stopped at its upload limit')),
+  limitations(capped).some((l) => l.includes('Capped at')),
   true,
 );
 check(
@@ -238,7 +243,7 @@ check(
     truncated: true,
     sampledStart: '2026-08-01T00:00:00.000Z',
     sampledEnd: '2026-09-01T00:00:00.000Z',
-  })).some((o) => o.text.includes('days this sample spans')),
+  })).some((o) => /uploads a week across \d+ days/.test(o.text)),
   true,
 );
 check(
@@ -262,7 +267,7 @@ check(
 );
 check(
   'unreadable comments raise their own, with the count',
-  openQuestions(report({ unreadable: 2 })).some((q) => q.includes('2 sampled uploads')),
+  openQuestions(report({ unreadable: 2 })).some((q) => q.includes('unreadable on 2 uploads')),
   true,
 );
 check('at most three', openQuestions(report({ truncated: true, unreadable: 1, promotions: [promotion()] })).length, 3);
@@ -415,7 +420,13 @@ check(
 // Gates, disclosures and the things public data cannot support
 // ---------------------------------------------------------------------------
 
-check('the Shorts proxy is still labelled a proxy', read('src/components/report/FormatPerformance.tsx').includes('duration <strong className="font-medium">proxy</strong>'), true);
+// Matched as prose: the emphasis markup around "proxy" reflows when the
+// sentence is edited, and what has to survive is the word beside "duration".
+check(
+  'the Shorts proxy is still labelled a proxy',
+  /duration\s*\{?'?\s*'?\}?\s*<strong[^>]*>\s*proxy/.test(read('src/components/report/FormatPerformance.tsx')),
+  true,
+);
 check('commenters are still not the audience', prose('src/components/channel/ChannelReport.tsx').includes('do not represent the audience'), true);
 check(
   'comment themes have four states, not two',
@@ -540,12 +551,12 @@ check('it is excluded from the median rather than counted as zero', withStatesPe
 check('and from the total', withStatesPerf.total, 1_800_000);
 check(
   'the summary names the excluded broadcasts rather than dropping them silently',
-  factualSummary(withStates).join(' ').includes('1 live broadcast and 1 scheduled premiere are in the sample and excluded'),
+  factualSummary(withStates).join(' ').includes('1 live broadcast and 1 scheduled premiere excluded from every view figure'),
   true,
 );
 check(
   'and the limitations say the unreported one is unknown, not zero',
-  limitations(withStates).some((l) => l.includes('That is unknown, not zero')),
+  limitations(withStates).some((l) => l.includes('unknown, not zero')),
   true,
 );
 // A genuine zero on a published upload IS a measurement and must survive.
@@ -576,17 +587,17 @@ check(
 check('and never prints the request in their place', windowText.includes('22 Jun 2026'), false);
 check(
   'the gap between request and sample is stated when it is material',
-  windowText.includes('A 90-day window was requested; the sample begins 12 days inside it'),
+  windowText.includes('90 days were requested; the sample starts 12 days in'),
   true,
 );
-check('and names the cap as the reason', windowText.includes('reached its upload limit first'), true);
+check('and names the cap as the reason', windowText.includes('the collection hit its upload limit'), true);
 check(
   'a sample that fills its window does not print the note at all',
   factualSummary(report({
     requestedStart: '2026-06-12T00:00:00.000Z',
     sampledStart: '2026-06-13T00:00:00.000Z',
     sampledEnd: '2026-09-10T00:00:00.000Z',
-  })).join(' ').includes('window was requested'),
+  })).join(' ').includes('days were requested'),
   false,
 );
 // publicReport derives the sampled range for evidence collected before the
@@ -689,7 +700,27 @@ check(
 );
 check(
   'the report states outright that nothing was watched',
-  prose('src/components/channel/ChannelReport.tsx').includes('No upload was watched and no transcript was read'),
+  prose('src/components/channel/ChannelReport.tsx').includes('Nothing was watched'),
+  true,
+);
+check(
+  'and the limitations say it in full at least once',
+  limitations(report()).some((l) => l.includes('No upload was watched, no transcript read')),
+  true,
+);
+// The threshold that printed "no single upload dominates" over a 98% share.
+check(
+  'a dominant upload is reported as dominant at three uploads',
+  observations(report({
+    videos: [video({ id: 'a', views: 1_000 }), video({ id: 'b', views: 1_200 }), video({ id: 'c', views: 90_000 })],
+  })).some((o) => o.text.includes('takes 98%') && !o.text.includes('No single upload dominates')),
+  true,
+);
+check(
+  'and an even one is not, at any size',
+  observations(report({
+    videos: Array.from({ length: 12 }, (_, i) => video({ id: `v${i}`, views: 10_000 + i })),
+  })).some((o) => o.text.startsWith('No single upload dominates')),
   true,
 );
 check('a Korean particle is stripped so 아이폰이 and 아이폰 are one subject', composition([
@@ -754,7 +785,7 @@ check(
 check(
   'and so does one with no duration',
   limitations(report({ videos: [video({ id: 'a', format: 'unknown', seconds: null }), video({ id: 'b' })] })).some(
-    (l) => l.includes('1 upload reports no duration publicly'),
+    (l) => l.includes('1 upload reports no duration, so it sits'),
   ),
   true,
 );

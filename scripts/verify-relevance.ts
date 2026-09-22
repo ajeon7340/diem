@@ -261,7 +261,7 @@ check(
   true,
 );
 check('it never implies subscriber growth', scatterProse.includes('Nothing here shows subscribers'), true);
-check('unreported view counts are excluded rather than drawn at zero', scatterProse.includes('that is unknown, not zero'), true);
+check('unreported view counts are excluded rather than drawn at zero', scatterProse.includes('unknown, not zero'), true);
 check('format uses shape as well as position', scatter.includes('MARKER'), true);
 check('points are keyboard reachable', scatter.includes('ArrowRight') && scatter.includes('tabIndex={0}'), true);
 check('and there is a table alternative', scatter.includes('Chart data as a table'), true);

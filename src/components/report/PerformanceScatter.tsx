@@ -214,11 +214,11 @@ export function PerformanceScatter({
             ))}
         </ul>
         <p className="text-[11px] leading-relaxed text-ink-muted">
-          Views as measured on {shortDate(collectedAt)} — not a history. Newer uploads have had less
-          time to accumulate, so the left of the chart is not growth. Nothing here shows subscribers.
-          Highest in the sample: {compact(maxV)}.
+          Measured {shortDate(collectedAt)} — not a history. Newer uploads have had less time to
+          accumulate, so the slope is age, not growth. Nothing here shows subscribers. Highest:{' '}
+          {compact(maxV)}.
           {unreported.length
-            ? ` ${unreported.length} upload${unreported.length === 1 ? '' : 's'} report${unreported.length === 1 ? 's' : ''} no view count and ${unreported.length === 1 ? 'is' : 'are'} not plotted — that is unknown, not zero.`
+            ? ` ${unreported.length} not plotted, reporting no view count — unknown, not zero.`
             : ''}
           {aside.live || aside.upcoming
             ? ` ${[
@@ -226,7 +226,7 @@ export function PerformanceScatter({
                 aside.upcoming ? `${aside.upcoming} scheduled premiere${aside.upcoming === 1 ? '' : 's'}` : null,
               ]
                 .filter(Boolean)
-                .join(' and ')} ${aside.live + aside.upcoming === 1 ? 'is' : 'are'} excluded — neither is a comparable result.`
+                .join(' and ')} excluded — not comparable results.`
             : ''}
         </p>
         {/* AGE GROUPS, BECAUSE THE SLOPE IS MOSTLY AGE. A month-old upload has
@@ -261,9 +261,7 @@ export function PerformanceScatter({
           </div>
         </div>
       ) : (
-        <p className="mt-3 text-[11px] text-ink-faint print:hidden">
-          Select a point, or use the table below.
-        </p>
+        <p className="mt-3 text-[11px] text-ink-faint print:hidden">Select a point, or use the table.</p>
       )}
 
       <details className="mt-3 report-chart-table">

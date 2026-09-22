@@ -18,8 +18,10 @@ import { RelevanceReport } from '@/components/report/RelevanceReport';
 import { contextFingerprint, freshnessOf } from '@/lib/relevance/fingerprint';
 import { requirementMatrix, type RelevanceContext } from '@/lib/relevance/requirements';
 import { ReportTabs } from '@/components/report/ReportTabs';
+import { ReportRange } from '@/components/report/ReportRange';
+import { publishedRange } from '@/lib/channel/report';
 export const dynamic='force-dynamic';
-export default async function ReportPage({params,searchParams}:{params:{id:string};searchParams:{format?:string;view?:string;brand?:string;campaign?:string}}) {
+export default async function ReportPage({params,searchParams}:{params:{id:string};searchParams:{format?:string;view?:string;brand?:string;campaign?:string;from?:string;to?:string}}) {
  const viewer=await getViewer();if(!viewer.organization)redirect('/signin');if(!isSupabaseConfigured())notFound();
  const db=createSessionClient();
  const {data:row}=await db.from('channel_analyses').select('*').eq('channel_id',params.id).maybeSingle();
@@ -43,6 +45,33 @@ export default async function ReportPage({params,searchParams}:{params:{id:strin
  const freshness=context&&report?freshnessOf(stored?{evidenceFetchedAt:stored.evidenceFetchedAt,contextFingerprint:stored.contextFingerprint}:null,report.fetchedAt,contextFingerprint(context)):'missing';
  const active=jobs.some(j=>j.status==='queued'||j.status==='running');
  const state=reportState(jobs,!!report,(report?.derivedAllowed && !report.comments ? 0 : report?.videos.length)??0,(report?.unreadable??0)>0);
+
+ /*
+  * THE DATE RANGE NARROWS THE SAMPLE, IT DOES NOT COLLECT ONE.
+  *
+  * Filtering here rather than in the browser means every figure — the
+  * composition, the medians, the scatter, the representative uploads, the
+  * limitations — is recomputed over the same filtered set. A client-side
+  * filter that hid rows would leave the charts drawn over all of them.
+  */
+ const sampleSpan = publishedRange(report?.videos ?? []);
+ const day = (value: string | undefined) => (value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null);
+ const from = day(searchParams.from);
+ const to = day(searchParams.to);
+ const ranged = report && (from || to)
+  ? {
+     ...report,
+     videos: report.videos.filter((v) => {
+      const at = v.publishedAt.slice(0, 10);
+      return (!from || at >= from) && (!to || at <= to);
+     }),
+    }
+  : report;
+ // The sampled range follows the filter, or the appendix would report dates
+ // that are no longer in the report above it.
+ const shown = ranged && ranged !== report
+  ? { ...ranged, ...(() => { const r = publishedRange(ranged.videos); return { sampledStart: r.first, sampledEnd: r.last }; })() }
+  : ranged;
 
  const overview = view === 'overview';
  const stateTone = active ? 'indigo' : state === 'Failed' ? 'rose' : state.startsWith('Partially') || state.includes('insufficient') ? 'amber' : report ? 'emerald' : 'slate';
@@ -119,30 +148,43 @@ export default async function ReportPage({params,searchParams}:{params:{id:strin
    {overview ? (
     report ? (
      <div className="mx-auto max-w-[1080px]">
-      {/* The format filter sits with the report it filters, not in a rail. */}
-      <form className="mb-3 flex flex-wrap items-center gap-2 print:hidden">
-       {searchParams.brand ? <input type="hidden" name="brand" value={searchParams.brand} /> : null}
-       <label className="text-[12px] text-ink-muted" htmlFor="format">
-        Show
-       </label>
-       <select
-        id="format"
-        name="format"
-        defaultValue={searchParams.format ?? 'all'}
-        className="min-h-8 rounded-[var(--r-md)] border border-line bg-surface px-2 text-[12px] text-ink"
-       >
-        <option value="all">All formats</option>
-        <option value="short">Short, 3 min or less (proxy)</option>
-        <option value="long">Long-form</option>
-       </select>
-       <button className="press min-h-8 rounded-[var(--r-md)] border border-line-strong bg-surface px-2.5 text-[12px] font-medium text-ink hover:bg-paper">
-        Apply
-       </button>
-      </form>
+      {/* The filters sit with the report they filter, not in a rail. */}
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 print:hidden">
+       {sampleSpan.first && sampleSpan.last ? (
+        <ReportRange
+         from={from}
+         to={to}
+         min={sampleSpan.first.slice(0, 10)}
+         max={sampleSpan.last.slice(0, 10)}
+         shown={shown?.videos.length ?? 0}
+         total={report.videos.length}
+        />
+       ) : null}
+       <form className="flex items-center gap-2">
+        {searchParams.brand ? <input type="hidden" name="brand" value={searchParams.brand} /> : null}
+        {from ? <input type="hidden" name="from" value={from} /> : null}
+        {to ? <input type="hidden" name="to" value={to} /> : null}
+        <label className="sr-only" htmlFor="format">Format</label>
+        <select
+         id="format"
+         name="format"
+         defaultValue={searchParams.format ?? 'all'}
+         className="min-h-8 rounded-[var(--r-md)] border border-line bg-surface px-2 text-[12px] text-ink"
+        >
+         <option value="all">All formats</option>
+         <option value="short">Short, ≤3 min (proxy)</option>
+         <option value="long">Long-form</option>
+        </select>
+        <button className="press min-h-8 rounded-[var(--r-md)] border border-line-strong bg-surface px-2.5 text-[12px] font-medium text-ink hover:bg-paper">
+         Apply
+        </button>
+       </form>
+      </div>
       {/* The rail already names the channel; the report's own header would be
           the same avatar, name and handle a second time. It still prints. */}
       <ChannelReport
-       report={report}
+       report={shown!}
+       narrowed={shown!.videos.length !== report.videos.length ? report.videos.length : null}
        identity={false}
        format={['short', 'long'].includes(searchParams.format ?? '') ? searchParams.format : 'all'}
       />

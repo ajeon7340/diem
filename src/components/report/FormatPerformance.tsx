@@ -71,7 +71,7 @@ export function FormatPerformance({
             </div>
             {p.median === null ? (
               <p className="mt-1 text-[11px] leading-relaxed text-ink-muted">
-                None of these reported a view count, so there is no median. Unknown, not zero.
+                No view counts reported, so no median. Unknown, not zero.
               </p>
             ) : (
               <>
@@ -82,7 +82,7 @@ export function FormatPerformance({
                 {p.n === 1 ? (
                   <p className="tnum mt-1 text-[11px] text-ink-muted">
                     One upload, at <span className="text-ink" title={exact(p.median)}>{compact(p.median)} views</span>.
-                    A single upload is not a distribution.
+                    Not a distribution.
                   </p>
                 ) : (
                   <p className="tnum mt-1 text-[11px] text-ink-muted">
@@ -101,11 +101,11 @@ export function FormatPerformance({
         ))}
       </ul>
       <p className="text-[11px] leading-relaxed text-ink-muted">
-        Views as measured on the collection date, over uploads of different ages — a recent upload
-        has had less time to accumulate. Public metadata does not identify Shorts; three minutes or
-        less is a duration <strong className="font-medium">proxy</strong> and can include non-Shorts.
+        Measured on the collection date, over uploads of different ages. Public metadata does not
+        identify Shorts; three minutes or less is a duration{' '}
+        <strong className="font-medium">proxy</strong> and can include non-Shorts.
         {groups.some((g) => g.p.n >= 2 && g.p.p25 === null)
-          ? ' A middle 50% is quoted only where at least eight uploads reported a count.'
+          ? ' A middle 50% needs eight reporting uploads.'
           : ''}
         {groups.some((g) => g.p.excludedLive + g.p.excludedUpcoming > 0)
           ? ' Live broadcasts and scheduled premieres are excluded.'

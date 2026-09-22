@@ -14,11 +14,11 @@ import type { VideoEvidence } from '@/lib/ingest/analyze';
  * greyscale, and each one sized by a count printed beside it so the bar is a
  * convenience rather than the only way to read the number.
  *
- * THE TWO CLASSIFICATIONS ARE RENDERED DIFFERENTLY ON PURPOSE. Formats are
- * mutually exclusive and are shown as bars with percentages, because they sum
- * to the sample. Subjects are overlapping tags and are shown as chips with
- * counts and NO percentage, because "12 uploads mention 아이폰" out of 50 is not
- * 24% of anything a reader can add up.
+ * FORMATS ONLY. These are mutually exclusive and sum to the sample, so a bar
+ * with a percentage beside it means something. The overlapping subject tags
+ * are drawn as bubbles in `SubjectBubbles` precisely because they do NOT sum:
+ * a stacked bar of them would add past 100% and invite arithmetic that is not
+ * true of anything.
  *
  * UNCLASSIFIED IS PRINTED, always, with its share. A classifier that covers
  * 70% of a sample and shows only the 70% is claiming coverage it does not have.
@@ -50,7 +50,7 @@ export function CompositionBars({
               <details className="group print-keep-summary">
                 <summary className="flex cursor-pointer list-none items-center gap-2.5 rounded py-0.5 hover:bg-paper">
                   <span
-                    className={`w-[8.5rem] shrink-0 text-[12px] leading-snug ${
+                    className={`w-24 shrink-0 text-[12px] leading-snug sm:w-[8.5rem] ${
                       group.format === 'unclassified' ? 'text-ink-faint' : 'text-ink'
                     }`}
                   >
@@ -64,7 +64,7 @@ export function CompositionBars({
                       style={{ width: `${Math.max((n / max) * 100, 2)}%` }}
                     />
                   </span>
-                  <span className="tnum w-20 shrink-0 text-right text-[12px] text-ink">
+                  <span className="tnum w-16 shrink-0 text-right text-[12px] text-ink sm:w-20">
                     {n} <span className="text-ink-faint">{percent(n, composition.sampled)}</span>
                   </span>
                 </summary>
@@ -103,45 +103,10 @@ export function CompositionBars({
         })}
       </ul>
 
-      {composition.subjects.length ? (
-        <div className="avoid-break border-t border-line pt-2.5">
-          <p className="text-[11px] font-medium text-ink">
-            Recurring subjects
-            <span className="ml-1.5 font-normal text-ink-faint">
-              overlapping tags — one upload can carry several, so these do not add up to{' '}
-              {composition.sampled}
-            </span>
-          </p>
-          <ul className="mt-1.5 flex flex-wrap gap-1.5">
-            {composition.subjects.map((subject) => (
-              <li key={subject.term}>
-                <a
-                  href={videoUrl(subject.videoIds[0])}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-baseline gap-1.5 rounded-md border border-line bg-paper px-2 py-0.5 text-[11px] text-ink hover:border-indigo"
-                >
-                  {subject.term}
-                  <span className="tnum text-ink-faint">{subject.videoIds.length}</span>
-                </a>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : (
-        <p className="border-t border-line pt-2.5 text-[11px] leading-relaxed text-ink-muted">
-          No word recurs in three or more sampled titles, so no subject is named. A sample this
-          varied is a finding about the sample, not about the channel.
-        </p>
-      )}
-
       <p className="text-[11px] leading-relaxed text-ink-faint">
-        {composition.sampled} upload{composition.sampled === 1 ? '' : 's'} classified
-        {sampled && sampled !== composition.sampled
-          ? ` of ${sampled} sampled — live broadcasts and scheduled premieres are not classified`
-          : ''}
-        . {composition.basis}{' '}
-        A label describes how the creator titled an upload, not what happens in it.
+        {composition.sampled} classified
+        {sampled && sampled !== composition.sampled ? ` of ${sampled} sampled` : ''}. A label is how
+        the creator titled an upload, not what happens in it. {composition.basis}
       </p>
     </div>
   );

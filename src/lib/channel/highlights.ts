@@ -166,7 +166,7 @@ export function factualSummary(report: ChannelReportView, now = Date.now()): str
       ? `, published between ${shortDate(report.sampledStart)} and ${shortDate(report.sampledEnd)}`
       : '';
   lines.push(
-    `${report.videos.length} upload${report.videos.length === 1 ? '' : 's'} were read on ${shortDate(report.fetchedAt)}${span}.`,
+    `${report.videos.length} upload${report.videos.length === 1 ? '' : 's'} read ${shortDate(report.fetchedAt)}${span}.`,
   );
   // The request, said separately and only when it differs from what was found.
   // Printing "we asked for 90 days" under a sample that fills 90 days is noise.
@@ -174,7 +174,7 @@ export function factualSummary(report: ChannelReportView, now = Date.now()): str
     const missed = Math.round((Date.parse(report.sampledStart) - Date.parse(report.requestedStart)) / DAY);
     if (missed >= 7) {
       lines.push(
-        `A ${report.windowDays}-day window was requested; the sample begins ${missed} days inside it${report.truncated ? ', because the collection reached its upload limit first' : ''}.`,
+        `${report.windowDays} days were requested; the sample starts ${missed} days in${report.truncated ? ' — the collection hit its upload limit' : ''}.`,
       );
     }
   }
@@ -209,22 +209,21 @@ export function factualSummary(report: ChannelReportView, now = Date.now()): str
   if (aside.live) excluded.push(`${aside.live} live broadcast${aside.live === 1 ? '' : 's'}`);
   if (aside.upcoming) excluded.push(`${aside.upcoming} scheduled premiere${aside.upcoming === 1 ? '' : 's'}`);
   if (excluded.length) {
-    const count = aside.live + aside.upcoming;
     lines.push(
-      `${excluded.join(' and ')} ${count === 1 ? 'is' : 'are'} in the sample and excluded from every view figure — a broadcast still running and a video nobody can watch yet are not comparable results.`,
+      `${excluded.join(' and ')} excluded from every view figure — neither is a comparable result.`,
     );
   }
 
   const disclosed = report.promotions.filter((p) => p.disclosure === 'explicit').length;
   lines.push(
     disclosed > 0
-      ? `${disclosed} of the sampled uploads carry YouTube's paid-promotion flag. The flag does not name the sponsor.`
-      : 'No sampled upload carries YouTube’s paid-promotion flag. That is what this sample shows, not a record of the channel never having run one.',
+      ? `${disclosed} upload${disclosed === 1 ? '' : 's'} carr${disclosed === 1 ? 'ies' : 'y'} YouTube's paid-promotion flag. The flag does not name the sponsor.`
+      : 'None carry YouTube’s paid-promotion flag — not a record of the channel never having run one.',
   );
 
   if (depth === 'thin') {
     lines.push(
-      `Only ${report.videos.length} upload${report.videos.length === 1 ? '' : 's'} could be read, which is too few to describe a pattern. Treat everything above as illustrative of this sample alone.`,
+      `${report.videos.length} upload${report.videos.length === 1 ? '' : 's'} is too few to describe a pattern. Read everything above as this sample alone.`,
     );
   }
   return lines;
@@ -258,8 +257,8 @@ export function observations(report: ChannelReportView): Observation[] {
       text:
         `${dominant.videoIds.length} of ${profile.sampled} sampled uploads are titled as ${FORMAT_LABEL[dominant.format].toLowerCase()}` +
         (subject
-          ? `, and “${subject.term}” appears in ${subject.videoIds.length} titles. Both are readings of retrieved metadata, not of the videos.`
-          : '. That is a reading of retrieved titles, not of the videos.'),
+          ? `, and “${subject.term}” appears in ${subject.videoIds.length} titles. Both read the metadata, not the videos.`
+          : '. That reads the titles, not the videos.'),
       supporting: dominant.videoIds.slice(0, 3),
     });
   }
@@ -272,14 +271,14 @@ export function observations(report: ChannelReportView): Observation[] {
     const bigger = long.length >= short.length ? long : short;
     const label = bigger === long ? 'long-form' : 'short (≤3 min, a duration proxy)';
     out.push({
-      text: `${bigger.length} of ${eligible.length} comparable uploads are ${label}, and ${eligible.length - bigger.length} ${eligible.length - bigger.length === 1 ? 'is' : 'are'} the other length. What the creator would agree to produce is not visible in a publishing history.`,
+      text: `${bigger.length} of ${eligible.length} comparable uploads are ${label}. What the creator would agree to produce is not visible in a publishing history.`,
       supporting: bigger.slice(0, 3).map((v) => v.id),
     });
   } else if (long.length || short.length) {
     const only = long.length ? long : short;
     const label = long.length ? 'long-form' : 'short (≤3 min, a duration proxy)';
     out.push({
-      text: `Every comparable upload in this sample is ${label}. Nothing here shows the other length being published, which is not the same as it being unavailable.`,
+      text: `Every comparable upload is ${label}. Nothing shows the other length being published — not the same as it being unavailable.`,
       supporting: only.slice(0, 3).map((v) => v.id),
     });
   }
@@ -293,14 +292,22 @@ export function observations(report: ChannelReportView): Observation[] {
       .sort((a, b) => (b.views ?? 0) - (a.views ?? 0))[0];
     const share = p.max / p.total;
     const even = 1 / p.n;
-    if (share >= Math.max(0.2, even * 3)) {
+    /*
+     * "DOMINATES" HAS TO BE REACHABLE. The first threshold was three times an
+     * even share, which at three uploads is 100% — so a sample whose top
+     * upload took 98% of its views printed "no single upload dominates". Two
+     * conditions instead: at least a quarter of the total, AND at least twice
+     * what an even split would give. The floor stops a 50-upload sample
+     * calling 5% dominance; the multiple stops a 3-upload sample calling 34%.
+     */
+    if (share >= 0.25 && share >= 2 * even) {
       out.push({
-        text: `The most-viewed upload accounts for ${percent(p.max, p.total)} of the ${compact(p.total)} views across the ${p.n} uploads reporting a count — an even split would be ${percent(1, p.n)} each. Views are plays, not people, and one person can account for several.`,
+        text: `The most-viewed upload takes ${percent(p.max, p.total)} of the ${compact(p.total)} views across ${p.n} reporting a count; an even split is ${percent(1, p.n)}. Views are plays, not people.`,
         supporting: best ? [best.id] : [],
       });
     } else {
       out.push({
-        text: `No single upload dominates: the most-viewed accounts for ${percent(p.max, p.total)} of the ${compact(p.total)} views across the ${p.n} reporting a count, against ${percent(1, p.n)} for an even split. Views are plays, not people.`,
+        text: `No single upload dominates: the top one takes ${percent(p.max, p.total)} of ${compact(p.total)} views across ${p.n} reporting a count, against ${percent(1, p.n)} for an even split. Views are plays, not people.`,
         supporting: best ? [best.id] : [],
       });
     }
@@ -317,8 +324,8 @@ export function observations(report: ChannelReportView): Observation[] {
     const rate = report.videos.length / (spanDays / 7);
     out.push({
       text: report.truncated
-        ? `${rate.toFixed(1)} uploads a week across the ${Math.round(spanDays)} days this sample spans. The collection stopped at its upload limit, so nothing here describes the period before ${shortDate(report.sampledStart)}.`
-        : `${rate.toFixed(1)} uploads a week across the ${Math.round(spanDays)} days this sample spans.`,
+        ? `${rate.toFixed(1)} uploads a week across ${Math.round(spanDays)} days. Capped, so nothing here describes the period before ${shortDate(report.sampledStart)}.`
+        : `${rate.toFixed(1)} uploads a week across ${Math.round(spanDays)} days.`,
       supporting: [],
     });
   }
@@ -342,7 +349,7 @@ export function limitations(report: ChannelReportView): string[] {
 
   if (report.truncated) {
     out.push(
-      `The collection stopped at its upload limit, so this sample is the most recent ${report.videos.length} uploads rather than everything published in the ${report.windowDays}-day window. Re-collect with a larger bound to widen it.`,
+      `Capped at ${report.videos.length} uploads, so this is the most recent slice of the ${report.windowDays}-day window, not all of it. Re-collect with a larger bound to widen it.`,
     );
   }
   if (aside.live || aside.upcoming) {
@@ -350,29 +357,26 @@ export function limitations(report: ChannelReportView): string[] {
       aside.live ? `${aside.live} live broadcast${aside.live === 1 ? '' : 's'}` : null,
       aside.upcoming ? `${aside.upcoming} scheduled premiere${aside.upcoming === 1 ? '' : 's'}` : null,
     ].filter(Boolean);
-    const count = aside.live + aside.upcoming;
-    out.push(
-      `${bits.join(' and ')} could not be compared on views and ${count === 1 ? 'was' : 'were'} excluded from every figure above.`,
-    );
+    out.push(`${bits.join(' and ')} could not be compared on views.`);
   }
   if (unknown > 0) {
     out.push(
-      `${unknown} upload${unknown === 1 ? '' : 's'} report${unknown === 1 ? 's' : ''} no duration publicly, so ${unknown === 1 ? 'it sits' : 'they sit'} outside the long-form and short comparison.`,
+      `${unknown} upload${unknown === 1 ? '' : 's'} report${unknown === 1 ? 's' : ''} no duration, so ${unknown === 1 ? 'it sits' : 'they sit'} outside the format comparison.`,
     );
   }
   const p = performance(report.videos, Date.parse(report.fetchedAt));
   if (p.unreported > 0) {
     out.push(
-      `${p.unreported} comparable upload${p.unreported === 1 ? '' : 's'} report${p.unreported === 1 ? 's' : ''} no view count. That is unknown, not zero, and ${p.unreported === 1 ? 'it is' : 'they are'} excluded from every median and range.`,
+      `${p.unreported} comparable upload${p.unreported === 1 ? '' : 's'} report${p.unreported === 1 ? 's' : ''} no view count — unknown, not zero, and excluded from every median.`,
     );
   }
   if (!report.derivedAllowed) {
     out.push(
-      'Comment themes are not available on this deployment, so nothing here describes how viewers responded.',
+      'Comment themes are not available here, so nothing describes how viewers responded.',
     );
   }
   out.push(
-    'Everything above is public metadata. No upload was watched, no transcript was read, and nothing here shows who the audience is or what they bought.',
+    'All of it is public metadata. No upload was watched, no transcript read, and nothing here shows who the audience is.',
   );
   return out.slice(0, 5);
 }
@@ -392,22 +396,22 @@ export function openQuestions(report: ChannelReportView): string[] {
 
   if (report.promotions.some((p) => p.disclosure === 'explicit')) {
     out.push(
-      'Which brands were behind the disclosed paid promotions, and does any exclusivity still apply? YouTube’s flag marks the video, not the advertiser.',
+      'Which brands were behind the disclosed promotions, and does exclusivity still apply? The flag marks the video, not the advertiser.',
     );
   }
   // The availability question the old observation ASSERTED an answer to.
   if (long && short) {
     out.push(
-      'Which lengths would they actually take on as a deliverable? Both appear in the sample; publishing a format is not agreeing to produce one.',
+      'Which lengths would they take on as a deliverable? Publishing a format is not agreeing to produce one.',
     );
   } else if (long || short) {
     out.push(
-      `This sample is ${long ? 'entirely long-form' : 'entirely short'}. Ask whether they produce the other length, and on what terms.`,
+      `Entirely ${long ? 'long-form' : 'short'} here. Ask whether they produce the other length, and on what terms.`,
     );
   }
   if (report.unreadable > 0) {
     out.push(
-      `Comments could not be read on ${report.unreadable} sampled upload${report.unreadable === 1 ? '' : 's'}. Ask whether comments are usually open, and what response they normally see.`,
+      `Comments unreadable on ${report.unreadable} upload${report.unreadable === 1 ? '' : 's'}. Ask whether they are usually open, and what response they see.`,
     );
   }
   // The gated profile's own questions come last and only when it ran.
@@ -475,7 +479,7 @@ export function representativeVideos(report: ChannelReportView, limit = 4): Repr
     take(
       sponsored.id,
       'sponsored',
-      `Carries YouTube’s paid-promotion flag — ${disclosedIds.size} of ${report.videos.length} sampled upload${disclosedIds.size === 1 ? ' does' : 's do'}. The flag does not name the sponsor`,
+      `Paid-promotion flag, ${disclosedIds.size} of ${report.videos.length}. The flag does not name the sponsor`,
     );
   }
 
@@ -485,7 +489,7 @@ export function representativeVideos(report: ChannelReportView, limit = 4): Repr
     take(
       subject.videoIds.find((id) => !used.has(id)),
       'subject',
-      `“${subject.term}” is in ${subject.videoIds.length} of ${profile.sampled} sampled titles — the most-repeated subject in the sample`,
+      `“${subject.term}” is in ${subject.videoIds.length} of ${profile.sampled} titles — the most-repeated subject`,
     );
   }
 
@@ -495,7 +499,7 @@ export function representativeVideos(report: ChannelReportView, limit = 4): Repr
     take(
       dominant.videoIds.find((id) => !used.has(id)),
       'format',
-      `One of ${dominant.videoIds.length} uploads whose title reads as ${FORMAT_LABEL[dominant.format].toLowerCase()} — the commonest shape in this sample`,
+      `One of ${dominant.videoIds.length} titled as ${FORMAT_LABEL[dominant.format].toLowerCase()} — the commonest shape here`,
     );
   }
 
@@ -514,7 +518,7 @@ export function representativeVideos(report: ChannelReportView, limit = 4): Repr
       take(
         nearest?.id,
         'typical',
-        `Its view count sits nearest the ${compact(gp.median)} median of the ${gp.n} ${label} uploads that reported one — a position in a distribution, not a judgement about the content`,
+        `Nearest the ${compact(gp.median)} median of ${gp.n} ${label} uploads — a position in a distribution, not a judgement about the content`,
       );
     }
   }
@@ -530,7 +534,7 @@ export function representativeVideos(report: ChannelReportView, limit = 4): Repr
       take(
         best?.id,
         'outlier',
-        `${compact(best?.views ?? null)} views — ${(overall.max / overall.median).toFixed(1)}× the sample median and ${percent(overall.max, overall.total ?? overall.max)} of its total views. An outlier, not the norm`,
+        `${compact(best?.views ?? null)} views — ${(overall.max / overall.median).toFixed(1)}× the median, ${percent(overall.max, overall.total ?? overall.max)} of total views. An outlier, not the norm`,
       );
     }
   }

@@ -238,7 +238,13 @@ check('add-to-campaign and share are in the header', /secondary:[\s\S]{0,200}<Re
 check('and open as popovers rather than growing the strip',
   code('src/components/channel/ReportActions.tsx').includes("layout === 'inline'"), true);
 check('the format control sits with the report it filters',
-  detail.indexOf('htmlFor="format"') > detail.indexOf('<ChannelReport') || /max-w-\[1080px\][\s\S]{0,600}htmlFor="format"/.test(detail), true);
+  /max-w-\[1080px\][\s\S]{0,2200}htmlFor="format"/.test(detail), true);
+// The date range narrows a sample that was already collected. It must never be
+// confused with Refresh, which spends quota and replaces the snapshot.
+const range = code('src/components/report/ReportRange.tsx');
+check('the date range is a URL parameter, so a filtered report is a link', range.includes('router.replace'), true);
+check('and the server recomputes over the filtered set', detail.includes('const ranged = report && (from || to)'), true);
+check('a filtered report says so rather than passing as the whole', code('src/components/channel/ChannelReport.tsx').includes('narrowed !== null'), true);
 check(
   'the report does not repeat the identity the rail already shows',
   detail.includes('identity={false}'),

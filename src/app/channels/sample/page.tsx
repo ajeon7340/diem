@@ -48,10 +48,10 @@ const VIDEOS: ChannelReportView['videos'] = [
   { id: 'sample-aeropress', title: 'Aeropress vs pour-over: which grinder setting actually matters', publishedAt: new Date(NOW - 6 * DAY).toISOString(), views: 31_400, seconds: 780, format: 'long', state: 'published', description: 'Side by side on the same beans.' },
   { id: 'sample-grinder', title: 'Hand grinder review: 40 shots so you do not have to', publishedAt: new Date(NOW - 19 * DAY).toISOString(), views: 18_200, seconds: 640, format: 'long', state: 'published', description: 'Paid promotion. Full review of the grinder.' },
   { id: 'sample-travel', title: '여행용 그라인더 3개월 사용기: 집에서 에스프레소 내리기', publishedAt: new Date(NOW - 33 * DAY).toISOString(), views: 12_050, seconds: 520, format: 'long', state: 'published', description: '3개월 동안 써본 기록.' },
-  { id: 'sample-short1', title: 'Grind size in 40 seconds', publishedAt: new Date(NOW - 41 * DAY).toISOString(), views: 96_800, seconds: 44, format: 'short', state: 'published', description: '' },
-  { id: 'sample-kettle', title: 'Kettle review: the one nobody needs (but I bought anyway)', publishedAt: new Date(NOW - 58 * DAY).toISOString(), views: 9_400, seconds: 410, format: 'long', state: 'published', description: '' },
+  { id: 'sample-short1', title: 'Coffee grinder size in 40 seconds', publishedAt: new Date(NOW - 41 * DAY).toISOString(), views: 96_800, seconds: 44, format: 'short', state: 'published', description: '' },
+  { id: 'sample-kettle', title: 'Coffee kettle review: the one nobody needs (but I bought anyway)', publishedAt: new Date(NOW - 58 * DAY).toISOString(), views: 9_400, seconds: 410, format: 'long', state: 'published', description: '' },
   // Supports the brand's category outright.
-  { id: 'sample-kit', title: 'Coffee equipment I actually kept after two years of use', publishedAt: new Date(NOW - 47 * DAY).toISOString(), views: 22_700, seconds: 900, format: 'long', state: 'published', description: 'Long-term notes on the whole setup.' },
+  { id: 'sample-kit', title: 'Coffee grinder and equipment I actually kept after two years of use', publishedAt: new Date(NOW - 47 * DAY).toISOString(), views: 22_700, seconds: 900, format: 'long', state: 'published', description: 'Long-term notes on the whole setup.' },
   // Names an avoided topic in order to REFUSE it — which is exactly why a
   // conflicting row tells a buyer to read the video rather than decide.
   { id: 'sample-crypto', title: 'Why I turn down crypto sponsorships', publishedAt: new Date(NOW - 64 * DAY).toISOString(), views: 7_300, seconds: 300, format: 'long', state: 'published', description: '' },
