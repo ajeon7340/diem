@@ -944,31 +944,83 @@ void (async () => {
   // ---------------------------------------------------------------------------
 
   const panel = readFileSync('src/components/discovery/FilterPanel.tsx', 'utf8');
-  // One width for every rail in the product. Discovery was 300px and the
-  // workspace pages 340px, so the menu shifted sideways when you moved between
-  // them; the number now has one definition and both import it.
-  check('the filter rail uses the shared rail width', panel.includes('RAIL_WIDTH'), true);
-  check(
-    'and that width is defined once',
-    readFileSync('src/components/shell/ContextWorkspace.tsx', 'utf8').includes(
-      "export const RAIL_WIDTH = 'lg:w-[340px]'",
-    ),
-    true,
-  );
-  check('and is bounded by the viewport so it can scroll inside', panel.includes('lg:max-h-[calc(100dvh-2rem)]'), true);
-  check('below lg it is a drawer, not a squeezed column', panel.includes('lg:hidden') && panel.includes('aria-controls="discovery-filters"'), true);
+  /*
+   * THE FILTER PANEL IS A GRID TRACK, NOT A RAIL.
+   *
+   * It used to borrow the workspace rail's width, which made the page's
+   * conditions the same shape, in the same place, as the application's
+   * navigation. Discovery is three columns and they are three different kinds
+   * of thing: where you are, what you are asking, and what came back.
+   */
+  const page = readFileSync('src/app/discover/page.tsx', 'utf8');
+  check('navigation and filters do not share a column', panel.includes('RAIL_WIDTH'), false);
+  check('the page declares the filter column as a track', page.includes('lg:grid-cols-[320px_minmax(0,1fr)]'), true);
+  // `1fr` floors at min-content, so a wide row pushes the track past the
+  // viewport and the PAGE scrolls sideways. This is what stops it.
+  check('the results track can shrink', page.includes('minmax(0,1fr)'), true);
+  check('and is never a bare 1fr', /grid-cols-\[[^\]]*_1fr\]/.test(page), false);
+  check('the filter column reads as its own surface', panel.includes('bg-black/[0.02]'), true);
+  check('below lg it is a sheet, not a squeezed column', panel.includes('inset-x-0 bottom-0'), true);
   check('Escape closes it', panel.includes("event.key === 'Escape'"), true);
   check('and focus returns to the control that opened it', panel.includes('opener.current?.focus()'), true);
 
   const forms = readFileSync('src/components/discovery/SearchForms.tsx', 'utf8');
-  check('fields scroll in their own region', forms.includes('overflow-y-auto'), true);
-  check('while submit and reset sit outside it', forms.includes('shrink-0 border-t border-line bg-surface'), true);
-  check('reset is the native one, so it restores what was searched for', forms.includes('type="reset"'), true);
-  check('optional filters are folded away', forms.includes('More filters'), true);
+  check('the criteria sections scroll in their own region', panel.includes('min-h-0 flex-1 overflow-y-auto'), true);
+  check('while Search and Reset sit outside it', panel.includes('sticky bottom-0 shrink-0 border-t'), true);
+  /*
+   * NOTHING IS BEHIND "MORE FILTERS" ANY MORE.
+   *
+   * One accordion holding every optional condition meant a customer could not
+   * find out what this product filters on without opening it, and most never
+   * did. Every section is on the page; four are open and the rest are one
+   * click away.
+   */
+  check('no single accordion hides the optional filters', panel.includes('More filters'), false);
+  check('the sections are individually collapsible', (panel.match(/<Section/g) ?? []).length >= 6, true);
+  check('and the four that matter open by default', (panel.match(/defaultOpen/g) ?? []).length >= 4, true);
+  /*
+   * NO KEYSTROKE SPENDS QUOTA.
+   *
+   * This used to be asserted as "no onChange anywhere", which held only while
+   * the form had no live controls at all. It now has two — the view range and
+   * the location picker publish into the draft the main panel reads — and
+   * neither touches the network. What matters is the guarantee, not the
+   * absence of a handler, so the guarantee is what is checked: no fetch, no
+   * navigation, and one plain form submit as the only way to start a run.
+   */
+  check('no handler in the form reaches the network', /\bfetch\s*\(|XMLHttpRequest|navigator\.sendBeacon/.test(forms), false);
+  check('and none navigates', /router\.(push|replace|refresh)/.test(forms), false);
+  check('the search is still a plain form submit', panel.includes('<form\n        id="discovery-search"') || panel.includes('id="discovery-search"'), true);
+  /*
+   * THE URL IS THE SINGLE SOURCE OF TRUTH.
+   *
+   * A search somebody wants to send a colleague, return to with the back
+   * button, or save, has to exist as an address. Holding it in component state
+   * makes all three impossible, and lets the filter column and the results
+   * area disagree about what is applied — which is the bug the chip row exists
+   * to prevent.
+   */
+  const results = readFileSync('src/components/discovery/ResultsArea.tsx', 'utf8');
+  for (const [where, src] of [['the panel', panel], ['the results area', results]] as const) {
+    check(`${where} reads the filters from the URL`, src.includes('useSearchParams'), true);
+    check(`and ${where} writes them back to it`, src.includes('router.replace'), true);
+  }
+  check('no filter state is held in a store', /createContext|zustand|redux/i.test(panel + results), false);
+  check('every applied filter is a chip you can clear', results.includes('Clear filter:'), true);
+  check('and all of them at once', results.includes('Clear all'), true);
   check(
-    'nothing fires a request while typing — every mode is a plain submit',
-    /onChange|onInput|useEffect/.test(forms),
-    false,
+    'clearing a range clears both ends',
+    readFileSync('src/lib/discovery/filters.ts', 'utf8').includes("if (key === 'subsFrom') return { ...filters, subsFrom: null, subsTo: null };"),
+    true,
+  );
+  check('the empty state runs a search rather than naming the page', results.includes('form="discovery-search"'), true);
+  check('and says what one costs', results.includes('spends one of the day'), true);
+  // The view range is a post-retrieval filter and the panel says so.
+  check('the view range names what it narrows', panel.includes('not a channel average'), true);
+  check(
+    'and it reaches the run as an explicit range',
+    readFileSync('src/lib/discovery/criteria.ts', 'utf8').includes('input.viewsFrom !== null || input.viewsTo !== null'),
+    true,
   );
 
   const list = readFileSync('src/components/discovery/ResultList.tsx', 'utf8');
@@ -1091,6 +1143,30 @@ void (async () => {
     viewFiltered.removed.some((r) => r.filter === 'viewsUnmeasured'),
     true,
   );
+
+  // The explicit range wins over the legacy band ids: two ends somebody set
+  // are what they meant, and unioning them with a band would widen the filter
+  // they had just narrowed.
+  const ranged = criteriaSchema.parse({ viewsFrom: '10000', viewsTo: '100000', views: '1m' });
+  check('an explicit view range parses', [ranged.viewsFrom, ranged.viewsTo], [10_000, 100_000]);
+  const rangedOut = applyPostFilters(
+    [
+      { ...candidate('under', 1), evidence: [ev(5_000)] },
+      { ...candidate('inside', 1), evidence: [ev(50_000)] },
+      { ...candidate('over', 1), evidence: [ev(2_000_000)] },
+      { ...candidate('unknown', 1), evidence: [ev(null)] },
+    ],
+    { viewBands: [{ id: 'custom', label: 'Typical views', min: 10_000, max: 100_000 }] },
+  );
+  check(
+    'and narrows to it, keeping the unmeasured',
+    rangedOut.kept.map((c) => c.channelId),
+    ['inside', 'unknown'],
+  );
+  check('an open lower end is unbounded, not zero', applyPostFilters(
+    [{ ...candidate('small', 1), evidence: [ev(5)] }],
+    { viewBands: [{ id: 'custom', label: 'Typical views', min: null, max: 100 }] },
+  ).kept.length, 1);
 
   const criteriaForm = readFileSync('src/components/discovery/SearchForms.tsx', 'utf8');
   check('the criteria form no longer asks for free-text topics', criteriaForm.includes('id="keywords"'), false);

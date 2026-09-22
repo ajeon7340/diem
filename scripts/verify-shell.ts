@@ -67,7 +67,10 @@ check('below lg the rail stacks above the work rather than squeezing beside it',
 check('global navigation is the left column', shell.includes('<AppShell'), true);
 check('and it is not repeated in a top bar', shell.includes('<SiteHeader'), false);
 const nav = code('src/components/shell/AppNav.tsx');
-check('the nav collapses', nav.includes("data-collapsed={collapsed"), true);
+// The state moved up to the shell, because the GRID TEMPLATE reads it: a
+// column that changed width without its track changing too is how a sidebar
+// ends up over the page.
+check('the nav collapses', code('src/components/shell/AppShell.tsx').includes("data-collapsed={collapsed ? 'true' : 'false'}"), true);
 check('and remembers the choice', nav.includes('localStorage.setItem(STORE'), true);
 check('a collapsed item keeps its accessible name', nav.includes("collapsed ? 'sr-only' : 'truncate'"), true);
 check('and still marks the current page', nav.includes("aria-current={active ? 'page' : undefined}"), true);
@@ -275,6 +278,39 @@ check('and the shell prints on white, not the paper ground', css.includes('.app-
 // cross axis cancels `stretch`, so `main` sized itself to its own max-content.
 check('a centred main still fills the column', css.includes('.app-main > main,'), true);
 check('and cannot be pushed wider than it', css.includes('  width: 100%;\n  min-width: 0;\n}'), true);
+
+
+// ---------------------------------------------------------------------------
+// The shell is a grid, and the rail is a track in it
+// ---------------------------------------------------------------------------
+
+const shellCss = read('src/app/globals.css');
+check('the shell is a grid, not a flex row', shellCss.includes('.app-shell {\n  display: grid;'), true);
+check('the rail is a track whose width is one variable', shellCss.includes('grid-template-columns: var(--rail) minmax(0, 1fr);'), true);
+check('collapsed swaps the track, not the element width', shellCss.includes("data-collapsed='true'"), true);
+// `1fr` floors at min-content: a wide table would push the track past the
+// viewport and scroll the whole document sideways.
+check('the content track can shrink', shellCss.includes('minmax(0, 1fr)'), true);
+check('nothing in the desktop layout is positioned fixed', /\.app-(shell|nav|main)[^{]*\{[^}]*position:\s*fixed/.test(shellCss), false);
+check('and main is the only scroll container', shellCss.includes('.app-main {\n  min-width: 0;\n  overflow-y: auto;'), true);
+
+const rail = code('src/components/shell/AppNav.tsx');
+check('the rail is a full-height column', rail.includes("'app-nav flex h-dvh flex-col'"), true);
+// The footer used to fall off the bottom on a short viewport, taking the
+// workspace card and Sign out with it.
+check('its middle region scrolls, not the column', rail.includes('min-h-0 flex-1 overflow-y-auto'), true);
+check('so the footer cannot be pushed off the screen', rail.includes('shrink-0 space-y-2 border-t border-line'), true);
+check('every icon-only control is labelled', (rail.match(/aria-label=/g) ?? []).length >= 5, true);
+check('and collapsed items keep a tooltip', rail.includes('title={collapsed ? label : undefined}'), true);
+check(
+  'collapse persists, and defaults collapsed on discovery',
+  code('src/components/shell/AppShell.tsx').includes("pathname.startsWith('/discover')"),
+  true,
+);
+// z-index only where something genuinely floats.
+check('the drawer scrim is z-30', rail.includes('z-30'), true);
+check('the drawer panel is z-40', rail.includes('z-40'), true);
+
 
 console.log(`\n  ${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);

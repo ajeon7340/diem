@@ -7,7 +7,6 @@ import { BrandList } from '@/components/discovery/BrandList';
 import { EmptyState } from '@/components/discovery/EmptyState';
 import { ContextBar } from '@/components/discovery/ContextBar';
 import { FilterPanel } from '@/components/discovery/FilterPanel';
-import { ModeTabs } from '@/components/discovery/ModeTabs';
 import { NarrowingProvider, PerformanceFilters } from '@/components/discovery/Narrowing';
 import { ResultList } from '@/components/discovery/ResultList';
 import { ModeForm } from '@/components/discovery/SearchForms';
@@ -19,7 +18,6 @@ import { getBrands as getWorkspaceBrands, pickBrand } from '@/lib/data/brands';
 import { buildContext } from '@/lib/discovery/context';
 import { getBrands, getCandidates, getSearch, getSearchJobs } from '@/lib/data/discovery';
 import { describeJob } from '@/lib/ingest/jobs';
-import { filterSummary } from '@/lib/discovery/defaults';
 import { coverageSentence, searchStage, searchState, SEARCH_STATE_LABEL } from '@/lib/discovery/state';
 import { DISCOVERY_MODES, SIMILARITY_DIMENSION_LABEL, SIMILARITY_LIMIT } from '@/lib/discovery/types';
 import {
@@ -124,29 +122,31 @@ export default async function DiscoveryResults({ params }: { params: { id: strin
               the rail, the rows they hide are in the list beside it. */}
           <NarrowingProvider>
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-6">
-            <FilterPanel summary={filterSummary(search.mode, search.params)}>
-              <div className="shrink-0 space-y-3 border-b border-line p-3">
-                <ContextBar
-                  context={context}
-                  brands={workspaceBrands.map((b) => ({ id: b.id, name: b.name }))}
-                  campaigns={campaigns.map((c) => ({ id: c.id, name: c.name, brandId: c.brandId }))}
-                />
-                <ModeTabs mode={search.mode} />
-                <p className="text-[11px] leading-relaxed text-ink-muted">
-                  Filters this search ran with. Change them to search again.
-                </p>
+            <FilterPanel
+              mode={search.mode}
+              campaignId={search.campaignId}
+              brandId={context.brand?.id ?? null}
+              modeExtra={
+                <div className="space-y-3">
+                  <ContextBar
+                    context={context}
+                    brands={workspaceBrands.map((b) => ({ id: b.id, name: b.name }))}
+                    campaigns={campaigns.map((c) => ({ id: c.id, name: c.name, brandId: c.brandId }))}
+                  />
+                  <ModeForm
+                    mode={search.mode}
+                    campaignId={search.campaignId}
+                    defaults={context.defaults}
+                    context={context}
+                  />
+                </div>
+              }
+            />
+            {candidates.length > 0 ? (
+              <div className="lg:hidden">
+                <PerformanceFilters />
               </div>
-              <ModeForm
-                mode={search.mode}
-                campaignId={search.campaignId}
-                defaults={context.defaults}
-                context={context}
-              />
-              {/* Below the form and outside it, because Search does not apply
-                  these — they narrow the rows already retrieved, the moment
-                  they change. Nothing to narrow, nothing to show. */}
-              {candidates.length > 0 ? <PerformanceFilters /> : null}
-            </FilterPanel>
+            ) : null}
 
             <div className="min-w-0 flex-1 space-y-4">
               {/* Observed events only. No percentage: a run does not know how

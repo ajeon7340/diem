@@ -54,8 +54,16 @@
    * The nav is a real column, so its width is a variable the main area reads
    * rather than a number repeated in two places that drift.
    */
-  --nav-w: 264px;
-  --nav-w-collapsed: 68px;
+  /*
+   * THE RAIL IS A GRID TRACK, NOT AN OVERLAY.
+   *
+   * It was `position: fixed` in spirit — a column the main area had to leave
+   * room for — which is how the nav ended up over the content at some widths.
+   * One variable, read by the grid template, so the column and the space it
+   * occupies are the same number by construction.
+   */
+  --rail: 232px;
+  --rail-collapsed: 64px;
   --header-h: 56px;
 
   /*
@@ -528,15 +536,34 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
  * differ has to say so.
  */
 
+/*
+ * TWO TRACKS, AND THE SECOND IS `minmax(0, 1fr)`.
+ *
+ * `1fr` is `minmax(auto, 1fr)`: its floor is the content's min-content width,
+ * so a wide results table pushes the track past the viewport and the page
+ * scrolls sideways. `minmax(0, 1fr)` lets the track shrink and the overflow
+ * stays inside whatever declared it.
+ */
 .app-shell {
-  display: flex;
-  min-height: 100dvh;
+  display: grid;
+  height: 100dvh;
+  grid-template-columns: minmax(0, 1fr);
   background: var(--paper);
 }
 
+@media (min-width: 768px) {
+  .app-shell {
+    grid-template-columns: var(--rail) minmax(0, 1fr);
+  }
+  .app-shell[data-collapsed='true'] {
+    grid-template-columns: var(--rail-collapsed) minmax(0, 1fr);
+  }
+}
+
+/* The only scroll container. `min-width: 0` for the same reason as the track. */
 .app-main {
   min-width: 0;
-  flex: 1;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
 }
@@ -557,8 +584,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   min-width: 0;
 }
 
-/* The nav column. `width` transitions because the main area reflows with it;
-   this is an infrequent, deliberate action, so the movement is worth showing. */
+/* The track transitions, not the element: the main area reflows with it, and
+   this is an infrequent, deliberate action worth showing. */
 /*
  * The nav shares the page's ground and draws no edge.
  *
@@ -567,12 +594,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
  * Transparent, borderless, and the only thing with a background is the item
  * you are on.
  */
-.app-nav {
-  width: var(--nav-w);
-  background: transparent;
-  transition: width var(--t-panel) var(--ease-out);
-}
-.app-nav[data-collapsed='true'] { width: var(--nav-w-collapsed); }
+.app-shell { transition: grid-template-columns var(--t-panel) var(--ease-out); }
+.app-nav { background: transparent; }
 
 /*
  * SURFACES
@@ -686,7 +709,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 .workspace-drawer[open] { animation: panel-in-right var(--t-panel) var(--ease-out) both; }
 
 @media (prefers-reduced-motion: reduce) {
-  .app-nav,
+  .app-shell,
   .row,
   .press,
   .data-table tbody tr { transition: none; }

@@ -2,12 +2,10 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
-import { removeSavedCandidate } from '@/app/actions/discovery';
 import { ContextBar } from '@/components/discovery/ContextBar';
 import { FilterPanel } from '@/components/discovery/FilterPanel';
-import { ModeTabs } from '@/components/discovery/ModeTabs';
+import { ResultsArea, type SearchRow } from '@/components/discovery/ResultsArea';
 import { ModeForm } from '@/components/discovery/SearchForms';
-import { StartGuide } from '@/components/discovery/StartGuide';
 import { WorkspaceLayout } from '@/components/shell/WorkspaceLayout';
 import { getViewer } from '@/lib/access/viewer';
 import { getCampaign, getCampaigns } from '@/lib/data/campaigns';
@@ -16,7 +14,7 @@ import { buildContext } from '@/lib/discovery/context';
 import { getSavedCandidates, getSearches, getSearchJobs } from '@/lib/data/discovery';
 import { nextStep } from '@/lib/channel/state';
 import { searchState, SEARCH_STATE_LABEL } from '@/lib/discovery/state';
-import { DISCOVERY_MODES, type DiscoveryMode } from '@/lib/discovery/types';
+import { type DiscoveryMode } from '@/lib/discovery/types';
 
 export const metadata: Metadata = { title: 'Discover creators' };
 export const dynamic = 'force-dynamic';
@@ -24,12 +22,17 @@ export const dynamic = 'force-dynamic';
 const MODES: DiscoveryMode[] = ['criteria', 'similar', 'competitor'];
 
 /**
- * Discovery before a search has run: the same two columns the results page
- * uses, with a start note where the creators will be.
+ * Discovery: filters in one column, what came back in the other.
  *
- * The heading is small and the introduction is one line. This is a workspace
- * somebody returns to, not a landing page — a 40px title and three paragraphs
- * of explanation push the first control below the fold every single visit.
+ * THREE COLUMNS ACROSS THE PAGE, and they are three different kinds of thing:
+ * the nav rail says where you are in the product, this page's filter column
+ * says what you are asking of the index, and the results area says what came
+ * back. The first is the shell's; the other two are this grid.
+ *
+ * `minmax(0, 1fr)` ON THE RESULTS TRACK. `1fr` floors at the content's
+ * min-content width, so a wide row pushes the track past the viewport and the
+ * whole page scrolls sideways; `minmax(0, 1fr)` lets it shrink and keeps any
+ * overflow inside whatever declared it.
  */
 export default async function DiscoverPage({
   searchParams,
@@ -49,14 +52,12 @@ export default async function DiscoverPage({
     searchParams.campaign ? getCampaign(searchParams.campaign) : Promise.resolve(null),
     getBrands(viewer.organization.id),
     getCampaigns(viewer.organization.id),
-    getSearches(viewer.organization.id, 8),
+    getSearches(viewer.organization.id, 12),
     getSavedCandidates(viewer.organization.id),
   ]);
 
   // The brand a campaign belongs to wins over the one in the URL: a campaign
-  // selected for client A cannot be read against client B's profile, and
-  // silently pairing them would be the wrong-product failure this whole model
-  // exists to stop.
+  // selected for client A cannot be read against client B's profile.
   const brand = pickBrand(
     brands,
     campaign?.brandId ?? searchParams.brand ?? null,
@@ -65,131 +66,59 @@ export default async function DiscoverPage({
   const context = buildContext({ mode, brand, campaign });
   const jobs = await getSearchJobs(searches.map((s) => s.id));
 
+  const rows: SearchRow[] = searches.map((search) => ({
+    id: search.id,
+    mode: search.mode,
+    asked: describe(search.params),
+    state: SEARCH_STATE_LABEL[
+      searchState(
+        jobs.get(search.id) ?? [],
+        search.emptyReason === null ? 1 : 0,
+        search.collectedAt,
+        search.emptyReason,
+      )
+    ],
+    at: search.createdAt.slice(0, 10),
+  }));
+
   return (
-    <WorkspaceLayout
-      width="wide"
-      header={{
-        title: 'Discover creators',
-        meta: campaign ? (
-          <>
-            <span>
-              searching for <strong className="font-medium text-ink">{campaign.name}</strong>
-            </span>
-            <Link href="/discover" className="text-indigo underline-offset-4 hover:underline">
-              Clear
-            </Link>
-          </>
-        ) : undefined,
-      }}
-      bare
-    >
-      <main className="flex-1 px-4 py-5 sm:px-6">
-        <div className="mx-auto w-full max-w-[1480px]">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-6">
-            <FilterPanel>
-              <div className="shrink-0 space-y-3 border-b border-line p-3">
+    <WorkspaceLayout bare>
+      <div className="flex h-full min-w-0 flex-col">
+        {campaign ? (
+          <p className="border-b border-line bg-indigo-wash px-4 py-2 text-[12px] text-indigo sm:px-5">
+            Searching for <strong className="font-semibold">{campaign.name}</strong>.{' '}
+            <Link href="/discover" className="underline underline-offset-4">Clear</Link>
+          </p>
+        ) : null}
+
+        {/* Rows are named at mobile too: with the panel collapsed to a button,
+            an auto row would otherwise share the height with the results and
+            leave a gap between the two. */}
+        <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[auto_minmax(0,1fr)] lg:grid-cols-[320px_minmax(0,1fr)] lg:grid-rows-1">
+          <FilterPanel
+            mode={mode}
+            campaignId={campaign?.id ?? null}
+            brandId={context.brand?.id ?? null}
+            modeExtra={
+              <div className="space-y-3">
                 <ContextBar
                   context={context}
                   brands={brands.map((b) => ({ id: b.id, name: b.name }))}
                   campaigns={campaigns.map((c) => ({ id: c.id, name: c.name, brandId: c.brandId }))}
                 />
-                <ModeTabs mode={mode} />
-                <p className="text-[11px] leading-relaxed text-ink-muted">{DISCOVERY_MODES[mode].blurb}</p>
+                <ModeForm
+                  mode={mode}
+                  campaignId={campaign?.id ?? null}
+                  defaults={context.defaults}
+                  context={context}
+                />
               </div>
-              <ModeForm
-                mode={mode}
-                campaignId={campaign?.id ?? null}
-                defaults={context.defaults}
-                context={context}
-              />
-            </FilterPanel>
+            }
+          />
 
-            <div className="min-w-0 flex-1 space-y-6">
-              <StartGuide mode={mode} />
-
-              <section>
-                <h2 className="rail">Recent searches</h2>
-                {searches.length === 0 ? (
-                  <p className="mt-2 text-[12px] text-ink-muted">Nothing yet.</p>
-                ) : (
-                  <ul className="mt-2 divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
-                    {searches.map((search) => {
-                      const state = searchState(
-                        jobs.get(search.id) ?? [],
-                        search.emptyReason === null ? 1 : 0,
-                        search.collectedAt,
-                        search.emptyReason,
-                      );
-                      return (
-                        <li key={search.id}>
-                          <Link
-                            href={`/discover/${search.id}`}
-                            className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3.5 py-2.5 hover:bg-paper"
-                          >
-                            <span className="text-[13px] font-medium text-ink">
-                              {DISCOVERY_MODES[search.mode].label}
-                            </span>
-                            <span className="min-w-0 truncate text-[12px] text-ink-muted">
-                              {describe(search.params)}
-                            </span>
-                            <span className="tnum ml-auto shrink-0 text-[11px] text-ink-faint">
-                              {SEARCH_STATE_LABEL[state]} · {search.createdAt.slice(0, 10)}
-                            </span>
-                          </Link>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </section>
-
-              <section>
-                <h2 className="rail">Saved candidates</h2>
-                {saved.length === 0 ? (
-                  <p className="mt-2 text-[12px] text-ink-muted">Nothing saved yet.</p>
-                ) : (
-                  <ul className="mt-2 divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
-                    {saved.map((candidate) => (
-                      <li key={candidate.channelId} className="flex flex-wrap items-start gap-3 px-3.5 py-2.5">
-                        {candidate.avatar ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={candidate.avatar} alt="" width={32} height={32} className="h-8 w-8 rounded-full" />
-                        ) : null}
-                        <div className="min-w-0 flex-1">
-                          <Link
-                            href={`/channels/${candidate.channelId}`}
-                            className="text-[13px] font-medium text-indigo underline-offset-4 hover:underline"
-                          >
-                            {candidate.title ?? candidate.channelId}
-                          </Link>
-                          {candidate.handle ? (
-                            <span className="ml-2 text-[12px] text-ink-muted">{candidate.handle}</span>
-                          ) : null}
-                          {candidate.reason ? (
-                            <p className="mt-0.5 line-clamp-1 text-[12px] text-ink-muted">{candidate.reason}</p>
-                          ) : null}
-                          <p className="tnum mt-0.5 text-[11px] text-ink-faint">
-                            Saved {candidate.savedAt.slice(0, 10)}
-                            {candidate.dataFetchedAt
-                              ? ` · analysis read ${candidate.dataFetchedAt.slice(0, 10)}`
-                              : ' · no analysis run yet'}
-                          </p>
-                        </div>
-                        <form action={removeSavedCandidate}>
-                          <input type="hidden" name="channelId" value={candidate.channelId} />
-                          <button type="submit" className="min-h-8 rounded-lg px-2 text-[12px] text-ink-muted hover:text-rose">
-                            Remove
-                          </button>
-                        </form>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </section>
-            </div>
-          </div>
+          <ResultsArea searches={rows} saved={saved} campaignId={campaign?.id ?? null} />
         </div>
-      </main>
+      </div>
     </WorkspaceLayout>
   );
 }
@@ -198,6 +127,8 @@ export default async function DiscoverPage({
 function describe(params: Record<string, unknown>): string {
   const keywords = params.keywords;
   if (Array.isArray(keywords) && keywords.length) return keywords.join(', ');
+  const categories = params.categories;
+  if (Array.isArray(categories) && categories.length) return categories.join(', ');
   if (typeof params.channel === 'string' && params.channel) return params.channel;
   const competitors = params.knownCompetitors;
   if (Array.isArray(competitors) && competitors.length) return competitors.join(', ');

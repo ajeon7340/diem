@@ -101,7 +101,20 @@ export async function runCriteria(
   const terms = criteriaTerms(input);
 
   const subscriberBands = selectedBands(SUBSCRIBER_BANDS, input.subscribers);
-  const viewBands = selectedBands(VIEW_BANDS, input.views);
+  // An explicit from/to wins over the legacy band ids: a customer who set two
+  // ends meant those two ends, and silently unioning them with a band would
+  // widen the filter they just narrowed.
+  const viewBands =
+    input.viewsFrom !== null || input.viewsTo !== null
+      ? [
+          {
+            id: 'custom',
+            label: 'Typical views',
+            min: input.viewsFrom,
+            max: input.viewsTo,
+          },
+        ]
+      : selectedBands(VIEW_BANDS, input.views);
 
   if (plan.length === 0) {
     return {

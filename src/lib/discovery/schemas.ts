@@ -123,6 +123,17 @@ export const criteriaSchema = z.object({
   views: bandId(VIEW_BANDS),
   minSubscribers: bound,
   maxSubscribers: bound,
+  /**
+   * A typical-views range, as two ends rather than a band.
+   *
+   * STILL A POST-RETRIEVAL FILTER. `search.list` has no view parameter, so
+   * this narrows the rows a run read — it cannot reach a channel the search
+   * did not return. It sits on the SEARCH form rather than the results panel
+   * because it changes which rows survive a run, and the run reports how many
+   * it removed.
+   */
+  viewsFrom: bound,
+  viewsTo: bound,
   publishedWithinDays: z
     .union([z.number(), z.string()])
     .optional()

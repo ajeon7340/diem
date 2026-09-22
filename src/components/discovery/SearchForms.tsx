@@ -94,6 +94,7 @@ function LocalePicker({
   context,
   field: key,
   anyLabel,
+  onPick,
 }: {
   id: string;
   name: string;
@@ -104,6 +105,8 @@ function LocalePicker({
   context?: SearchContext;
   field: keyof FilterDefaults;
   anyLabel: string;
+  /** Publishes the choice into the draft the main panel reads. */
+  onPick?: (code: string) => void;
 }) {
   const [showAll, setShowAll] = useState(false);
   const initialCodes = name === 'language'
@@ -122,7 +125,13 @@ function LocalePicker({
         {text}
         <From context={context} field={key} />
       </label>
-      <select id={id} name={name} defaultValue={defaultValue ?? ''} className={`${field} mt-1.5`}>
+      <select
+        id={id}
+        name={name}
+        defaultValue={defaultValue ?? ''}
+        onChange={(event) => onPick?.(event.target.value)}
+        className={`${field} mt-1.5`}
+      >
         <option value="">{anyLabel}</option>
         {saved.length ? (
           <optgroup label="Saved preferences">
